@@ -236,7 +236,7 @@ def _flatten_like(
         urls.append(expanded_url)
 
     return {
-        "id": f"like-{tweet_id}",
+        "id": str(tweet_id),
         "liked_tweet_id": str(tweet_id),
         "text": text,
         "created_at": like.get("createdAt") or like.get("created_at"),
@@ -602,6 +602,20 @@ def apply_filters(
     if top_n is not None and top_n > 0:
         return result[:top_n]
     return result
+
+
+def split_tweets_and_likes(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Partition rows into (tweets, likes) based on tweet_type."""
+    tweets: list[dict[str, Any]] = []
+    likes: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("tweet_type") == "like":
+            likes.append(row)
+        else:
+            tweets.append(row)
+    return tweets, likes
 
 
 def sanitize_dataset_id(value: str) -> str:

@@ -3,7 +3,20 @@ import type { JsonRecord, ScopeData, ScopeRow, NearestNeighborsRawResponse, Node
 
 export { client };
 
-export const apiUrl = import.meta.env.VITE_API_URL;
+function withApiPrefix(rawUrl: string | undefined): string {
+  const raw = (rawUrl || '').trim().replace(/\/+$/, '').replace(/\/api$/, '');
+  return `${raw}/api`;
+}
+
+// RPC client uses the origin directly; legacy fetch calls need the /api prefix.
+export const apiUrl = withApiPrefix(import.meta.env.VITE_API_URL);
+
+// Jobs now run on the TS API.
+export const jobsApiUrl = apiUrl;
+
+// Legacy write endpoints (non-RPC) can be pinned separately if needed.
+const legacyBaseUrl = import.meta.env.VITE_LEGACY_API_URL || import.meta.env.VITE_API_URL;
+export const legacyApiUrl = withApiPrefix(legacyBaseUrl);
 
 // ---------------------------------------------------------------------------
 // Typed wrappers around the Hono RPC client.
@@ -64,6 +77,11 @@ export const viewClient = {
     const res = await client.api.datasets[':dataset'].views[':view'].rows.$get({
       param: { dataset: datasetId, view: scopeId },
     });
+    if (!res.ok) {
+      const err: Error & { status?: number } = new Error(`Failed to fetch scope rows (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
     return (await res.json()) as ScopeRow[];
   },
 };
@@ -216,12 +234,12 @@ export const queryClient = {
 // Legacy Flask-only endpoints — not part of the TS API
 const legacyMiscClient = {
   updateDataset: async (datasetId: string, key: string, value: string | number | boolean) => {
-    return fetch(`${apiUrl}/datasets/${datasetId}/meta/update?key=${key}&value=${value}`).then(
+    return fetch(`${legacyApiUrl}/datasets/${datasetId}/meta/update?key=${key}&value=${value}`).then(
       (response) => response.json()
     );
   },
   fetchClusterIndices: async (datasetId: string, clusterId: string) => {
-    return fetch(`${apiUrl}/datasets/${datasetId}/clusters/${clusterId}/indices`)
+    return fetch(`${legacyApiUrl}/datasets/${datasetId}/clusters/${clusterId}/indices`)
       .then((response) => response.json())
       .then((data: JsonRecord) => {
         data.cluster_id = clusterId;
@@ -229,7 +247,7 @@ const legacyMiscClient = {
       });
   },
   killJob: async (datasetId: string, jobId: string) => {
-    return fetch(`${apiUrl}/jobs/kill?dataset=${datasetId}&job_id=${jobId}`).then((response) =>
+    return fetch(`${jobsApiUrl}/jobs/kill?dataset=${datasetId}&job_id=${jobId}`).then((response) =>
       response.json()
     );
   },
@@ -240,7 +258,7 @@ const legacyMiscClient = {
     description: string
   ) => {
     return fetch(
-      `${apiUrl}/datasets/${datasetId}/scopes/${scopeId}/description?label=${label}&description=${description}`
+      `${legacyApiUrl}/datasets/${datasetId}/scopes/${scopeId}/description?label=${label}&description=${description}`
     ).then((response) => response.json());
   },
   resolveUrl: async (url: string) => {

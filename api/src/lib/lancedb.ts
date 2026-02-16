@@ -92,21 +92,17 @@ export async function getGraphTable(
   return getDatasetTable(dataset, tableSuffix);
 }
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export function resolveDatasetTableId(dataset: string, tableIdOrSuffix: string): string {
   if (tableIdOrSuffix.includes("__")) return tableIdOrSuffix;
-  if (UUID_RE.test(tableIdOrSuffix)) {
-    return `${dataset}__${tableIdOrSuffix}`;
-  }
-  // Treat simple identifiers like "edges" / "node_stats" as dataset-scoped suffixes.
-  // Legacy table ids like "scopes-001" include "-" and are used as-is.
+
+  // Allow dataset-scoped suffixes like "edges" / "node_stats".
   if (/^[a-z][a-z0-9_]*$/i.test(tableIdOrSuffix)) {
     return `${dataset}__${tableIdOrSuffix}`;
   }
-  // Treat as a legacy full table id (e.g. "scopes-001") and open as-is.
-  return tableIdOrSuffix;
+
+  throw new Error(
+    `Invalid table identifier "${tableIdOrSuffix}". Expected "{dataset}__{id}" or a simple suffix.`,
+  );
 }
 
 /**
@@ -116,7 +112,6 @@ export function resolveDatasetTableId(dataset: string, tableIdOrSuffix: string):
  * Accepts either:
  * - suffix form: "edges" → "{dataset}__edges"
  * - full table id: "{dataset}__{uuid}" → used as-is
- * - legacy table id: "scopes-001" → used as-is
  */
 export async function getDatasetTable(
   dataset: string,
@@ -180,4 +175,60 @@ export async function vectorSearch(
     index: r.index as number,
     _distance: r._distance as number,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Catalog registry LanceDB (system__datasets, system__scopes)
+// ---------------------------------------------------------------------------
+
+let catalogDb: lancedb.Connection | null = null;
+const catalogTables = new Map<string, lancedb.Table>();
+
+/**
+ * Open the catalog LanceDB connection.
+ * Local: ${LATENT_SCOPE_DATA}/_catalog/lancedb
+ * Cloud: LANCEDB_CATALOG_URI (falls back to LANCEDB_URI)
+ */
+export async function getCatalogDb(): Promise<lancedb.Connection> {
+  if (catalogDb) return catalogDb;
+
+  const catalogUri = process.env.LANCEDB_CATALOG_URI;
+  const catalogApiKey = process.env.LANCEDB_CATALOG_API_KEY;
+
+  if (catalogUri) {
+    catalogDb = catalogApiKey
+      ? await lancedb.connect({ uri: catalogUri, apiKey: catalogApiKey })
+      : await lancedb.connect(catalogUri);
+    return catalogDb;
+  }
+
+  // Local catalog
+  const dataDir = process.env.LATENT_SCOPE_DATA;
+  if (!dataDir) {
+    throw new Error(
+      "LANCEDB_CATALOG_URI or LATENT_SCOPE_DATA must be set for catalog access",
+    );
+  }
+  const expandedDir = dataDir.startsWith("~/")
+    ? `${process.env.HOME ?? ""}/${dataDir.slice(2)}`
+    : dataDir;
+  const catalogSubdir = process.env.LATENT_SCOPE_CATALOG_LOCAL_PATH ?? "_catalog/lancedb";
+  const localPath = `${expandedDir}/${catalogSubdir}`;
+  catalogDb = await lancedb.connect(localPath);
+  return catalogDb;
+}
+
+/**
+ * Open a catalog registry table (system__datasets or system__scopes).
+ */
+export async function getCatalogTable(
+  tableName: string,
+): Promise<lancedb.Table> {
+  const cached = catalogTables.get(tableName);
+  if (cached) return cached;
+
+  const conn = await getCatalogDb();
+  const table = await conn.openTable(tableName);
+  catalogTables.set(tableName, table);
+  return table;
 }

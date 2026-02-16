@@ -14,7 +14,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import pandas as pd
 
-from latentscope import __version__
+from latentscope.__version__ import __version__
 from latentscope.util import get_data_dir
 
 STATUS_URL_RE = re.compile(
@@ -489,8 +489,8 @@ def _write_lance_edges(dataset_dir: str, dataset_id: str, edges_df: pd.DataFrame
 
     tbl.create_scalar_index("src_tweet_id", index_type="BTREE")
     tbl.create_scalar_index("dst_tweet_id", index_type="BTREE")
-    tbl.create_scalar_index("edge_kind", index_type="BITMAP")
-    tbl.create_scalar_index("internal_target", index_type="BITMAP")
+    tbl.create_scalar_index("edge_kind", index_type="BTREE")
+    tbl.create_scalar_index("internal_target", index_type="BTREE")
 
     print(f"LanceDB: wrote {len(write_df)} edges to '{table_name}' with indexes")
 
@@ -630,11 +630,8 @@ def build_links_graph(
 
     # Write to LanceDB (dataset-global only, not scope-specific builds)
     if not scope_id:
-        try:
-            _write_lance_edges(dataset_dir, dataset_id, edges_df)
-            _write_lance_node_stats(dataset_dir, dataset_id, node_stats_df)
-        except Exception as e:
-            print(f"WARNING: LanceDB write failed (parquet artifacts are fine): {e}")
+        _write_lance_edges(dataset_dir, dataset_id, edges_df)
+        _write_lance_node_stats(dataset_dir, dataset_id, node_stats_df)
 
     edge_kind_counts = {
         "reply": int((edges_df["edge_kind"] == "reply").sum()) if not edges_df.empty else 0,

@@ -7,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from latentscope import __version__
+from latentscope.__version__ import __version__
 from latentscope.pipeline.stages.scope_ids import resolve_scope_id
 from latentscope.pipeline.stages.scope_labels import (
     build_cluster_labels_lookup,
@@ -131,6 +131,16 @@ def run_scope(
 
     print("exporting to lancedb")
     export_lance(data_dir, dataset_id, resolved_scope_id)
+
+    from latentscope.pipeline.catalog_registry import upsert_scope_meta
+
+    upsert_scope_meta(
+        data_dir,
+        dataset_id=dataset_id,
+        scope_id=resolved_scope_id,
+        scope_meta=scope_meta,
+        is_active=True,
+    )
 
     print("wrote scope", resolved_scope_id)
     return resolved_scope_id

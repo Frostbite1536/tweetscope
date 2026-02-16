@@ -28,7 +28,7 @@ if os.path.exists(_local_toponymy) and _local_toponymy not in _sys_paths_normali
     print(f"Using local toponymy from: {_local_toponymy}")
 
 from latentscope.util import get_data_dir
-from latentscope import __version__
+from latentscope.__version__ import __version__
 
 
 def main():

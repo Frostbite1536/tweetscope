@@ -3,48 +3,48 @@ import path from "node:path";
 import { readFile } from "node:fs/promises";
 import {
   DATA_DIR,
-  PUBLIC_DATASET,
-  PUBLIC_SCOPE,
   RAW_DATA_URL,
   buildFileUrl,
   ensureSafeRelativePath,
   fileExists,
-  getScopeMeta,
-  listDatasetsFromDataDir,
-  listJsonObjects,
-  loadJsonFile,
 } from "./dataShared.js";
+import {
+  listDatasets as registryListDatasets,
+  getDataset as registryGetDataset,
+  listScopes as registryListScopes,
+  getScope as registryGetScope,
+} from "../lib/catalogRepo.js";
 
 export const catalogRoutes = new Hono()
   .get("/datasets/:dataset/meta", async (c) => {
     const dataset = c.req.param("dataset");
     try {
-      const meta = await loadJsonFile(`${dataset}/meta.json`);
-      return c.json(meta);
-    } catch {
+      const meta = await registryGetDataset(dataset);
+      if (meta) return c.json(meta);
+      return c.json({ error: "Dataset metadata not found" }, 404);
+    } catch (err) {
+      console.error("catalogRepo.getDataset failed:", err);
       return c.json({ error: "Dataset metadata not found" }, 404);
     }
   })
   .get("/datasets/:dataset/scopes", async (c) => {
     const dataset = c.req.param("dataset");
     try {
-      if (PUBLIC_SCOPE) {
-        const scope = await getScopeMeta(dataset, PUBLIC_SCOPE);
-        return c.json([scope]);
-      }
-      if (!DATA_DIR) throw new Error("No local scope listing available");
-      const scopes = await listJsonObjects(`${dataset}/scopes`, /.*[0-9]+\.json$/);
+      const scopes = await registryListScopes(dataset);
       return c.json(scopes);
-    } catch {
+    } catch (err) {
+      console.error("catalogRepo.listScopes failed:", err);
       return c.json({ error: "Scopes not found" }, 404);
     }
   })
   .get("/datasets/:dataset/scopes/:scope", async (c) => {
     const { dataset, scope } = c.req.param();
     try {
-      const scopeMeta = await getScopeMeta(dataset, scope);
-      return c.json(scopeMeta);
-    } catch {
+      const scopeMeta = await registryGetScope(dataset, scope);
+      if (scopeMeta) return c.json(scopeMeta);
+      return c.json({ error: "Scope not found" }, 404);
+    } catch (err) {
+      console.error("catalogRepo.getScope failed:", err);
       return c.json({ error: "Scope not found" }, 404);
     }
   })
@@ -85,12 +85,11 @@ export const catalogRoutes = new Hono()
     return c.json({ error: "File not found" }, 404);
   })
   .get("/datasets", async (c) => {
-    const localDatasets = await listDatasetsFromDataDir();
-    if (localDatasets.length > 0) {
-      return c.json(localDatasets);
+    try {
+      const datasets = await registryListDatasets();
+      return c.json(datasets);
+    } catch (err) {
+      console.error("catalogRepo.listDatasets failed:", err);
+      return c.json([] as string[]);
     }
-    if (PUBLIC_DATASET) {
-      return c.json([{ id: PUBLIC_DATASET }]);
-    }
-    return c.json([] as string[]);
   });

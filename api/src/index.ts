@@ -14,6 +14,7 @@ import { logger } from "hono/logger";
 import { searchRoutes } from "./routes/search.js";
 import { resolveUrlRoutes } from "./routes/resolve-url.js";
 import { dataRoutes } from "./routes/data.js";
+import { jobsRoutes } from "./routes/jobs.js";
 
 const app = new Hono();
 
@@ -90,6 +91,7 @@ const routes = app
   .route("/api/search", searchRoutes)
   .route("/api", resolveUrlRoutes)
   .route("/api", dataRoutes)
+  .route("/api/jobs", jobsRoutes)
   .get("/api/health", (c) => c.json({ status: "ok" }))
   .get("/api/app-config", (c) =>
     c.json({

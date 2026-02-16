@@ -62,10 +62,8 @@ print("APP MODE?", APP_MODE)
 # used in returning rows for a given index (indexed, get_tags)
 DATAFRAMES = {}
 
-from .jobs import jobs_bp, jobs_write_bp
-app.register_blueprint(jobs_bp, url_prefix='/api/jobs')
-if(not READ_ONLY):
-    app.register_blueprint(jobs_write_bp, url_prefix='/api/jobs')
+# Jobs routes now live in the TS API (/api/jobs/*).
+# Flask no longer serves job endpoints.
 
 from .search import search_bp
 # Search endpoints (NN) are studio-only.

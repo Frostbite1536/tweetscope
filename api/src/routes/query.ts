@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import { getIndexColumn, getTable, getTableColumns } from "../lib/lancedb.js";
+import type * as lancedb from "@lancedb/lancedb";
+import { getDatasetTable } from "../lib/lancedb.js";
 import {
   attachIndexFields,
   buildFilterWhere,
@@ -14,13 +15,44 @@ import {
   type JsonRecord,
 } from "./dataShared.js";
 
+function fullScanLimit(countRaw: unknown): number {
+  const count = Number(countRaw);
+  if (!Number.isFinite(count) || count <= 0) return 1;
+  return Math.floor(count);
+}
+
+function uniqueIntegers(values: number[]): number[] {
+  const seen = new Set<number>();
+  const out: number[] = [];
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
+}
+
+async function getTableColumnsFromSchema(table: lancedb.Table): Promise<string[]> {
+  const schema = (await table.schema()) as { fields?: Array<{ name?: string }> };
+  return (schema.fields ?? [])
+    .map((field) => String(field.name ?? ""))
+    .filter((name) => name.length > 0);
+}
+
+function resolveIndexColumn(tableColumns: string[]): string {
+  const candidates = ["index", "ls_index", "id"];
+  return candidates.find((name) => tableColumns.includes(name)) ?? "index";
+}
+
 export const queryRoutes = new Hono()
   .post("/indexed", async (c) => {
     const payload = (await c.req.json().catch(() => ({}))) as JsonRecord;
     const rawIndices = Array.isArray(payload.indices) ? payload.indices : [];
-    const requested = rawIndices
+    const requested = uniqueIntegers(
+      rawIndices
       .map((v) => normalizeIndex(v))
-      .filter((v): v is number => v !== null);
+      .filter((v): v is number => v !== null),
+    );
     if (requested.length === 0) return c.json([]);
 
     const scopeId = resolveScopeId(payload);
@@ -35,9 +67,9 @@ export const queryRoutes = new Hono()
       return c.json({ error: "dataset is required" }, 400);
     }
     const tableId = await resolveLanceTableId(dataset, scopeId);
-    const table = await getTable(tableId);
-    const indexColumn = await getIndexColumn(tableId);
-    const tableColumns = await getTableColumns(tableId);
+    const table = await getDatasetTable(dataset, tableId);
+    const tableColumns = await getTableColumnsFromSchema(table);
+    const indexColumn = resolveIndexColumn(tableColumns);
 
     const requestedColumns = Array.isArray(payload.columns)
       ? payload.columns.filter((col): col is string => typeof col === "string")
@@ -88,9 +120,9 @@ export const queryRoutes = new Hono()
       return c.json({ error: "dataset is required" }, 400);
     }
     const tableId = await resolveLanceTableId(dataset, scopeId);
-    const table = await getTable(tableId);
-    const indexColumn = await getIndexColumn(tableId);
-    const tableColumns = await getTableColumns(tableId);
+    const table = await getDatasetTable(dataset, tableId);
+    const tableColumns = await getTableColumnsFromSchema(table);
+    const indexColumn = resolveIndexColumn(tableColumns);
 
     const perPage = 100;
     const page = Math.max(0, normalizeIndex(payload.page) ?? 0);
@@ -112,9 +144,11 @@ export const queryRoutes = new Hono()
           );
 
     const indices = Array.isArray(payload.indices)
-      ? payload.indices
+      ? uniqueIntegers(
+          payload.indices
           .map((value) => normalizeIndex(value))
-          .filter((value): value is number => value !== null)
+          .filter((value): value is number => value !== null),
+        )
       : [];
 
     let rows: JsonRecord[] = [];
@@ -143,7 +177,8 @@ export const queryRoutes = new Hono()
       total = rows.length;
       rows = rows.slice(offset, offset + perPage);
     } else if (sort) {
-      const allRows = (await table.query().select(selectedColumns).toArray()) as JsonRecord[];
+      const limit = fullScanLimit(await table.countRows());
+      const allRows = (await table.query().select(selectedColumns).limit(limit).toArray()) as JsonRecord[];
       rows = sortRows(
         allRows.map((row) => attachIndexFields(jsonSafe(row) as JsonRecord, indexColumn)),
         sort
@@ -183,17 +218,21 @@ export const queryRoutes = new Hono()
       return c.json({ error: "dataset is required" }, 400);
     }
     const tableId = await resolveLanceTableId(dataset, scopeId);
-    const table = await getTable(tableId);
-    const indexColumn = await getIndexColumn(tableId);
+    const table = await getDatasetTable(dataset, tableId);
+    const tableColumns = await getTableColumnsFromSchema(table);
+    const indexColumn = resolveIndexColumn(tableColumns);
     const where = buildFilterWhere(payload.filters);
 
     const query = table.query().select([indexColumn]);
     if (where) query.where(where);
 
-    const rows = (await query.toArray()) as JsonRecord[];
-    const indices = rows
+    const limit = fullScanLimit(await table.countRows());
+    const rows = (await query.limit(limit).toArray()) as JsonRecord[];
+    const indices = uniqueIntegers(
+      rows
       .map((row) => normalizeIndex(row[indexColumn]))
-      .filter((value): value is number => value !== null);
+      .filter((value): value is number => value !== null),
+    );
 
     return c.json({ indices });
   });

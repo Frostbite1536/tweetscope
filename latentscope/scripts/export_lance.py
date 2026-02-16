@@ -47,8 +47,12 @@ def export_lance(directory, dataset, scope_id, metric="cosine", partitions=None,
         partitions = max(1, int(n_rows ** 0.5))
     sub_vectors = dim // 16
 
-    # Use collision-proof table name from scope JSON, fall back to scope_id for old scopes
-    table_name = scope_meta.get("lancedb_table_id", scope_id)
+    table_name = scope_meta.get("lancedb_table_id")
+    if not table_name:
+        raise ValueError(
+            f"Scope {scope_id} is missing lancedb_table_id in scope JSON. "
+            "Regenerate the scope before exporting."
+        )
     has_sae = "sae_id" in scope_meta and scope_meta["sae_id"]
 
     def _create_table(db, table_name):

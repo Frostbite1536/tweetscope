@@ -45,6 +45,12 @@ function toNodeStatsRow(row: Record<string, unknown>): NodeStatsRow {
   };
 }
 
+function fullScanLimit(countRaw: unknown): number {
+  const count = Number(countRaw);
+  if (!Number.isFinite(count) || count <= 0) return 1;
+  return Math.floor(count);
+}
+
 // ---------------------------------------------------------------------------
 // LanceGraphRepo
 // ---------------------------------------------------------------------------
@@ -60,7 +66,8 @@ export class LanceGraphRepo {
       const kindList = edgeKinds.map((k) => `'${k.replace(/'/g, "''")}'`).join(", ");
       query = query.where(`edge_kind IN (${kindList})`);
     }
-    const rows = await query.toArray();
+    const limit = fullScanLimit(await table.countRows());
+    const rows = await query.limit(limit).toArray();
     return rows.map((r) => toEdgeRow(r as Record<string, unknown>));
   }
 
@@ -104,7 +111,8 @@ export class LanceGraphRepo {
     const descLimit = opts?.descLimit ?? 3000;
 
     const table = await getGraphTable(dataset, "edges");
-    const replyRows = await table.query().where("edge_kind = 'reply'").toArray();
+    const limit = fullScanLimit(await table.countRows());
+    const replyRows = await table.query().where("edge_kind = 'reply'").limit(limit).toArray();
     const replyEdges = replyRows.map((r) => toEdgeRow(r as Record<string, unknown>));
 
     // Build node_stats ls_index lookup
@@ -183,7 +191,8 @@ export class LanceGraphRepo {
   }> {
     const maxLimit = limit ?? 2000;
     const table = await getGraphTable(dataset, "edges");
-    const quoteRows = await table.query().where("edge_kind = 'quote'").toArray();
+    const fullLimit = fullScanLimit(await table.countRows());
+    const quoteRows = await table.query().where("edge_kind = 'quote'").limit(fullLimit).toArray();
     const quoteEdges = quoteRows.map((r) => toEdgeRow(r as Record<string, unknown>));
 
     const outgoingAll = quoteEdges.filter((edge) => edge.src_tweet_id === tweetId);
@@ -202,7 +211,8 @@ export class LanceGraphRepo {
    */
   async getNodeStats(dataset: string): Promise<NodeStatsRow[]> {
     const table = await getGraphTable(dataset, "node_stats");
-    const rows = await table.query().toArray();
+    const limit = fullScanLimit(await table.countRows());
+    const rows = await table.query().limit(limit).toArray();
     return rows.map((r) => toNodeStatsRow(r as Record<string, unknown>));
   }
 

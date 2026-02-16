@@ -20,6 +20,7 @@ from latentscope.importers.twitter import (
     load_community_extracted_json,
     load_native_x_archive_zip,
     sanitize_dataset_id,
+    split_tweets_and_likes,
 )
 from latentscope.scripts.cluster import clusterer
 from latentscope.scripts.build_links_graph import build_links_graph
@@ -213,6 +214,29 @@ def _upsert_import_rows(
         merged.loc[missing, "ls_index"] = range(start, start + int(missing.sum()))
     merged["ls_index"] = merged["ls_index"].astype(int)
     merged_df = merged.sort_values("ls_index", kind="stable").reset_index(drop=True)
+
+    if merged_df["id"].duplicated().any():
+        duplicate_ids = (
+            merged_df.loc[merged_df["id"].duplicated(), "id"]
+            .astype(str)
+            .head(10)
+            .tolist()
+        )
+        raise ValueError(
+            f"Duplicate ids detected after import merge (sample: {duplicate_ids})"
+        )
+    if merged_df["ls_index"].duplicated().any():
+        duplicate_indices = (
+            merged_df.loc[merged_df["ls_index"].duplicated(), "ls_index"]
+            .astype(int)
+            .head(10)
+            .tolist()
+        )
+        raise ValueError(
+            f"Duplicate ls_index values detected after import merge (sample: {duplicate_indices})"
+        )
+    if merged_df["ls_index"].isna().any():
+        raise ValueError("Null ls_index values detected after import merge")
 
     ingest(dataset_id, merged_df, text_column=text_column)
 
@@ -597,122 +621,52 @@ def _try_enable_hierarchical_scope(
     }
 
 
-def run_import(
+def _register_catalog(
+    data_dir: str,
     dataset_id: str,
-    source: str,
-    *,
-    zip_path: str | None = None,
-    input_path: str | None = None,
-    username: str | None = None,
-    include_likes: bool = True,
-    year: int | None = None,
-    lang: str | None = None,
-    min_favorites: int = 0,
-    min_text_length: int = 0,
-    exclude_replies: bool = False,
-    exclude_retweets: bool = False,
-    top_n: int | None = None,
-    sort: str = "recent",
-    text_column: str = "text",
-    run_pipeline: bool = False,
-    embedding_model: str = "voyageai-voyage-4-lite",
-    umap_neighbors: int = 25,
-    umap_min_dist: float = 0.1,
-    cluster_samples: int = 5,
-    cluster_min_samples: int = 5,
-    cluster_selection_epsilon: float = 0.0,
-    hierarchical_labels: bool = True,
-    toponymy_provider: str = "openai",
-    toponymy_model: str = "gpt-5-mini",
-    toponymy_min_clusters: int = 2,
-    toponymy_base_min_cluster_size: int = 10,
-    toponymy_context: str | None = None,
-    build_links: bool = False,
-    import_batch_id: str | None = None,
-    incremental_links: bool = True,
-) -> dict[str, Any]:
-    dataset_id = sanitize_dataset_id(dataset_id)
+    active_scope_id: str | None = None,
+) -> None:
+    """Register or update a dataset in the LanceDB catalog."""
+    from latentscope.pipeline.catalog_registry import upsert_dataset_meta
 
-    if source == "zip":
-        if not zip_path:
-            raise ValueError("--zip_path is required for --source zip")
-        imported = load_native_x_archive_zip(zip_path)
-    elif source == "community":
-        if not username:
-            raise ValueError("--username is required for --source community")
-        raw = fetch_community_archive(username)
-        imported = load_community_archive_raw(raw, username=username)
-    elif source == "community_json":
-        if not input_path:
-            raise ValueError("--input_path is required for --source community_json")
-        imported = load_community_extracted_json(input_path)
-    else:
-        raise ValueError(f"Unsupported source: {source}")
-
-    filtered = apply_filters(
-        imported.rows,
-        include_likes=include_likes,
-        year=year,
-        lang=lang,
-        min_favorites=min_favorites,
-        min_text_length=min_text_length,
-        exclude_replies=exclude_replies,
-        exclude_retweets=exclude_retweets,
-        top_n=top_n,
-        sort=sort,
-    )
-    if not filtered:
-        raise ValueError("No rows available after filtering")
-
-    data_dir = get_data_dir()
-    df = _build_df(filtered)
-    upsert_summary = _upsert_import_rows(
+    meta_path = os.path.join(data_dir, dataset_id, "meta.json")
+    with open(meta_path) as _mf:
+        dataset_meta = json.load(_mf)
+    upsert_dataset_meta(
+        data_dir,
         dataset_id=dataset_id,
-        incoming_df=df,
-        text_column=text_column,
-        data_dir=data_dir,
-        import_batch_id=import_batch_id,
-        manifest_extra={
-            "source": imported.source,
-            "year": year,
-            "lang": lang,
-            "top_n": top_n,
-            "sort": sort,
-            "include_likes": include_likes,
-            "exclude_replies": exclude_replies,
-            "exclude_retweets": exclude_retweets,
-        },
+        meta=dataset_meta,
+        active_scope_id=active_scope_id,
     )
 
-    summary: dict[str, Any] = {
-        "dataset_id": dataset_id,
-        "rows": int(upsert_summary["batch_rows"]),
-        "dataset_rows": int(upsert_summary["dataset_rows"]),
-        "inserted_rows": int(upsert_summary["inserted_rows"]),
-        "updated_rows": int(upsert_summary["updated_rows"]),
-        "import_batch_id": upsert_summary["import_batch_id"],
-        "import_manifest_path": upsert_summary["manifest_path"],
-        "profile": imported.profile,
-        "source": imported.source,
-    }
 
-    if not run_pipeline:
-        if build_links:
-            try:
-                links_summary = build_links_graph(
-                    dataset_id,
-                    incremental=incremental_links,
-                    changed_tweet_ids=upsert_summary["changed_tweet_ids"],
-                )
-                summary["links"] = {
-                    "nodes": links_summary["nodes"],
-                    "edges": links_summary["edges"],
-                    "edge_kind_counts": links_summary["edge_kind_counts"],
-                    "incremental": bool(links_summary.get("incremental")),
-                }
-            except Exception as err:
-                summary["links_error"] = str(err)
-        return summary
+def _run_pipeline_for_dataset(
+    *,
+    dataset_id: str,
+    data_dir: str,
+    text_column: str,
+    source_label: str,
+    embedding_model: str,
+    umap_neighbors: int,
+    umap_min_dist: float,
+    cluster_samples: int,
+    cluster_min_samples: int,
+    cluster_selection_epsilon: float,
+    hierarchical_labels: bool,
+    toponymy_provider: str,
+    toponymy_model: str,
+    toponymy_min_clusters: int,
+    toponymy_base_min_cluster_size: int,
+    toponymy_context: str | None,
+    do_build_links: bool,
+    incremental_links: bool,
+    changed_tweet_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Run embed → UMAP → cluster → scope → labels → links for one dataset.
+
+    Returns a dict with pipeline artifact IDs and optional links summary.
+    """
+    result: dict[str, Any] = {}
 
     # 1) Embedding
     embed(
@@ -773,7 +727,7 @@ def run_import(
 
     # 4) Scope with default labels
     scope_label = f"{dataset_id} Twitter"
-    scope_description = f"Imported from {imported.source} and auto-processed."
+    scope_description = f"Imported from {source_label} and auto-processed."
     scope(
         dataset_id=dataset_id,
         embedding_id=embedding_id,
@@ -808,9 +762,9 @@ def run_import(
         cluster_labels_id = hier.get("cluster_labels_id", "default")
         hierarchical_enabled = bool(hier.get("hierarchical_labels"))
         if "toponymy_generated" in hier:
-            summary["toponymy_generated"] = bool(hier["toponymy_generated"])
+            result["toponymy_generated"] = bool(hier["toponymy_generated"])
 
-    summary.update(
+    result.update(
         {
             "embedding_id": embedding_id,
             "umap_id": umap_id,
@@ -821,22 +775,231 @@ def run_import(
         }
     )
 
-    if build_links:
-        try:
-            links_summary = build_links_graph(
-                dataset_id,
-                scope_id=scope_id,
-                incremental=incremental_links,
+    _register_catalog(data_dir, dataset_id, active_scope_id=scope_id)
+
+    if do_build_links:
+        links_summary = build_links_graph(
+            dataset_id,
+            incremental=incremental_links,
+            changed_tweet_ids=changed_tweet_ids,
+        )
+        result["links"] = {
+            "nodes": links_summary["nodes"],
+            "edges": links_summary["edges"],
+            "edge_kind_counts": links_summary["edge_kind_counts"],
+            "incremental": bool(links_summary.get("incremental")),
+        }
+
+    return result
+
+
+def run_import(
+    dataset_id: str,
+    source: str,
+    *,
+    zip_path: str | None = None,
+    input_path: str | None = None,
+    username: str | None = None,
+    include_likes: bool = True,
+    year: int | None = None,
+    lang: str | None = None,
+    min_favorites: int = 0,
+    min_text_length: int = 0,
+    exclude_replies: bool = False,
+    exclude_retweets: bool = False,
+    top_n: int | None = None,
+    sort: str = "recent",
+    text_column: str = "text",
+    run_pipeline: bool = False,
+    embedding_model: str = "voyageai-voyage-4-lite",
+    umap_neighbors: int = 25,
+    umap_min_dist: float = 0.1,
+    cluster_samples: int = 5,
+    cluster_min_samples: int = 5,
+    cluster_selection_epsilon: float = 0.0,
+    hierarchical_labels: bool = True,
+    toponymy_provider: str = "openai",
+    toponymy_model: str = "gpt-5-mini",
+    toponymy_min_clusters: int = 2,
+    toponymy_base_min_cluster_size: int = 10,
+    toponymy_context: str | None = None,
+    build_links: bool = False,
+    import_batch_id: str | None = None,
+    incremental_links: bool = True,
+) -> dict[str, Any]:
+    dataset_id = sanitize_dataset_id(dataset_id)
+
+    if source == "zip":
+        if not zip_path:
+            raise ValueError("--zip_path is required for --source zip")
+        imported = load_native_x_archive_zip(zip_path)
+    elif source == "community":
+        if not username:
+            raise ValueError("--username is required for --source community")
+        raw = fetch_community_archive(username)
+        imported = load_community_archive_raw(raw, username=username)
+    elif source == "community_json":
+        if not input_path:
+            raise ValueError("--input_path is required for --source community_json")
+        imported = load_community_extracted_json(input_path)
+    else:
+        raise ValueError(f"Unsupported source: {source}")
+
+    # ------------------------------------------------------------------
+    # Filter all rows (always include likes; skip top_n — applied to tweets only)
+    # ------------------------------------------------------------------
+    filtered = apply_filters(
+        imported.rows,
+        include_likes=True,
+        year=year,
+        lang=lang,
+        min_favorites=min_favorites,
+        min_text_length=min_text_length,
+        exclude_replies=exclude_replies,
+        exclude_retweets=exclude_retweets,
+        top_n=None,
+        sort=sort,
+    )
+    if not filtered:
+        raise ValueError("No rows available after filtering")
+
+    # Split into tweets and likes
+    tweet_rows, like_rows = split_tweets_and_likes(filtered)
+
+    # Apply top_n only to tweets
+    if top_n is not None and top_n > 0:
+        tweet_rows = tweet_rows[:top_n]
+
+    # Discard likes if the user opted out
+    if not include_likes:
+        like_rows = []
+
+    if not tweet_rows and not like_rows:
+        raise ValueError("No rows available after filtering (neither tweets nor likes)")
+
+    data_dir = get_data_dir()
+    manifest_base = {
+        "source": imported.source,
+        "year": year,
+        "lang": lang,
+        "top_n": top_n,
+        "sort": sort,
+        "include_likes": include_likes,
+        "exclude_replies": exclude_replies,
+        "exclude_retweets": exclude_retweets,
+    }
+
+    pipeline_params = dict(
+        data_dir=data_dir,
+        text_column=text_column,
+        source_label=imported.source,
+        embedding_model=embedding_model,
+        umap_neighbors=umap_neighbors,
+        umap_min_dist=umap_min_dist,
+        cluster_samples=cluster_samples,
+        cluster_min_samples=cluster_min_samples,
+        cluster_selection_epsilon=cluster_selection_epsilon,
+        hierarchical_labels=hierarchical_labels,
+        toponymy_provider=toponymy_provider,
+        toponymy_model=toponymy_model,
+        toponymy_min_clusters=toponymy_min_clusters,
+        toponymy_base_min_cluster_size=toponymy_base_min_cluster_size,
+        toponymy_context=toponymy_context,
+    )
+
+    summary: dict[str, Any] = {
+        "dataset_id": dataset_id,
+        "rows": 0,
+        "dataset_rows": 0,
+        "inserted_rows": 0,
+        "updated_rows": 0,
+        "profile": imported.profile,
+        "source": imported.source,
+    }
+
+    # ------------------------------------------------------------------
+    # Process tweets dataset (skip if no tweets after filtering)
+    # ------------------------------------------------------------------
+    if tweet_rows:
+        tweets_df = _build_df(tweet_rows)
+        upsert_summary = _upsert_import_rows(
+            dataset_id=dataset_id,
+            incoming_df=tweets_df,
+            text_column=text_column,
+            data_dir=data_dir,
+            import_batch_id=import_batch_id,
+            manifest_extra=manifest_base,
+        )
+
+        summary.update({
+            "rows": int(upsert_summary["batch_rows"]),
+            "dataset_rows": int(upsert_summary["dataset_rows"]),
+            "inserted_rows": int(upsert_summary["inserted_rows"]),
+            "updated_rows": int(upsert_summary["updated_rows"]),
+            "import_batch_id": upsert_summary["import_batch_id"],
+            "import_manifest_path": upsert_summary["manifest_path"],
+        })
+
+        _register_catalog(data_dir, dataset_id)
+
+        if not run_pipeline:
+            if build_links:
+                links_summary = build_links_graph(
+                    dataset_id,
+                    incremental=incremental_links,
+                    changed_tweet_ids=upsert_summary["changed_tweet_ids"],
+                )
+                summary["links"] = {
+                    "nodes": links_summary["nodes"],
+                    "edges": links_summary["edges"],
+                    "edge_kind_counts": links_summary["edge_kind_counts"],
+                    "incremental": bool(links_summary.get("incremental")),
+                }
+        else:
+            pipeline_result = _run_pipeline_for_dataset(
+                dataset_id=dataset_id,
+                do_build_links=build_links,
+                incremental_links=incremental_links,
                 changed_tweet_ids=upsert_summary["changed_tweet_ids"],
+                **pipeline_params,
             )
-            summary["links"] = {
-                "nodes": links_summary["nodes"],
-                "edges": links_summary["edges"],
-                "edge_kind_counts": links_summary["edge_kind_counts"],
-                "incremental": bool(links_summary.get("incremental")),
-            }
-        except Exception as err:
-            summary["links_error"] = str(err)
+            summary.update(pipeline_result)
+
+    # ------------------------------------------------------------------
+    # Process likes dataset (separate, independent dataset)
+    # ------------------------------------------------------------------
+    if like_rows:
+        likes_dataset_id = f"{dataset_id}-likes"
+        likes_df = _build_df(like_rows)
+        likes_upsert = _upsert_import_rows(
+            dataset_id=likes_dataset_id,
+            incoming_df=likes_df,
+            text_column=text_column,
+            data_dir=data_dir,
+            import_batch_id=import_batch_id,
+            manifest_extra={**manifest_base, "dataset_type": "likes", "parent_dataset_id": dataset_id},
+        )
+
+        likes_summary: dict[str, Any] = {
+            "dataset_id": likes_dataset_id,
+            "rows": int(likes_upsert["batch_rows"]),
+            "dataset_rows": int(likes_upsert["dataset_rows"]),
+            "inserted_rows": int(likes_upsert["inserted_rows"]),
+            "updated_rows": int(likes_upsert["updated_rows"]),
+        }
+
+        _register_catalog(data_dir, likes_dataset_id)
+
+        if run_pipeline:
+            likes_pipeline = _run_pipeline_for_dataset(
+                dataset_id=likes_dataset_id,
+                do_build_links=False,  # no links graph for likes
+                incremental_links=False,
+                **pipeline_params,
+            )
+            likes_summary.update(likes_pipeline)
+
+        summary["likes_dataset"] = likes_summary
 
     return summary
 
@@ -948,10 +1111,20 @@ def main() -> None:
     args_dict = vars(args).copy()
     args_dict["include_likes"] = not args_dict.pop("exclude_likes", False)
     result = run_import(**args_dict)
-    print(f"IMPORTED_ROWS: {result['rows']}")
+    tweet_rows = result["rows"]
+    likes_rows = result.get("likes_dataset", {}).get("rows", 0)
+    total_rows = tweet_rows + likes_rows
+    print(f"IMPORTED_ROWS: {total_rows}")
+    print(f"IMPORTED_TWEET_ROWS: {tweet_rows}")
     print(f"DATASET_ID: {result['dataset_id']}")
     if result.get("scope_id"):
         print(f"FINAL_SCOPE: {result['scope_id']}")
+    if result.get("likes_dataset"):
+        likes = result["likes_dataset"]
+        print(f"LIKES_DATASET_ID: {likes['dataset_id']}")
+        print(f"LIKES_IMPORTED_ROWS: {likes.get('rows', 0)}")
+        if likes.get("scope_id"):
+            print(f"LIKES_FINAL_SCOPE: {likes['scope_id']}")
 
 
 if __name__ == "__main__":

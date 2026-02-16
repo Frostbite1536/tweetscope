@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { getDatasetTable, getTableColumns, resolveDatasetTableId } from "../lib/lancedb.js";
 import {
   DATA_DIR,
-  PUBLIC_SCOPE,
   getScopeMeta,
   jsonSafe,
   listJsonObjects,
@@ -12,6 +11,7 @@ import {
   validateRequiredColumns,
   type JsonRecord,
 } from "./dataShared.js";
+import { getActiveScope } from "../lib/catalogRepo.js";
 
 const contractRequired = Object.keys(scopeContract.required_columns);
 const contractOptional = Object.keys(scopeContract.optional_columns ?? {});
@@ -25,11 +25,19 @@ class ContractViolationError extends Error {
   }
 }
 
+function fullScanLimit(countRaw: unknown): number {
+  const count = Number(countRaw);
+  if (!Number.isFinite(count) || count <= 0) return 1;
+  return Math.floor(count);
+}
+
 async function resolveViewTableId(dataset: string, view: string): Promise<string> {
   const meta = await getScopeMeta(dataset, view);
   const tableId = meta.lancedb_table_id;
-  const tableIdOrSuffix = typeof tableId === "string" && tableId ? tableId : view;
-  return resolveDatasetTableId(dataset, tableIdOrSuffix);
+  if (typeof tableId !== "string" || !tableId.trim()) {
+    throw new Error(`Scope metadata missing lancedb_table_id for ${dataset}/${view}`);
+  }
+  return resolveDatasetTableId(dataset, tableId);
 }
 
 async function queryServingRows({
@@ -46,8 +54,9 @@ async function queryServingRows({
 
   // Select only serving columns that exist in the table (exclude vector)
   const queryCols = contractSelected.filter((col) => tableCols.includes(col) && col !== "vector");
+  const limit = fullScanLimit(await table.countRows());
 
-  const rawRows = (await table.query().select(queryCols).toArray()) as JsonRecord[];
+  const rawRows = (await table.query().select(queryCols).limit(limit).toArray()) as JsonRecord[];
   const normalized = rawRows.map((row, idx) => {
     const safe = jsonSafe(row) as JsonRecord;
     const lsIndex = normalizeIndex(safe.ls_index) ?? idx;
@@ -65,6 +74,22 @@ async function queryServingRows({
   return normalized;
 }
 
+/**
+ * Extract a nested metadata field from the active scope via registry.
+ */
+async function getActiveScopeField(
+  dataset: string,
+  field: string,
+): Promise<unknown | null> {
+  try {
+    const active = await getActiveScope(dataset);
+    if (!active) return null;
+    return (active as Record<string, unknown>)[field] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export const viewsRoutes = new Hono()
   .get("/datasets/:dataset/views/:view/meta", async (c) => {
     const { dataset, view } = c.req.param();
@@ -76,20 +101,6 @@ export const viewsRoutes = new Hono()
       return c.json({ error: "View not found" }, 404);
     }
   })
-  .get("/datasets/:dataset/views/:view/cluster-tree", async (c) => {
-    const { dataset, view } = c.req.param();
-    try {
-      const meta = await getScopeMeta(dataset, view);
-      return c.json({
-        hierarchical_labels: meta.hierarchical_labels ?? false,
-        unknown_count: meta.unknown_count ?? 0,
-        cluster_labels_lookup: meta.cluster_labels_lookup ?? [],
-      });
-    } catch (err) {
-      console.error(err);
-      return c.json({ error: "View cluster tree not found" }, 404);
-    }
-  })
   .get("/datasets/:dataset/views/:view/points", async (c) => {
     const { dataset, view } = c.req.param();
     try {
@@ -99,8 +110,9 @@ export const viewsRoutes = new Hono()
 
       const selected = ["id", "ls_index", "x", "y", "cluster", "label", "deleted"];
       const queryCols = selected.filter((col) => tableCols.includes(col));
+      const limit = fullScanLimit(await table.countRows());
 
-      const rawRows = (await table.query().select(queryCols).toArray()) as JsonRecord[];
+      const rawRows = (await table.query().select(queryCols).limit(limit).toArray()) as JsonRecord[];
 
       const normalized = rawRows.map((row, idx) => {
         const safe = jsonSafe(row) as JsonRecord;
@@ -137,6 +149,12 @@ export const viewsRoutes = new Hono()
   })
   .get("/datasets/:dataset/scopes/:scope/parquet", async (c) => {
     const { dataset, scope } = c.req.param();
+
+    // Deprecated — use /views/:view/rows instead
+    c.header("Deprecation", "true");
+    c.header("Sunset", "2026-06-01");
+    c.header("Link", `</api/datasets/${dataset}/views/${scope}/rows>; rel="successor-version"`);
+
     let tableId: string;
     try {
       tableId = await resolveLanceTableId(dataset, scope);
@@ -167,12 +185,17 @@ export const viewsRoutes = new Hono()
   .get("/datasets/:dataset/embeddings", async (c) => {
     const dataset = c.req.param("dataset");
     try {
-      if (PUBLIC_SCOPE) {
-        const scopeMeta = await getScopeMeta(dataset, PUBLIC_SCOPE);
-        const embedding = scopeMeta.embedding;
-        if (embedding && typeof embedding === "object") return c.json([embedding]);
+      const embedding = await getActiveScopeField(dataset, "embedding");
+      if (embedding && typeof embedding === "object") {
+        return c.json([embedding]);
       }
-      if (!DATA_DIR) throw new Error("No local embedding listing available");
+    } catch {
+      // fall through
+    }
+
+    // Studio fallback: list from filesystem
+    try {
+      if (!DATA_DIR) return c.json([]);
       const embeddings = await listJsonObjects(`${dataset}/embeddings`, /.*\.json$/);
       return c.json(embeddings);
     } catch {
@@ -182,12 +205,17 @@ export const viewsRoutes = new Hono()
   .get("/datasets/:dataset/clusters", async (c) => {
     const dataset = c.req.param("dataset");
     try {
-      if (PUBLIC_SCOPE) {
-        const scopeMeta = await getScopeMeta(dataset, PUBLIC_SCOPE);
-        const cluster = scopeMeta.cluster;
-        if (cluster && typeof cluster === "object") return c.json([cluster]);
+      const cluster = await getActiveScopeField(dataset, "cluster");
+      if (cluster && typeof cluster === "object") {
+        return c.json([cluster]);
       }
-      if (!DATA_DIR) throw new Error("No local cluster listing available");
+    } catch {
+      // fall through
+    }
+
+    // Studio fallback: list from filesystem
+    try {
+      if (!DATA_DIR) return c.json([]);
       const clusters = await listJsonObjects(`${dataset}/clusters`, /^cluster-\d+\.json$/);
       return c.json(clusters);
     } catch {
@@ -197,12 +225,17 @@ export const viewsRoutes = new Hono()
   .get("/datasets/:dataset/clusters/:cluster/labels_available", async (c) => {
     const { dataset, cluster } = c.req.param();
     try {
-      if (PUBLIC_SCOPE) {
-        const scopeMeta = await getScopeMeta(dataset, PUBLIC_SCOPE);
-        const labels = scopeMeta.cluster_labels;
-        if (labels && typeof labels === "object") return c.json([labels]);
+      const labels = await getActiveScopeField(dataset, "cluster_labels");
+      if (labels && typeof labels === "object") {
+        return c.json([labels]);
       }
-      if (!DATA_DIR) throw new Error("No local labels listing available");
+    } catch {
+      // fall through
+    }
+
+    // Studio fallback: list from filesystem
+    try {
+      if (!DATA_DIR) return c.json([]);
       const escapedCluster = cluster.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const labels = await listJsonObjects(
         `${dataset}/clusters`,

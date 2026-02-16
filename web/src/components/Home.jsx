@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 import { jobPolling } from './Job/Run';
 import JobProgress from './Job/Progress';
 import { Button, Input } from 'react-element-forge';
-import { apiUrl, catalogClient } from '../lib/apiService';
+import { apiUrl, jobsApiUrl, catalogClient } from '../lib/apiService';
 import { extractTwitterArchiveForImport } from '../lib/twitterArchiveParser';
 const readonly = import.meta.env.MODE == 'read_only';
 
@@ -93,15 +93,7 @@ function Home({ appConfig = null }) {
       }
       try {
         setTwitterArchiveExtracting(true);
-        const extractedRaw = await extractTwitterArchiveForImport(twitterArchiveFile);
-        const extracted = twitterArchiveIncludeLikes
-          ? extractedRaw
-          : {
-              ...extractedRaw,
-              likes: [],
-              likes_count: 0,
-              total_count: extractedRaw?.tweet_count || extractedRaw?.tweets?.length || 0,
-            };
+        const extracted = await extractTwitterArchiveForImport(twitterArchiveFile);
         const recordCount =
           extracted?.total_count ||
           (extracted?.tweet_count || extracted?.tweets?.length || 0) +
@@ -114,7 +106,7 @@ function Home({ appConfig = null }) {
         formData.append('source_type', 'community_json');
         formData.append('file', extractedFile);
 
-        const data = await fetch(`${apiUrl}/jobs/import_twitter`, {
+        const data = await fetch(`${jobsApiUrl}/jobs/import_twitter`, {
           method: 'POST',
           body: formData,
         }).then(parseApiResponse);
@@ -151,7 +143,7 @@ function Home({ appConfig = null }) {
         formData.append('year', communityYear);
       }
 
-      fetch(`${apiUrl}/jobs/import_twitter`, {
+      fetch(`${jobsApiUrl}/jobs/import_twitter`, {
         method: 'POST',
         body: formData,
       })
@@ -191,6 +183,8 @@ function Home({ appConfig = null }) {
   }, [twitterImportJob, navigate]);
 
   const twitterArchiveNameTaken = datasets.some((dataset) => dataset.id === twitterArchiveDatasetName);
+  const likesNameTaken = twitterArchiveIncludeLikes &&
+    datasets.some((dataset) => dataset.id === `${twitterArchiveDatasetName}-likes`);
   const communityNameTaken = datasets.some((dataset) => dataset.id === communityDatasetName);
 
   return (
@@ -226,12 +220,12 @@ function Home({ appConfig = null }) {
                     onChange={(e) => setTwitterArchiveIncludeLikes(e.target.checked)}
                   />
                   <div>
-                    <div className={styles.checkboxLabel}>Include likes in import</div>
-                    {!twitterArchiveIncludeLikes ? (
-                      <div className={styles.checkboxHint}>
-                        Likes are stripped client-side before upload.
-                      </div>
-                    ) : null}
+                    <div className={styles.checkboxLabel}>Import likes as separate dataset</div>
+                    <div className={styles.checkboxHint}>
+                      {twitterArchiveIncludeLikes
+                        ? 'Likes will be imported into a separate dataset.'
+                        : 'Likes will not be imported.'}
+                    </div>
                   </div>
                 </label>
 
@@ -270,6 +264,9 @@ function Home({ appConfig = null }) {
                 {twitterArchiveNameTaken ? (
                   <div className={styles.warningBanner}>This dataset name is already taken.</div>
                 ) : null}
+                {likesNameTaken ? (
+                  <div className={styles.warningBanner}>The likes dataset name ({twitterArchiveDatasetName}-likes) is already taken.</div>
+                ) : null}
 
                 <Button
                   type="submit"
@@ -277,6 +274,7 @@ function Home({ appConfig = null }) {
                     !twitterArchiveFile ||
                     !twitterArchiveDatasetName ||
                     twitterArchiveNameTaken ||
+                    likesNameTaken ||
                     twitterArchiveExtracting
                   }
                   text={twitterArchiveExtracting ? 'Processing archive locally...' : 'Import Archive'}
@@ -361,7 +359,7 @@ function Home({ appConfig = null }) {
               <div className={styles.datasetCard} key={dataset.id}>
                 <div className={styles.datasetHeader}>
                   <h3 className={styles.datasetName}>{dataset.id}</h3>
-                  <span className={styles.datasetRowCount}>{dataset.length} rows</span>
+                  <span className={styles.datasetRowCount}>{dataset.row_count ?? dataset.length ?? 0} rows</span>
                 </div>
                 <div className={styles.scopeGrid}>
                   {scopes[dataset.id] &&

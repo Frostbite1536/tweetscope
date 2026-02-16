@@ -4,6 +4,10 @@ import path from "node:path";
 import { DATA_DIR, RAW_DATA_URL } from "./env.js";
 import { ensureSafeRelativePath, fileExists, buildFileUrl } from "./paths.js";
 import type { JsonRecord } from "./types.js";
+import {
+  getScope as registryGetScope,
+  resolveScopeLanceTableId as registryResolveTableId,
+} from "../../lib/catalogRepo.js";
 
 const scopeCache = new Map<string, JsonRecord>();
 
@@ -30,9 +34,7 @@ export async function loadJsonFile(relativePath: string): Promise<JsonRecord> {
 }
 
 export async function resolveLanceTableId(dataset: string, scopeId: string): Promise<string> {
-  const meta = await getScopeMeta(dataset, scopeId);
-  const tableId = meta.lancedb_table_id;
-  return typeof tableId === "string" && tableId ? tableId : scopeId;
+  return registryResolveTableId(dataset, scopeId);
 }
 
 export async function getScopeMeta(dataset: string, scopeId: string): Promise<JsonRecord> {
@@ -40,9 +42,14 @@ export async function getScopeMeta(dataset: string, scopeId: string): Promise<Js
   const cached = scopeCache.get(cacheKey);
   if (cached) return cached;
 
-  const scope = await loadJsonFile(`${dataset}/scopes/${scopeId}.json`);
-  scopeCache.set(cacheKey, scope);
-  return scope;
+  const registryMeta = await registryGetScope(dataset, scopeId);
+  if (registryMeta) {
+    const record = registryMeta as unknown as JsonRecord;
+    scopeCache.set(cacheKey, record);
+    return record;
+  }
+
+  throw new Error(`Scope ${scopeId} not found in registry for dataset ${dataset}`);
 }
 
 export async function listJsonObjects(

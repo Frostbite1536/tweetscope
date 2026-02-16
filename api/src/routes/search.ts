@@ -55,7 +55,14 @@ export const searchRoutes = new Hono()
 
     // Fetch scope metadata once — drives both model resolution and table lookup
     const scopeMeta = await getScopeMeta(dataset, scope_id);
-    const tableId = (scopeMeta.lancedb_table_id as string) || scope_id;
+    const tableIdRaw = scopeMeta.lancedb_table_id;
+    if (typeof tableIdRaw !== "string" || !tableIdRaw.trim()) {
+      return c.json(
+        { error: `scope ${scope_id} is missing lancedb_table_id; re-run scope export` },
+        500,
+      );
+    }
+    const tableId = tableIdRaw;
     const { model, apiKey } = getModelConfig(scopeMeta);
 
     if (!apiKey) {
@@ -73,8 +80,15 @@ export const searchRoutes = new Hono()
       where: "deleted = false",
     });
 
-    const indices = results.map((r) => r.index);
-    const distances = results.map((r) => r._distance);
+    const seen = new Set<number>();
+    const indices: number[] = [];
+    const distances: number[] = [];
+    for (const result of results) {
+      if (seen.has(result.index)) continue;
+      seen.add(result.index);
+      indices.push(result.index);
+      distances.push(result._distance);
+    }
 
     // Match the response shape the frontend expects (apiService.js:176-184)
     return c.json({

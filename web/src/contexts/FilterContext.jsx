@@ -14,6 +14,19 @@ import {
 
 const FilterContext = createContext(null);
 
+function uniqueOrderedIndices(values) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values || []) {
+    const n = Number(value);
+    if (!Number.isInteger(n)) continue;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
 export function FilterProvider({ children }) {
   // Global filter config: { type, value } or null when no filter is active.
   const [filterConfig, setFilterConfig] = useState(null);
@@ -37,7 +50,9 @@ export function FilterProvider({ children }) {
 
   // Base set of non-deleted indices from the dataset.
   const baseIndices = useMemo(() => {
-    return scopeRows.map((row) => row.ls_index).filter((index) => !deletedIndices.includes(index));
+    return uniqueOrderedIndices(
+      scopeRows.map((row) => row.ls_index).filter((index) => !deletedIndices.includes(index))
+    );
   }, [scopeRows, deletedIndices]);
 
   // Column filter
@@ -145,7 +160,7 @@ export function FilterProvider({ children }) {
           }
         }
       }
-      setFilteredIndices(indices);
+      setFilteredIndices(uniqueOrderedIndices(indices));
       setPage(0); // Reset to first page when filter changes.
       setLoading(false);
     }
