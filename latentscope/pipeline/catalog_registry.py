@@ -40,10 +40,23 @@ def _validate_no_nan(obj: Any, path: str = "") -> None:
             _validate_no_nan(v, f"{path}[{i}]")
 
 
+def _scrub_nan(obj: Any) -> Any:
+    """Replace NaN/Inf floats with None so JSON serialization succeeds."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    if isinstance(obj, dict):
+        return {k: _scrub_nan(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_scrub_nan(v) for v in obj]
+    return obj
+
+
 def _safe_json_dumps(meta: dict) -> str:
-    """Serialize metadata to JSON, rejecting NaN/Inf and unexpected types."""
-    _validate_no_nan(meta)
-    return json.dumps(meta, allow_nan=False)
+    """Serialize metadata to JSON, converting NaN/Inf to null."""
+    clean = _scrub_nan(meta)
+    return json.dumps(clean, allow_nan=False)
 
 
 def _sql_literal(raw: str) -> str:

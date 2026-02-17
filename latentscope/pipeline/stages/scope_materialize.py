@@ -53,11 +53,12 @@ def build_scope_points_df(
         transactions_path = os.path.join(
             data_dir, dataset_id, "scopes", f"{overwrite_scope_id}-transactions.json"
         )
-        with open(transactions_path) as f:
-            transactions = json.load(f)
-            for transaction in transactions:
-                if transaction["action"] == "delete_rows":
-                    scope_points.loc[transaction["payload"]["row_ids"], "deleted"] = True
+        if os.path.exists(transactions_path):
+            with open(transactions_path) as f:
+                transactions = json.load(f)
+                for transaction in transactions:
+                    if transaction["action"] == "delete_rows":
+                        scope_points.loc[transaction["payload"]["row_ids"], "deleted"] = True
 
     scope_points["ls_index"] = scope_points.index
     return scope_points
