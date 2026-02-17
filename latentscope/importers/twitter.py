@@ -76,6 +76,78 @@ def _parse_date_any(value: Any) -> datetime | None:
         return None
 
 
+def _text_fingerprint(text: str) -> str:
+    """Normalize tweet text for fuzzy matching against note tweets.
+
+    Strips leading @mentions, decodes common HTML entities, removes trailing
+    ellipsis, collapses whitespace, and lowercases.
+    """
+    t = str(text)
+    # Strip leading @mention chains (e.g. "@user1 @user2 actual text")
+    t = re.sub(r"^(?:@\w+\s*)+", "", t)
+    # Decode common HTML entities
+    t = t.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    # Strip trailing ellipsis (Unicode … or ...)
+    t = re.sub(r"[\u2026.]{1,3}\s*$", "", t)
+    # Collapse whitespace and lowercase
+    t = re.sub(r"\s+", " ", t).strip().lower()
+    # Use first 80 chars for matching (enough to be unique, short enough to
+    # tolerate truncation differences)
+    return t[:80]
+
+
+@dataclass
+class _NoteTweetInfo:
+    """Parsed note tweet ready for merging into its parent tweet."""
+    note_tweet_id: str
+    text: str
+    urls: list[str]
+    created_at: str | None
+
+
+def _build_note_tweet_lookup(
+    notes_raw: list[Any],
+) -> tuple[dict[str, _NoteTweetInfo], dict[str, _NoteTweetInfo]]:
+    """Build lookup tables from raw note-tweet.js entries.
+
+    Returns (by_id, by_fingerprint) where:
+      - by_id maps noteTweetId → _NoteTweetInfo
+      - by_fingerprint maps _text_fingerprint(text) → _NoteTweetInfo
+    """
+    by_id: dict[str, _NoteTweetInfo] = {}
+    by_fingerprint: dict[str, _NoteTweetInfo] = {}
+
+    for note_obj in notes_raw:
+        note = note_obj.get("noteTweet", note_obj)
+        core = note.get("core", {})
+        text = core.get("text", "")
+        if not text:
+            continue
+        note_id = str(note.get("noteTweetId") or "")
+        if not note_id:
+            continue
+
+        urls = []
+        for url in core.get("urls", []) or []:
+            expanded = url.get("expandedUrl")
+            if expanded:
+                urls.append(expanded)
+
+        dt = _parse_date_any(note.get("createdAt"))
+        info = _NoteTweetInfo(
+            note_tweet_id=note_id,
+            text=str(text),
+            urls=urls,
+            created_at=dt.isoformat() if dt else None,
+        )
+        by_id[note_id] = info
+        fp = _text_fingerprint(text)
+        if fp:
+            by_fingerprint[fp] = info
+
+    return by_id, by_fingerprint
+
+
 def _extract_profile_from_native(account_data: Any, profile_data: Any) -> dict[str, Any]:
     account = {}
     if isinstance(account_data, list) and account_data:
@@ -107,6 +179,9 @@ def _flatten_tweet(
     username: str | None = None,
     display_name: str | None = None,
     source: str = "x_native",
+    note_tweets_by_id: dict[str, _NoteTweetInfo] | None = None,
+    note_tweets_by_fp: dict[str, _NoteTweetInfo] | None = None,
+    consumed_note_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     t = tweet_obj.get("tweet", tweet_obj)
     dt = _parse_date_any(t.get("created_at"))
@@ -139,6 +214,37 @@ def _flatten_tweet(
     is_reply = bool(t.get("in_reply_to_status_id_str") or t.get("in_reply_to_status_id"))
     is_retweet = bool(t.get("retweeted_status")) or str(text).startswith("RT @")
 
+    # --- Note tweet merge: upgrade truncated text with full note version ---
+    note_tweet_id = None
+    matched_note: _NoteTweetInfo | None = None
+
+    if note_tweets_by_id or note_tweets_by_fp:
+        # 1) Direct lookup: tweet object may contain a note_tweet reference
+        raw_note_ref = t.get("note_tweet", {})
+        if isinstance(raw_note_ref, dict):
+            ref_id = str(raw_note_ref.get("note_tweet_id") or "")
+            if ref_id and note_tweets_by_id and ref_id in note_tweets_by_id:
+                matched_note = note_tweets_by_id[ref_id]
+
+        # 2) Fallback: fingerprint-based matching
+        if matched_note is None and note_tweets_by_fp:
+            fp = _text_fingerprint(text)
+            if fp and fp in note_tweets_by_fp:
+                matched_note = note_tweets_by_fp[fp]
+
+        if matched_note is not None:
+            text = matched_note.text
+            note_tweet_id = matched_note.note_tweet_id
+            # Merge URLs from note tweet (may have expanded URLs not in the
+            # truncated tweet's entities)
+            if matched_note.urls:
+                existing = set(urls)
+                for u in matched_note.urls:
+                    if u not in existing:
+                        urls.append(u)
+            if consumed_note_ids is not None:
+                consumed_note_ids.add(matched_note.note_tweet_id)
+
     return {
         "id": str(t.get("id_str") or t.get("id") or ""),
         "liked_tweet_id": None,
@@ -163,6 +269,7 @@ def _flatten_tweet(
         "media_urls_json": json.dumps(media_urls, ensure_ascii=False) if media_urls else "[]",
         "tweet_type": "tweet",
         "archive_source": source,
+        "note_tweet_id": note_tweet_id,
     }
 
 
@@ -187,8 +294,9 @@ def _flatten_note_tweet(
         if expanded:
             urls.append(expanded)
 
+    note_id = str(note.get("noteTweetId") or "")
     return {
-        "id": str(note.get("noteTweetId") or ""),
+        "id": note_id,
         "liked_tweet_id": None,
         "text": str(text),
         "created_at": created_at_iso or note.get("createdAt"),
@@ -211,6 +319,7 @@ def _flatten_note_tweet(
         "media_urls_json": "[]",
         "tweet_type": "note_tweet",
         "archive_source": source,
+        "note_tweet_id": note_id,
     }
 
 
@@ -259,6 +368,7 @@ def _flatten_like(
         "media_urls_json": "[]",
         "tweet_type": "like",
         "archive_source": source,
+        "note_tweet_id": None,
     }
 
 
@@ -418,10 +528,27 @@ def load_native_x_archive_zip(zip_path: str) -> ImportResult:
     username = profile.get("username")
     display_name = profile.get("display_name")
 
+    # Build note tweet lookup for merging into parent tweets
+    note_by_id, note_by_fp = _build_note_tweet_lookup(notes_raw)
+    consumed_note_ids: set[str] = set()
+
     rows: list[dict[str, Any]] = []
     for tw in tweets_raw:
-        rows.append(_flatten_tweet(tw, username=username, display_name=display_name, source="x_native"))
+        rows.append(_flatten_tweet(
+            tw,
+            username=username,
+            display_name=display_name,
+            source="x_native",
+            note_tweets_by_id=note_by_id,
+            note_tweets_by_fp=note_by_fp,
+            consumed_note_ids=consumed_note_ids,
+        ))
+    # Only add note tweets that weren't merged into a parent tweet
     for nt in notes_raw:
+        note = nt.get("noteTweet", nt)
+        note_id = str(note.get("noteTweetId") or "")
+        if note_id in consumed_note_ids:
+            continue
         row = _flatten_note_tweet(nt, username=username, display_name=display_name, source="x_native")
         if row:
             rows.append(row)
@@ -503,6 +630,50 @@ def load_community_archive_raw(raw_data: dict[str, Any], username: str) -> Impor
     return ImportResult(profile=profile, rows=normalized, source="community_archive")
 
 
+def _dedup_note_tweet_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove note-tweet duplicate rows that overlap with a regular tweet.
+
+    When the browser-side extraction includes both a truncated tweet and its
+    note-tweet version as separate entries, keep the regular tweet (which has
+    engagement metadata) but upgrade its text with the note-tweet version.
+    """
+    # Separate note_tweet rows from the rest
+    note_rows: list[dict[str, Any]] = []
+    other_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("tweet_type") == "note_tweet":
+            note_rows.append(row)
+        else:
+            other_rows.append(row)
+
+    if not note_rows:
+        return rows
+
+    # Build fingerprint index from non-note rows
+    fp_to_idx: dict[str, int] = {}
+    for idx, row in enumerate(other_rows):
+        fp = _text_fingerprint(row.get("text", ""))
+        if fp:
+            fp_to_idx[fp] = idx
+
+    consumed: set[int] = set()
+    for note_row in note_rows:
+        note_fp = _text_fingerprint(note_row.get("text", ""))
+        if note_fp and note_fp in fp_to_idx:
+            # Upgrade the regular tweet's text with the note version
+            target_idx = fp_to_idx[note_fp]
+            other_rows[target_idx]["text"] = note_row["text"]
+            other_rows[target_idx]["note_tweet_id"] = note_row.get("id")
+            consumed.add(id(note_row))
+
+    # Keep unmatched note tweets as standalone rows
+    for note_row in note_rows:
+        if id(note_row) not in consumed:
+            other_rows.append(note_row)
+
+    return other_rows
+
+
 def load_community_extracted_json(path: str) -> ImportResult:
     """
     Load strict browser-extracted archive payload.
@@ -545,6 +716,11 @@ def load_community_extracted_json(path: str) -> ImportResult:
         )
         if row:
             rows.append(row)
+
+    # Defensive dedup: older browser-extracted payloads may include both a
+    # regular tweet and its note tweet as separate entries.  Remove note-tweet
+    # duplicates by fingerprint matching.
+    rows = _dedup_note_tweet_rows(rows)
 
     return ImportResult(profile=profile, rows=rows, source="community_archive")
 

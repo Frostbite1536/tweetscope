@@ -118,6 +118,43 @@ function noteTweetToTweet(noteEntry, fallbackUsername = null) {
   };
 }
 
+function textFingerprint(text) {
+  let t = String(text || '');
+  // Strip leading @mention chains
+  t = t.replace(/^(?:@\w+\s*)+/, '');
+  // Decode common HTML entities
+  t = t.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  // Strip trailing ellipsis
+  t = t.replace(/[\u2026.]{1,3}\s*$/, '');
+  // Collapse whitespace and lowercase
+  t = t.replace(/\s+/g, ' ').trim().toLowerCase();
+  return t.slice(0, 80);
+}
+
+function buildNoteTweetLookup(notesRaw) {
+  const byId = new Map();
+  const byFingerprint = new Map();
+
+  for (const noteEntry of asArray(notesRaw)) {
+    const note = noteEntry?.noteTweet || noteEntry || {};
+    const core = note?.core || {};
+    const text = core.text || '';
+    const noteId = note.noteTweetId;
+    if (!noteId || !text) continue;
+
+    const urls = asArray(core.urls)
+      .map((u) => u?.expandedUrl || u?.url)
+      .filter(Boolean);
+
+    const info = { noteId: String(noteId), text: String(text), urls };
+    byId.set(String(noteId), info);
+    const fp = textFingerprint(text);
+    if (fp) byFingerprint.set(fp, info);
+  }
+
+  return { byId, byFingerprint };
+}
+
 function minimizeLikeObject(likeEntry) {
   const like = likeEntry?.like || likeEntry || {};
   const tweetId = like.tweetId || like.tweet_id || like.id_str || like.id;
@@ -177,10 +214,60 @@ export async function extractTwitterArchiveForImport(file) {
   const profile = profileFromArchive(accountRaw, profileRaw);
   const username = profile.username || null;
 
-  const tweets = [
-    ...asArray(tweetsRaw).map((row) => minimizeTweetObject(row, username)).filter(Boolean),
-    ...asArray(notesRaw).map((row) => noteTweetToTweet(row, username)).filter(Boolean),
-  ];
+  // Build note tweet lookup for merging into parent tweets
+  const { byId: noteById, byFingerprint: noteByFp } = buildNoteTweetLookup(notesRaw);
+  const consumedNoteIds = new Set();
+
+  const tweetEntries = asArray(tweetsRaw)
+    .map((row) => {
+      const minimized = minimizeTweetObject(row, username);
+      if (!minimized) return null;
+
+      const t = row?.tweet || row || {};
+      let matched = null;
+
+      // 1) Direct lookup via note_tweet reference in raw tweet object
+      const noteRef = t.note_tweet?.note_tweet_id;
+      if (noteRef && noteById.has(String(noteRef))) {
+        matched = noteById.get(String(noteRef));
+      }
+
+      // 2) Fallback: fingerprint matching
+      if (!matched) {
+        const fp = textFingerprint(minimized.tweet.full_text);
+        if (fp && noteByFp.has(fp)) {
+          matched = noteByFp.get(fp);
+        }
+      }
+
+      if (matched) {
+        minimized.tweet.full_text = matched.text;
+        // Merge URLs from note tweet
+        const existingUrls = new Set(
+          asArray(minimized.tweet.entities?.urls).map((u) => u.expanded_url),
+        );
+        for (const u of matched.urls) {
+          if (!existingUrls.has(u)) {
+            minimized.tweet.entities.urls.push({ expanded_url: u });
+          }
+        }
+        consumedNoteIds.add(matched.noteId);
+      }
+
+      return minimized;
+    })
+    .filter(Boolean);
+
+  // Only include note tweets that weren't merged into a parent tweet
+  const unmatchedNotes = asArray(notesRaw)
+    .filter((noteEntry) => {
+      const note = noteEntry?.noteTweet || noteEntry || {};
+      return !consumedNoteIds.has(String(note.noteTweetId || ''));
+    })
+    .map((row) => noteTweetToTweet(row, username))
+    .filter(Boolean);
+
+  const tweets = [...tweetEntries, ...unmatchedNotes];
   const likes = asArray(likesRaw).map((row) => minimizeLikeObject(row)).filter(Boolean);
 
   if (!tweets.length && !likes.length) {
