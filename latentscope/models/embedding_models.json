@@ -51,5 +51,19 @@
       "truncation": true,
       "max_tokens": 32000
     }
+  },
+  {
+    "provider": "voyageai-context",
+    "name": "voyage-context-3",
+    "id": "voyageai-voyage-context-3",
+    "params": {
+      "max_tokens": 32000,
+      "max_tokens_per_group": 32000,
+      "max_inputs_per_batch": 1000,
+      "max_total_tokens": 120000,
+      "max_total_chunks": 16000,
+      "default_output_dimension": 1024,
+      "dimensions": [2048, 1024, 512, 256]
+    }
   }
 ]

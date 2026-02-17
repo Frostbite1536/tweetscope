@@ -1,6 +1,6 @@
 import json
 from .providers.openai import OpenAIEmbedProvider, OpenAIChatProvider
-from .providers.voyageai import VoyageAIEmbedProvider
+from .providers.voyageai import VoyageAIEmbedProvider, VoyageContextEmbedProvider
 
 # We use a universal id system for models where its:
 # <provider>-<model-name> with model-name replacing "/"" with "___"
@@ -33,6 +33,8 @@ def get_embedding_model(id):
         return OpenAIEmbedProvider(model['name'], model['params'])
     if model['provider'] == "voyageai":
         return VoyageAIEmbedProvider(model['name'], model['params'])
+    if model['provider'] == "voyageai-context":
+        return VoyageContextEmbedProvider(model['name'], model['params'])
     raise ValueError(f"Unsupported embedding provider: {model['provider']}")
 
 

@@ -18,8 +18,310 @@ except ImportError as e:
     # Fallback to the standard console version if import fails
     from tqdm import tqdm
 
+from collections import defaultdict
 from latentscope.models import get_embedding_model
 from latentscope.util import get_data_dir
+
+
+def _normalize_tweet_id(value):
+    """Normalize tweet ID: strip trailing .0 from numeric strings."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith(".0") and text[:-2].isdigit():
+        return text[:-2]
+    return text
+
+
+def _prepare_text(text, prefix):
+    """Prepare a single text for embedding: handle null/empty, apply prefix."""
+    if text is None or text == "":
+        text = " "
+    return prefix + str(text)
+
+
+# ---------------------------------------------------------------------------
+# Thread grouping for contextual embeddings
+# ---------------------------------------------------------------------------
+
+VALID_CONTEXT_TWEET_TYPES = {"tweet", "note_tweet"}
+
+
+def build_self_thread_groups(df, text_column, prefix=""):
+    """Build thread groups from parquet data for contextual embedding.
+
+    Groups tweets by self-reply threads (user replying to themselves).
+    Standalone tweets become single-element groups.
+
+    Returns:
+        groups: list of dicts, each with:
+            - row_indices: list[int] — DataFrame integer indices for real chunks
+            - texts: list[str] — ordered chunk texts (context-only + real)
+            - context_count: int — number of leading context-only chunks
+        thread_stats: dict with summary statistics
+    """
+    has_thread_cols = (
+        "in_reply_to_status_id" in df.columns
+        and "username" in df.columns
+    )
+    if not has_thread_cols:
+        # No thread columns — treat every row as standalone
+        groups = []
+        for idx in range(len(df)):
+            text = _prepare_text(df.iloc[idx][text_column], prefix)
+            groups.append({
+                "row_indices": [idx],
+                "texts": [text],
+                "context_count": 0,
+            })
+        stats = {
+            "total_groups": len(groups),
+            "standalone_count": len(groups),
+            "multi_tweet_thread_count": 0,
+            "threads_with_context_parent": 0,
+            "avg_thread_length": 1.0,
+            "max_thread_length": 1,
+        }
+        return groups, stats
+
+    has_tweet_type = "tweet_type" in df.columns
+    has_created_at = "created_at" in df.columns
+
+    # 1. Build normalized ID → row index map
+    norm_id_to_idx = {}
+    for idx in range(len(df)):
+        row = df.iloc[idx]
+        norm_id = _normalize_tweet_id(row.get("id"))
+        if norm_id:
+            norm_id_to_idx[norm_id] = idx
+
+    # 2. Build self-reply parent map (child_norm_id → parent_norm_id)
+    #    Only where the parent's username matches the child's username
+    self_reply_parent = {}  # child_norm_id → parent_norm_id
+    for idx in range(len(df)):
+        row = df.iloc[idx]
+        parent_raw = row.get("in_reply_to_status_id")
+        parent_norm = _normalize_tweet_id(parent_raw)
+        if not parent_norm:
+            continue
+        if parent_norm not in norm_id_to_idx:
+            continue
+        # Check if same user (case-insensitive)
+        child_username = str(row.get("username", "")).strip().lower()
+        parent_idx = norm_id_to_idx[parent_norm]
+        parent_username = str(df.iloc[parent_idx].get("username", "")).strip().lower()
+        if child_username and child_username == parent_username:
+            child_norm = _normalize_tweet_id(row.get("id"))
+            if child_norm:
+                self_reply_parent[child_norm] = parent_norm
+
+    # 3. Build children map (parent_norm_id → [child_norm_ids])
+    children_map = defaultdict(list)
+    for child, parent in self_reply_parent.items():
+        children_map[parent].append(child)
+
+    # 4. Find thread roots: tweets that appear as parents but are not children
+    #    in the self-reply map, OR tweets that have children
+    all_children = set(self_reply_parent.keys())
+    all_parents = set(self_reply_parent.values())
+    thread_roots = all_parents - all_children  # parents that are not children of anyone
+
+    # 5. Walk from each root, collecting thread members
+    assigned = set()  # norm_ids already assigned to a thread
+    threads = []  # list of (norm_ids_in_order, root_norm_id)
+
+    def _walk_thread(root_norm_id):
+        """DFS walk collecting all descendants via self-reply edges."""
+        members = [root_norm_id]
+        stack = [root_norm_id]
+        while stack:
+            current = stack.pop()
+            for child in children_map.get(current, []):
+                if child not in assigned:
+                    members.append(child)
+                    stack.append(child)
+        return members
+
+    for root in sorted(thread_roots):  # sorted for determinism
+        if root in assigned:
+            continue
+        members = _walk_thread(root)
+        for m in members:
+            assigned.add(m)
+        threads.append((members, root))
+
+    # 6. Build groups
+    groups = []
+    standalone_count = 0
+    context_parent_count = 0
+    thread_lengths = []
+
+    for members, root_norm_id in threads:
+        # Get row indices and sort by created_at
+        member_indices = []
+        for m in members:
+            if m in norm_id_to_idx:
+                member_indices.append((m, norm_id_to_idx[m]))
+        if not member_indices:
+            continue
+
+        # Sort by created_at if available, otherwise by row index
+        if has_created_at:
+            member_indices.sort(key=lambda x: (
+                str(df.iloc[x[1]].get("created_at", "")), x[1]
+            ))
+        else:
+            member_indices.sort(key=lambda x: x[1])
+
+        row_indices = [idx for _, idx in member_indices]
+        texts = [_prepare_text(df.iloc[idx][text_column], prefix) for idx in row_indices]
+        context_count = 0
+
+        # Check if thread root is a reply to someone else's tweet in dataset
+        root_idx = norm_id_to_idx.get(root_norm_id)
+        if root_idx is not None:
+            root_row = df.iloc[root_idx]
+            root_parent_norm = _normalize_tweet_id(root_row.get("in_reply_to_status_id"))
+            if root_parent_norm and root_parent_norm not in self_reply_parent.get(root_norm_id, ""):
+                # Root is a reply to someone else
+                if root_parent_norm in norm_id_to_idx:
+                    ctx_idx = norm_id_to_idx[root_parent_norm]
+                    ctx_row = df.iloc[ctx_idx]
+                    # Only use as context if it's a real tweet (not a like)
+                    ctx_type = str(ctx_row.get("tweet_type", "tweet")).lower() if has_tweet_type else "tweet"
+                    if ctx_type in VALID_CONTEXT_TWEET_TYPES:
+                        ctx_text = _prepare_text(ctx_row[text_column], prefix)
+                        texts.insert(0, ctx_text)
+                        context_count = 1
+                        context_parent_count += 1
+
+        groups.append({
+            "row_indices": row_indices,
+            "texts": texts,
+            "context_count": context_count,
+        })
+        thread_lengths.append(len(row_indices))
+
+    # 7. Add standalone tweets (not in any thread)
+    for idx in range(len(df)):
+        norm_id = _normalize_tweet_id(df.iloc[idx].get("id"))
+        if norm_id and norm_id not in assigned:
+            text = _prepare_text(df.iloc[idx][text_column], prefix)
+            groups.append({
+                "row_indices": [idx],
+                "texts": [text],
+                "context_count": 0,
+            })
+            standalone_count += 1
+            thread_lengths.append(1)
+
+    stats = {
+        "total_groups": len(groups),
+        "standalone_count": standalone_count,
+        "multi_tweet_thread_count": sum(1 for l in thread_lengths if l > 1),
+        "threads_with_context_parent": context_parent_count,
+        "avg_thread_length": round(sum(thread_lengths) / max(len(thread_lengths), 1), 2),
+        "max_thread_length": max(thread_lengths) if thread_lengths else 0,
+    }
+
+    return groups, stats
+
+
+def batch_thread_groups(groups, tokenizer, params):
+    """Pack thread groups into API-call-sized batches respecting Voyage limits.
+
+    Returns:
+        list of list of ThreadGroup dicts (each inner list = one API call)
+    """
+    max_groups = int(params.get("max_inputs_per_batch", 1000))
+    max_tokens = int(params.get("max_total_tokens", 120000))
+    max_chunks = int(params.get("max_total_chunks", 16000))
+    max_tokens_per_group = int(params.get("max_tokens_per_group", 32000))
+
+    # Pre-compute token counts for each group
+    for g in groups:
+        group_tokens = 0
+        for text in g["texts"]:
+            group_tokens += len(tokenizer.encode(text).ids)
+        g["_total_tokens"] = group_tokens
+        g["_chunk_count"] = len(g["texts"])
+
+        # Handle oversized groups: truncate context-only prefix if needed
+        if g["_total_tokens"] > max_tokens_per_group and g["context_count"] > 0:
+            # Drop context-only chunks to fit
+            while g["context_count"] > 0 and g["_total_tokens"] > max_tokens_per_group:
+                dropped_text = g["texts"].pop(0)
+                dropped_tokens = len(tokenizer.encode(dropped_text).ids)
+                g["_total_tokens"] -= dropped_tokens
+                g["_chunk_count"] -= 1
+                g["context_count"] -= 1
+                print(f"  Warning: dropped context chunk ({dropped_tokens} tokens) from oversized group")
+
+        # If still oversized after dropping context, log warning
+        # (extremely rare — would need a single thread >100 tweets)
+        if g["_total_tokens"] > max_tokens_per_group:
+            print(f"  Warning: group with {g['_chunk_count']} chunks has {g['_total_tokens']} tokens (limit {max_tokens_per_group})")
+
+    # Greedy bin-packing
+    batches = []
+    current_batch = []
+    batch_tokens = 0
+    batch_chunks = 0
+
+    for g in groups:
+        would_exceed = (
+            len(current_batch) >= max_groups
+            or batch_tokens + g["_total_tokens"] > max_tokens
+            or batch_chunks + g["_chunk_count"] > max_chunks
+        )
+        if would_exceed and current_batch:
+            batches.append(current_batch)
+            current_batch = []
+            batch_tokens = 0
+            batch_chunks = 0
+
+        current_batch.append(g)
+        batch_tokens += g["_total_tokens"]
+        batch_chunks += g["_chunk_count"]
+
+    if current_batch:
+        batches.append(current_batch)
+
+    return batches
+
+
+def _save_contextual_progress(progress_path, batch_idx, config_hash):
+    """Save checkpoint for contextual embedding progress."""
+    with open(progress_path, 'w') as f:
+        json.dump({
+            "last_completed_batch": batch_idx,
+            "config_hash": config_hash,
+        }, f)
+
+
+def _load_contextual_progress(progress_path, config_hash):
+    """Load checkpoint. Returns starting_batch or 0 if no valid checkpoint."""
+    if not os.path.exists(progress_path):
+        return 0
+    try:
+        with open(progress_path, 'r') as f:
+            data = json.load(f)
+        if data.get("config_hash") != config_hash:
+            print("  Config changed since last checkpoint, starting from scratch")
+            return 0
+        return data.get("last_completed_batch", 0)
+    except (json.JSONDecodeError, KeyError):
+        return 0
+
+
+def _compute_config_hash(model_id, text_column, n_rows, n_groups):
+    """Deterministic hash of embedding config for checkpoint validation."""
+    import hashlib
+    key = f"{model_id}|{text_column}|{n_rows}|{n_groups}"
+    return hashlib.sha256(key.encode()).hexdigest()[:16]
+
 
 def chunked_iterable(iterable, size):
     """Yield successive chunks from an iterable."""
@@ -134,47 +436,162 @@ def embed(dataset_id, text_column, model_id, prefix, rerun, dimensions, batch_si
         #     print("Warning: max_seq_length is not a settable property, setting may not work")
         #     model.model.max_seq_length = max_seq_length
 
-    print("Checking for empty inputs")
-    sentences = df[text_column].tolist()
-    prefixed = []
     if prefix is None:
         prefix = ""
-    for i,s in enumerate(sentences):
-        if s is None or s == "":
-            print(i,s, "text is empty, adding a [space]")
-            s = " "
-        prefixed.append(prefix + s)
-    sentences = prefixed #[prefix + s for s in sentences]
 
-    total_batches = math.ceil(len(sentences) / batch_size) if batch_size > 0 else 0
+    embedding_path = os.path.join(embedding_dir, f"{embedding_id}.h5")
 
-    print("embedding", len(sentences), "sentences", "in", total_batches, "batches")
-    if starting_batch > 0:
-        print("Rerunning starting at batch", starting_batch)
+    # --- CONTEXTUAL PATH: group tweets by thread ---
+    if hasattr(model, 'embed_contextual'):
+        print("Building self-thread groups for contextual embedding...")
+        groups, thread_stats = build_self_thread_groups(df, text_column, prefix)
+        print(f"  {thread_stats['total_groups']} groups: "
+              f"{thread_stats['multi_tweet_thread_count']} threads, "
+              f"{thread_stats['standalone_count']} standalone, "
+              f"avg len {thread_stats['avg_thread_length']}, "
+              f"max len {thread_stats['max_thread_length']}")
+        if thread_stats['threads_with_context_parent'] > 0:
+            print(f"  {thread_stats['threads_with_context_parent']} threads with external parent context")
 
-    for i, batch in enumerate(tqdm(chunked_iterable(sentences, batch_size), total=total_batches)):
-        if i < starting_batch:
-            print(f"skipping batch {i}/{total_batches}", flush=True)
-            continue
-        try:
-            embeddings = np.array(model.embed(batch, dimensions=dimensions), dtype=np.float32)
-            append_to_hdf5(os.path.join(embedding_dir, f"{embedding_id}.h5"), embeddings)
-        except Exception as e:
-            print(batch)
-            print("error embedding batch", i, e)
-            print("exiting prematurely", embedding_id)
-            # extract the rows from the last batch from df
-            df_batch = df.iloc[i*batch_size:(i+1)*batch_size].copy()
-            df_batch["_ls_text_"] = batch
-            batch_path = os.path.join(embedding_dir, f"{embedding_id}-batch-{i}.parquet")
-            df_batch.to_parquet(batch_path)
-            print("wrote original data for batch along with processed inputs in _ls_sentences_ column to\n", batch_path)
-            print("debug with command:")
-            print("ls-embed-debug", batch_path, model_id)
+        print("Batching groups for API calls...")
+        batches = batch_thread_groups(groups, model.encoder, model.params)
+        total_batches = len(batches)
+        print(f"  {total_batches} API batches")
 
-            sys.exit(1)
+        # Resume support for contextual path
+        dim = dimensions or model.params.get("default_output_dimension", 1024)
+        config_hash = _compute_config_hash(model_id, text_column, len(df), len(groups))
+        progress_path = os.path.join(embedding_dir, f"{embedding_id}-progress.json")
+        partial_path = os.path.join(embedding_dir, f"{embedding_id}-partial.h5")
 
-    # track history of model_id used
+        if rerun is not None:
+            starting_batch = _load_contextual_progress(progress_path, config_hash)
+            print(f"  Resuming from batch {starting_batch}/{total_batches}")
+
+        # Pre-allocate or load partial results
+        import h5py
+        if starting_batch > 0 and os.path.exists(partial_path):
+            with h5py.File(partial_path, 'r') as f:
+                all_embeddings = np.array(f["embeddings"], dtype=np.float32)
+                filled = np.array(f["filled"], dtype=bool)
+            print(f"  Loaded {np.sum(filled)} partial embeddings from checkpoint")
+        else:
+            all_embeddings = np.zeros((len(df), dim), dtype=np.float32)
+            filled = np.zeros(len(df), dtype=bool)
+
+        print(f"Embedding {len(df)} rows in {total_batches} contextual batches...")
+        for batch_idx, batch_groups in enumerate(tqdm(batches, total=total_batches)):
+            if batch_idx < starting_batch:
+                continue
+            try:
+                api_inputs = [g["texts"] for g in batch_groups]
+                results = model.embed_contextual(api_inputs, dimensions=dimensions)
+
+                # Scatter: skip context-only chunks, place real embeddings at row indices
+                for g, group_embeddings in zip(batch_groups, results):
+                    cc = g["context_count"]
+                    real_embeddings = group_embeddings[cc:]
+                    for emb, row_idx in zip(real_embeddings, g["row_indices"]):
+                        all_embeddings[row_idx] = np.array(emb, dtype=np.float32)
+                        filled[row_idx] = True
+
+                # Checkpoint progress
+                _save_contextual_progress(progress_path, batch_idx + 1, config_hash)
+                with h5py.File(partial_path, 'w') as f:
+                    f.create_dataset("embeddings", data=all_embeddings)
+                    f.create_dataset("filled", data=filled)
+
+            except Exception as e:
+                print(f"Error in contextual batch {batch_idx}: {e}")
+                print(f"  Progress saved at batch {batch_idx}. Rerun with --rerun {embedding_id}")
+                sys.exit(1)
+
+        # Verify all rows filled
+        unfilled_count = int(np.sum(~filled))
+        if unfilled_count > 0:
+            print(f"WARNING: {unfilled_count} rows have no embedding!")
+
+        # Write final HDF5
+        append_to_hdf5(embedding_path, all_embeddings)
+
+        # Cleanup checkpoint files
+        for tmp in [progress_path, partial_path]:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+
+        # Write metadata with thread stats
+        (n_rows, n_dims), min_values, max_values = get_hdf5_embedding_stats(embedding_path)
+        with open(os.path.join(embedding_dir, f"{embedding_id}.json"), 'w') as f:
+            json.dump({
+                "id": embedding_id,
+                "model_id": model_id,
+                "dataset_id": dataset_id,
+                "text_column": text_column,
+                "rows": n_rows,
+                "dimensions": n_dims,
+                "max_seq_length": max_seq_length,
+                "prefix": prefix,
+                "contextual": True,
+                "thread_stats": thread_stats,
+                "min_values": min_values.tolist(),
+                "max_values": max_values.tolist(),
+            }, f, indent=2)
+
+    else:
+        # --- FLAT PATH (existing behavior, unchanged) ---
+        print("Checking for empty inputs")
+        sentences = df[text_column].tolist()
+        prefixed = []
+        for i, s in enumerate(sentences):
+            if s is None or s == "":
+                print(i, s, "text is empty, adding a [space]")
+                s = " "
+            prefixed.append(prefix + s)
+        sentences = prefixed
+
+        total_batches = math.ceil(len(sentences) / batch_size) if batch_size > 0 else 0
+
+        print("embedding", len(sentences), "sentences", "in", total_batches, "batches")
+        if starting_batch > 0:
+            print("Rerunning starting at batch", starting_batch)
+
+        for i, batch in enumerate(tqdm(chunked_iterable(sentences, batch_size), total=total_batches)):
+            if i < starting_batch:
+                print(f"skipping batch {i}/{total_batches}", flush=True)
+                continue
+            try:
+                embeddings = np.array(model.embed(batch, dimensions=dimensions), dtype=np.float32)
+                append_to_hdf5(embedding_path, embeddings)
+            except Exception as e:
+                print(batch)
+                print("error embedding batch", i, e)
+                print("exiting prematurely", embedding_id)
+                df_batch = df.iloc[i*batch_size:(i+1)*batch_size].copy()
+                df_batch["_ls_text_"] = batch
+                batch_path = os.path.join(embedding_dir, f"{embedding_id}-batch-{i}.parquet")
+                df_batch.to_parquet(batch_path)
+                print("wrote original data for batch along with processed inputs in _ls_sentences_ column to\n", batch_path)
+                print("debug with command:")
+                print("ls-embed-debug", batch_path, model_id)
+                sys.exit(1)
+
+        # Write metadata
+        (n_rows, n_dims), min_values, max_values = get_hdf5_embedding_stats(embedding_path)
+        with open(os.path.join(embedding_dir, f"{embedding_id}.json"), 'w') as f:
+            json.dump({
+                "id": embedding_id,
+                "model_id": model_id,
+                "dataset_id": dataset_id,
+                "text_column": text_column,
+                "rows": n_rows,
+                "dimensions": n_dims,
+                "max_seq_length": max_seq_length,
+                "prefix": prefix,
+                "min_values": min_values.tolist(),
+                "max_values": max_values.tolist(),
+            }, f, indent=2)
+
+    # Track history of model_id used
     history_file_path = os.path.join(DATA_DIR, "embedding_model_history.csv")
     try:
         with open(history_file_path, 'a') as history_file:
@@ -183,26 +600,6 @@ def embed(dataset_id, text_column, model_id, prefix, rerun, dimensions, batch_si
         with open(history_file_path, 'w') as history_file:
             history_file.write(f"{datetime.now().isoformat()},{model_id}\n")
 
-
-    # Calculate min/max and shape from the full embedding file (not only last batch)
-    embedding_path = os.path.join(embedding_dir, f"{embedding_id}.h5")
-    (n_rows, n_dims), min_values, max_values = get_hdf5_embedding_stats(embedding_path)
-    with open(os.path.join(embedding_dir, f"{embedding_id}.json"), 'w') as f:
-        json.dump({
-            "id": embedding_id,
-            "model_id": model_id,
-            "dataset_id": dataset_id,
-            "text_column": text_column,
-            "rows": n_rows,
-            "dimensions": n_dims,
-            "max_seq_length": max_seq_length,
-            "prefix": prefix,
-            "min_values": min_values.tolist(),
-            "max_values": max_values.tolist(),
-            }, f, indent=2)
-
-
-    # np.save(os.path.join(embedding_dir, f"{embedding_id}.npy"), np_embeds)
     print("done with", embedding_id)
 
 def truncate():
