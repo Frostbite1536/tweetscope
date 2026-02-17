@@ -1,3 +1,7 @@
+# DEPRECATED: This Flask server is no longer used by the frontend.
+# All serving is handled by the Hono TS API (api/src/).
+# Kept for the `ls-serve` CLI (local parquet/JSON debugging only).
+
 import re
 import os
 import sys

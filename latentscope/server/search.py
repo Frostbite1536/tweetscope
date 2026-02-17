@@ -1,3 +1,6 @@
+# DEPRECATED: Flask search routes — no longer used by the frontend.
+# All search is handled by the Hono TS API (api/src/routes/search.ts) via VoyageAI + LanceDB.
+
 import os
 import json
 import h5py

@@ -18,4 +18,13 @@ export default defineConfig(({ mode }) => ({
       '@api': path.resolve(__dirname, '../api/src'),
     },
   },
+  server: {
+    host: '0.0.0.0',
+    proxy: {
+      '/api': {
+        target: `http://localhost:${process.env.VITE_API_PORT || 3000}`,
+        changeOrigin: true,
+      },
+    },
+  },
 }));

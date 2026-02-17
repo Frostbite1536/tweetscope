@@ -1,3 +1,8 @@
+# DEPRECATED: This Flask server is no longer used by the frontend.
+# All serving is handled by the Hono TS API (api/src/).
+# The `ls-serve` CLI entry point still works for local debugging of raw
+# parquet/JSON data, but nothing in the frontend or pipeline depends on it.
+
 import argparse
 from latentscope.util import update_data_dir
 

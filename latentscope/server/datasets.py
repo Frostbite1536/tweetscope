@@ -1,3 +1,6 @@
+# DEPRECATED: Flask dataset routes — no longer used by the frontend.
+# All serving is handled by the Hono TS API (api/src/routes/catalog.ts, views.ts, query.ts).
+
 import os
 import re
 import json

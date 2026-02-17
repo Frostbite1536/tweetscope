@@ -1,11 +1,9 @@
 /**
  * TweetScope Serving API — Hono app.
  *
- * Thin TS API that replaces the Flask backend for production serving.
+ * Sole backend for all frontend serving (search, query, catalog, jobs).
  * Handles: search (LanceDB Cloud + VoyageAI), URL resolution,
- * and proxies static metadata from DATA_URL (R2/S3 CDN).
- *
- * Python Flask server (latentscope/server/) is kept for local dev/studio only.
+ * data queries, catalog metadata, job management, and file serving.
  */
 
 import { Hono } from "hono";
@@ -26,13 +24,13 @@ function parseBool(raw: string | undefined): boolean {
 }
 
 function parseOrigins(raw: string | undefined): string | string[] {
-  if (!raw || !raw.trim()) return "http://localhost:5173";
+  if (!raw || !raw.trim()) return "*"; // Dev uses Vite proxy (same-origin); prod is same-origin on Vercel
   if (raw.trim() === "*") return "*";
   const origins = raw
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
-  return origins.length <= 1 ? origins[0] ?? "http://localhost:5173" : origins;
+  return origins.length <= 1 ? origins[0] ?? "*" : origins;
 }
 
 const rawMode = (

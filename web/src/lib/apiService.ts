@@ -8,15 +8,10 @@ function withApiPrefix(rawUrl: string | undefined): string {
   return `${raw}/api`;
 }
 
-// RPC client uses the origin directly; legacy fetch calls need the /api prefix.
 export const apiUrl = withApiPrefix(import.meta.env.VITE_API_URL);
 
 // Jobs now run on the TS API.
 export const jobsApiUrl = apiUrl;
-
-// Legacy write endpoints (non-RPC) can be pinned separately if needed.
-const legacyBaseUrl = import.meta.env.VITE_LEGACY_API_URL || import.meta.env.VITE_API_URL;
-export const legacyApiUrl = withApiPrefix(legacyBaseUrl);
 
 // ---------------------------------------------------------------------------
 // Typed wrappers around the Hono RPC client.
@@ -231,35 +226,11 @@ export const queryClient = {
   },
 };
 
-// Legacy Flask-only endpoints — not part of the TS API
-const legacyMiscClient = {
-  updateDataset: async (datasetId: string, key: string, value: string | number | boolean) => {
-    return fetch(`${legacyApiUrl}/datasets/${datasetId}/meta/update?key=${key}&value=${value}`).then(
-      (response) => response.json()
-    );
-  },
-  fetchClusterIndices: async (datasetId: string, clusterId: string) => {
-    return fetch(`${legacyApiUrl}/datasets/${datasetId}/clusters/${clusterId}/indices`)
-      .then((response) => response.json())
-      .then((data: JsonRecord) => {
-        data.cluster_id = clusterId;
-        return data;
-      });
-  },
+const miscClient = {
   killJob: async (datasetId: string, jobId: string) => {
     return fetch(`${jobsApiUrl}/jobs/kill?dataset=${datasetId}&job_id=${jobId}`).then((response) =>
       response.json()
     );
-  },
-  updateScopeLabelDescription: async (
-    datasetId: string,
-    scopeId: string,
-    label: string,
-    description: string
-  ) => {
-    return fetch(
-      `${legacyApiUrl}/datasets/${datasetId}/scopes/${scopeId}/description?label=${label}&description=${description}`
-    ).then((response) => response.json());
   },
   resolveUrl: async (url: string) => {
     const res = await client.api['resolve-url'].$post({
@@ -280,5 +251,5 @@ export const apiService = {
   ...viewClient,
   ...graphClient,
   ...queryClient,
-  ...legacyMiscClient,
+  ...miscClient,
 };
