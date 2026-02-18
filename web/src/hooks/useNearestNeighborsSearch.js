@@ -3,6 +3,7 @@ import { queryClient } from '../lib/apiService';
 
 export default function useNearestNeighborsSearch({ userId, datasetId, scope, deletedIndices }) {
   const [distances, setDistances] = useState([]);
+  const [distanceMap, setDistanceMap] = useState(() => new Map());
 
   const uniqueOrdered = (values) => {
     const seen = new Set();
@@ -22,11 +23,19 @@ export default function useNearestNeighborsSearch({ userId, datasetId, scope, de
       return await queryClient
         .searchNearestNeighbors(datasetId, scope.embedding, query, scope)
         .then((data) => {
-          const { indices, distances } = data;
+          const { indices, distances: rawDistances } = data;
+          setDistances(rawDistances);
+
+          // Build ls_index → distance map from the parallel arrays
+          const dMap = new Map();
+          for (let i = 0; i < indices.length; i++) {
+            dMap.set(Number(indices[i]), rawDistances[i]);
+          }
+          setDistanceMap(dMap);
+
+          // Return all results (let FilterContext handle pagination)
           const filteredIndices = uniqueOrdered(indices).filter((idx) => !deletedIndices.includes(idx));
-          setDistances(distances);
-          const limit = 20;
-          return filteredIndices.slice(0, limit);
+          return filteredIndices;
         });
     } catch (error) {
       console.error('Search failed:', error);
@@ -36,11 +45,13 @@ export default function useNearestNeighborsSearch({ userId, datasetId, scope, de
 
   const clear = useCallback(() => {
     setDistances([]);
+    setDistanceMap(new Map());
   }, []);
 
   return {
     filter,
     clear,
     distances,
+    distanceMap,
   };
 }

@@ -172,69 +172,85 @@ export function FilterProvider({ children }) {
   // === Fetch Data Table Rows Logic
 
   const [dataTableRows, setDataTableRows] = useState([]);
+  const [rowsLoading, setRowsLoading] = useState(false);
 
   // === Pagination ===
   const ROWS_PER_PAGE = 20;
+
+  // Exclude deleted indices upfront so totalPages and shownIndices agree
+  const visibleFilteredIndices = useMemo(() => {
+    const deletedSet = new Set(deletedIndices);
+    return filteredIndices.filter((index) => !deletedSet.has(index));
+  }, [filteredIndices, deletedIndices]);
+
   const totalPages = useMemo(
-    () => Math.ceil(filteredIndices.length / ROWS_PER_PAGE),
-    [filteredIndices]
+    () => Math.ceil(visibleFilteredIndices.length / ROWS_PER_PAGE),
+    [visibleFilteredIndices]
   );
+
+  // Accumulative: all indices loaded so far (pages 0..page)
   const shownIndices = useMemo(() => {
-    const start = page * ROWS_PER_PAGE;
-    const nonDeletedIndices = filteredIndices.filter((index) => !deletedIndices.includes(index));
-    return nonDeletedIndices.slice(start, start + ROWS_PER_PAGE);
-  }, [filteredIndices, page, deletedIndices]);
+    return visibleFilteredIndices.slice(0, (page + 1) * ROWS_PER_PAGE);
+  }, [visibleFilteredIndices, page]);
 
-  // Keep track of the latest request
-  const lastRequestRef = useRef('');
+  // The delta: just the current page's indices (for fetching)
+  const currentPageIndices = useMemo(() => {
+    return visibleFilteredIndices.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
+  }, [visibleFilteredIndices, page]);
 
-  // Create a cache Map to store API responses for default requests.
+  // Monotonic request counter for staleness detection
+  const reqSeqRef = useRef(0);
+
+  // Cache for default (unfiltered) page fetches
   const rowsCache = useRef(new Map());
 
+  // Clear cache when dataset or scope changes
   useEffect(() => {
-    if (shownIndices.length) {
-      const nonDeletedIndices = shownIndices.filter((index) => !deletedIndices.includes(index));
+    rowsCache.current.clear();
+  }, [datasetId, scope?.id]);
 
-      // Use a timestamp in ms as a unique key for this request.
-      const requestTimestamp = Date.now();
-      lastRequestRef.current = requestTimestamp;
-
-      const cacheKey = `${JSON.stringify(nonDeletedIndices)}-${page}`;
-
-      if (!filterConfig) {
-        const cachedResult = rowsCache.current.get(cacheKey);
-        if (cachedResult) {
-          setDataTableRows(cachedResult);
-          // setLoading(false);
-          return;
-        }
-      }
-
-      apiService
-        .fetchDataFromIndices(datasetId, nonDeletedIndices, scope?.id)
-        .then((rows) => {
-          // Only update state if this is the latest request.
-          if (lastRequestRef.current !== requestTimestamp) {
-            // Discard stale result.
-            return;
-          }
-          const rowsWithIdx = rows.map((row, idx) => ({
-            ...row,
-            idx,
-            ls_index: row.index,
-          }));
-          setDataTableRows(rowsWithIdx);
-
-          // only cache the result if there is no filter config
-          // i.e. we are showing the default set of rows
-          if (!filterConfig) {
-            rowsCache.current.set(cacheKey, rowsWithIdx);
-          }
-        });
-    } else {
-      setDataTableRows([]);
+  useEffect(() => {
+    if (currentPageIndices.length === 0) {
+      if (page === 0) setDataTableRows([]);
+      return;
     }
-  }, [shownIndices, deletedIndices, userId, datasetId, scope, filterConfig, page]);
+
+    const reqId = ++reqSeqRef.current;
+    setRowsLoading(true);
+
+    const cacheKey = `${datasetId}-${scope?.id}-${JSON.stringify(currentPageIndices)}`;
+
+    if (!filterConfig) {
+      const cachedResult = rowsCache.current.get(cacheKey);
+      if (cachedResult) {
+        setDataTableRows((prev) => (page === 0 ? cachedResult : [...prev, ...cachedResult]));
+        setRowsLoading(false);
+        return;
+      }
+    }
+
+    apiService
+      .fetchDataFromIndices(datasetId, currentPageIndices, scope?.id)
+      .then((rows) => {
+        if (reqSeqRef.current !== reqId) return;
+        const baseIdx = page * ROWS_PER_PAGE;
+        const rowsWithIdx = rows.map((row, i) => ({
+          ...row,
+          idx: baseIdx + i,
+          ls_index: row.index,
+        }));
+        setDataTableRows((prev) => (page === 0 ? rowsWithIdx : [...prev, ...rowsWithIdx]));
+
+        if (!filterConfig) {
+          rowsCache.current.set(cacheKey, rowsWithIdx);
+        }
+      })
+      .finally(() => {
+        if (reqSeqRef.current === reqId) {
+          setRowsLoading(false);
+        }
+      });
+  }, [currentPageIndices, page, datasetId, scope, filterConfig]);
 
   // The context exposes only the state and setters that consumer components need.
   const value = useMemo(() => ({
@@ -250,6 +266,7 @@ export function FilterProvider({ children }) {
     ROWS_PER_PAGE,
     loading,
     setLoading,
+    rowsLoading,
     filterActive,
     setFilterActive,
     searchFilter,
@@ -260,7 +277,7 @@ export function FilterProvider({ children }) {
   }), [
     filterConfig, setFilterConfig, filterQuery, setFilterQuery,
     filteredIndices, shownIndices, page, setPage, totalPages, ROWS_PER_PAGE,
-    loading, setLoading, filterActive, setFilterActive,
+    loading, setLoading, rowsLoading, filterActive, setFilterActive,
     searchFilter, clusterFilter, columnFilter,
     setUrlParams, dataTableRows,
   ]);

@@ -1270,7 +1270,7 @@ function ExploreContent() {
                   )}
                   <TweetFeed
                     dataset={dataset}
-                    distances={searchFilter.distances}
+                    distanceMap={searchFilter.distanceMap}
                     clusterMap={clusterMap}
                     sae_id={sae?.id}
                     onHover={undefined}
