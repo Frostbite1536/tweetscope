@@ -87,7 +87,6 @@ function ExploreContent() {
     clusterLabels,
     clusterHierarchy,
     features,
-    sae,
     scopes,
     tags,
   } = useScope();
@@ -1272,7 +1271,6 @@ function ExploreContent() {
                     dataset={dataset}
                     distanceMap={searchFilter.distanceMap}
                     clusterMap={clusterMap}
-                    sae_id={sae?.id}
                     onHover={undefined}
                     onClick={handleClicked}
                     hoveredIndex={null}

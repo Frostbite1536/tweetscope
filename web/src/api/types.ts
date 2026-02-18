@@ -88,7 +88,6 @@ export interface ScopeData extends JsonRecord {
     model_id?: string;
     [key: string]: unknown;
   };
-  sae?: JsonRecord | null;
   cluster_labels_lookup?: ClusterLabel[];
   hierarchical_labels?: boolean;
 }

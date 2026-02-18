@@ -23,7 +23,6 @@ from latentscope.pipeline.stages.scope_meta import (
     load_cluster_meta,
     load_dataset_meta,
     load_embedding_meta,
-    load_sae_meta,
     load_umap_meta,
 )
 from latentscope.scripts.export_lance import export_lance
@@ -40,7 +39,6 @@ def run_scope(
     label: str,
     description: str,
     scope_id: str | None = None,
-    sae_id: str | None = None,
 ) -> str:
     data_dir = get_data_dir()
     print("DATA DIR", data_dir)
@@ -59,8 +57,6 @@ def run_scope(
         "label": label,
         "description": description,
     }
-    if sae_id:
-        scope_meta["sae_id"] = sae_id
 
     # Collision-proof LanceDB table naming: {dataset_id}__{scope_uid}
     scope_uid = str(uuid.uuid4())
@@ -70,8 +66,6 @@ def run_scope(
 
     scope_meta["dataset"] = load_dataset_meta(data_dir, dataset_id)
     scope_meta["embedding"] = load_embedding_meta(data_dir, dataset_id, embedding_id)
-    if sae_id:
-        scope_meta["sae"] = load_sae_meta(data_dir, dataset_id, sae_id)
     scope_meta["umap"] = load_umap_meta(data_dir, dataset_id, umap_id)
     scope_meta["cluster"] = load_cluster_meta(data_dir, dataset_id, cluster_id)
 

@@ -416,12 +416,11 @@ Define: raw uploads retention, intermediate artifact retention,
  │  export_lance()      │     │  lancedb/scopes-NNN.lance/          │
  │  lines 27-95         │────▶│    = -input.parquet columns          │
  │                      │     │    + vector (from embedding H5)      │
- │  Loads:              │     │    + sae_indices, sae_acts (if SAE)  │
- │  - -input.parquet    │     │                                      │
- │  - embedding H5      │     │  Indices:                            │
- │  - SAE H5 (optional) │     │    IvfPq on vector (cosine)         │
+ │  Loads:              │     │                                      │
+ │  - -input.parquet    │     │  Indices:                            │
+ │  - embedding H5      │     │    IvfPq on vector (cosine)         │
  │                      │     │    BTree on cluster                  │
- │  Table name =        │     │    LABEL_LIST on sae_indices         │
+ │  Table name =        │     │                                      │
  │  lancedb_table_id    │     │                                      │
  │  ({dataset}__{uuid}) │     │                                      │
  │  fallback: scope_id  │     │                                      │

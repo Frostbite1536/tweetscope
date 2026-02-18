@@ -31,16 +31,6 @@ def export_lance(directory, dataset, scope_id, metric="cosine", partitions=None,
     print(f"Converting embeddings to numpy arrays", embeddings['embeddings'].shape)
     scope_df["vector"] = [np.array(row) for row in embeddings['embeddings']]
 
-    if "sae_id" in scope_meta and scope_meta["sae_id"]:
-        print(f"SAE scope detected, adding metadata")
-        sae_path = os.path.join(dataset_path, "saes", f"{scope_meta['sae_id']}.h5")
-        with h5py.File(sae_path, 'r') as f:
-            all_top_indices = np.array(f["top_indices"])
-            all_top_acts = np.array(f["top_acts"])
-
-        scope_df["sae_indices"] = [row.tolist() for row in all_top_indices]
-        scope_df["sae_acts"] = [row.tolist() for row in all_top_acts]
-
     dim = embeddings['embeddings'].shape[1]
     n_rows = len(scope_df)
     if partitions is None:
@@ -53,8 +43,6 @@ def export_lance(directory, dataset, scope_id, metric="cosine", partitions=None,
             f"Scope {scope_id} is missing lancedb_table_id in scope JSON. "
             "Regenerate the scope before exporting."
         )
-    has_sae = "sae_id" in scope_meta and scope_meta["sae_id"]
-
     def _create_table(db, table_name):
         print(f"Creating table '{table_name}'")
         tbl = db.create_table(table_name, scope_df, mode="overwrite")
@@ -65,10 +53,6 @@ def export_lance(directory, dataset, scope_id, metric="cosine", partitions=None,
 
         print(f"Creating index for cluster on table '{table_name}'")
         tbl.create_scalar_index("cluster", index_type="BTREE")
-
-        if has_sae:
-            print(f"Creating index for sae_indices on table '{table_name}'")
-            tbl.create_scalar_index("sae_indices", index_type="LABEL_LIST")
 
         print(f"Table '{table_name}' created successfully")
 

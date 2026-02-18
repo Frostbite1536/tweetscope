@@ -128,6 +128,6 @@
 <text x="4142.57" y="190" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;ls-scope&quot;</text>
 <text x="4312.97" y="190" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;ls-build-links-graph&quot;</text>
 <text x="4765.195000000001" y="190" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;Parquet\ninput · umaps\nclusters · scopes&quot;</text>
-<text x="5060.72" y="190" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;HDF5\nembeddings · SAE&quot;</text>
+<text x="5060.72" y="190" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;HDF5\nembeddings&quot;</text>
 <text x="5341.945000000001" y="190" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;JSON\nmeta · scope config\njob status&quot;</text>
 </svg>

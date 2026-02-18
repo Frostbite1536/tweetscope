@@ -167,7 +167,7 @@ def ingest(dataset_id: str, df: pd.DataFrame, text_column: str | None = None) ->
             indent=2,
         )
 
-    for dirname in ("embeddings", "saes", "umaps", "clusters", "scopes", "tags"):
+    for dirname in ("embeddings", "umaps", "clusters", "scopes", "tags"):
         os.makedirs(os.path.join(dataset_dir, dirname), exist_ok=True)
 
     for tag_name in ("thumbs-up.indices", "thumbs-down.indices"):

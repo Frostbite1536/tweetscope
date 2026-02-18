@@ -10,7 +10,6 @@ TweetFeed.propTypes = {
   dataset: PropTypes.object.isRequired,
   distanceMap: PropTypes.instanceOf(Map),
   clusterMap: PropTypes.object,
-  sae_id: PropTypes.string,
   onHover: PropTypes.func,
   onClick: PropTypes.func,
   hoveredIndex: PropTypes.number,
@@ -24,7 +23,6 @@ function TweetFeed({
   dataset,
   distanceMap,
   clusterMap = {},
-  sae_id = null,
   onHover = () => {},
   onClick = () => {},
   hoveredIndex = null,
@@ -107,7 +105,6 @@ function TweetFeed({
               isHighlighted={isHighlighted}
               onHover={onHover}
               onClick={onClick}
-              showFeatures={!!sae_id}
               nodeStats={nodeStats?.get(row.ls_index)}
               onViewThread={onViewThread ? () => onViewThread(row.ls_index) : undefined}
               onViewQuotes={onViewQuotes ? () => onViewQuotes(row.ls_index) : undefined}

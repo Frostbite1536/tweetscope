@@ -15,7 +15,6 @@ def main() -> None:
     parser.add_argument(
         "--scope_id", type=str, help="Scope id to overwrite existing scope", default=None
     )
-    parser.add_argument("--sae_id", type=str, help="SAE id", default=None)
 
     args = parser.parse_args()
     scope(**vars(args))
@@ -30,7 +29,6 @@ def scope(
     label,
     description,
     scope_id=None,
-    sae_id=None,
 ):
     """
     Backwards-compatible entrypoint used by `ls-scope` and `twitter_import.py`.
@@ -45,6 +43,5 @@ def scope(
         label=label,
         description=description,
         scope_id=scope_id,
-        sae_id=sae_id,
     )
 

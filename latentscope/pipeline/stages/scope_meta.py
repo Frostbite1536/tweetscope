@@ -21,10 +21,6 @@ def load_embedding_meta(data_dir: str, dataset_id: str, embedding_id: str) -> di
     return embedding
 
 
-def load_sae_meta(data_dir: str, dataset_id: str, sae_id: str) -> dict[str, Any]:
-    return _load_json(os.path.join(data_dir, dataset_id, "saes", f"{sae_id}.json"))
-
-
 def load_umap_meta(data_dir: str, dataset_id: str, umap_id: str) -> dict[str, Any]:
     return _load_json(os.path.join(data_dir, dataset_id, "umaps", f"{umap_id}.json"))
 

@@ -326,22 +326,3 @@
   font-weight: 600;
 }
 
-.featureContainer {
-  flex: 1;
-  max-width: 150px;
-}
-
-.featureBars {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 20px;
-}
-
-.featureBar {
-  width: 4px;
-  background: var(--semantic-color-semantic-success);
-  border-radius: 2px;
-  min-height: 3px;
-  opacity: 0.8;
-}

@@ -40,7 +40,7 @@ The goal is to optimize for practical outcomes and data ownership, not general-p
 1. Generic file ingest UI (CSV/Parquet/JSON/XLSX) in hosted mode.
 2. Setup wizard steps as separate user-visible phases (`embed`, `umap`, `cluster`, `label`).
 3. Model/provider selection UI for end users.
-4. Compare view, datamap plot view, SAE-specific UI, and settings page for hosted/public builds.
+4. Compare view, datamap plot view, and settings page for hosted/public builds.
 5. Any route not directly supporting tweet/likes explorer outcomes.
 
 ### Reorganize UX

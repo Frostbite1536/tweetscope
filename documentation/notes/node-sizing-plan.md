@@ -62,7 +62,7 @@ Add `nodeSizeMode` in view settings:
 
 5. `Feature`
 - Keep existing feature-activation boost behavior when a feature is selected.
-- Useful for SAE/feature-driven analysis.
+- Useful for feature-driven analysis.
 
 ## Concrete Scoring Details
 ### Engagement score

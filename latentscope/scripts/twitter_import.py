@@ -584,7 +584,6 @@ def _try_enable_hierarchical_scope(
             label=label,
             description=description,
             scope_id=scope_id,
-            sae_id=None,
         )
         return {
             "cluster_labels_id": existing_labels_id,
@@ -612,7 +611,6 @@ def _try_enable_hierarchical_scope(
         label=label,
         description=description,
         scope_id=scope_id,
-        sae_id=None,
     )
     return {
         "cluster_labels_id": generated_labels_id,
@@ -737,7 +735,6 @@ def _run_pipeline_for_dataset(
         label=scope_label,
         description=scope_description,
         scope_id=None,
-        sae_id=None,
     )
     scope_id = _latest_id(os.path.join(dataset_dir, "scopes"), r"scopes-\d+\.json")
 

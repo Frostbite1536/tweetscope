@@ -66,7 +66,6 @@ TweetCard.propTypes = {
   isHighlighted: PropTypes.bool,
   onHover: PropTypes.func,
   onClick: PropTypes.func,
-  showFeatures: PropTypes.bool,
   nodeStats: PropTypes.object,
   onViewThread: PropTypes.func,
   onViewQuotes: PropTypes.func,
@@ -82,7 +81,6 @@ function TweetCard({
   isHighlighted = false,
   onHover,
   onClick,
-  showFeatures = false,
   nodeStats,
   onViewThread,
   onViewQuotes,
@@ -389,21 +387,6 @@ function TweetCard({
               <div className={styles.similarityBadge}>
                 <span className={styles.similarityIcon}>~</span>
                 <span>{(similarity * 100).toFixed(1)}%</span>
-              </div>
-            )}
-
-            {/* Feature bars (simplified) */}
-            {showFeatures && row.sae_indices && row.sae_acts && (
-              <div className={styles.featureContainer}>
-                <div className={styles.featureBars}>
-                  {row.sae_acts.slice(0, 10).map((act, i) => (
-                    <div
-                      key={i}
-                      className={styles.featureBar}
-                      style={{ height: `${Math.min(act * 100, 100)}%` }}
-                    />
-                  ))}
-                </div>
               </div>
             )}
           </div>

@@ -1,4 +1,4 @@
-"""Extract a subset of tweets for SAE testing."""
+"""Extract a subset of tweets for testing."""
 
 import json
 from pathlib import Path
@@ -13,7 +13,7 @@ def extract_test_tweets(
     language: str = "en"
 ) -> list[dict]:
     """
-    Extract a subset of tweets for SAE testing.
+    Extract a subset of tweets for testing.
 
     Args:
         input_file: Path to patio11_twitter_archive.json
