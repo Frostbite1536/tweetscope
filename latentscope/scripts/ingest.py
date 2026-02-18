@@ -136,11 +136,20 @@ def ingest(dataset_id: str, df: pd.DataFrame, text_column: str | None = None) ->
         col for col, col_meta in metadata.items() if col_meta["type"] == "array"
     ]
 
+    # Columns with nullable IDs that should preserve nulls (not coerce None → "None").
+    _nullable_id_cols = frozenset({
+        "in_reply_to_status_id", "quoted_status_id", "conversation_id",
+    })
+
     # Coerce remaining object-dtype columns to string to prevent parquet
     # serialization failures on mixed dict/list/object values.
     for col in out.columns:
         if out[col].dtype == "object" and metadata.get(col, {}).get("type") != "array":
-            out[col] = out[col].astype(str)
+            if col in _nullable_id_cols:
+                # Preserve nulls: only stringify non-null values
+                out[col] = out[col].where(out[col].isna(), out[col].astype(str))
+            else:
+                out[col] = out[col].astype(str)
 
     out.to_parquet(os.path.join(dataset_dir, "input.parquet"), index=False)
     with open(os.path.join(dataset_dir, "meta.json"), "w", encoding="utf-8") as f:

@@ -38,9 +38,12 @@ def _normalize_tweet_type(value: Any) -> str:
     return text
 
 
+_NULL_SENTINELS = frozenset({"none", "null", "nan", "<na>", ""})
+
+
 def _normalize_tweet_id(value: Any) -> str | None:
     text = _as_text(value)
-    if not text:
+    if not text or text.lower() in _NULL_SENTINELS:
         return None
     if text.endswith(".0") and text[:-2].isdigit():
         return text[:-2]
