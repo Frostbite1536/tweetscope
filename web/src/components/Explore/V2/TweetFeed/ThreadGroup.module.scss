@@ -1,0 +1,164 @@
+.threadGroup {
+  position: relative;
+  border: 1px solid var(--borders-color-border-3);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin: var(--space-2) 0;
+  min-width: 0;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
+
+  &:hover {
+    border-color: var(--borders-color-border-2);
+  }
+}
+
+// "N earlier tweets in this thread" banner — shown when thread root is not visible.
+// Visually mirrors expandBar but at the top, pointing upward.
+.ancestorBanner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
+  background: color-mix(in srgb, var(--semantic-color-semantic-info) 6%, transparent);
+  border: none;
+  border-bottom: 1px solid var(--borders-color-border-3);
+  cursor: pointer;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-color-text-subtle);
+  transition: background var(--transition-fast), color var(--transition-fast);
+
+  &:hover {
+    background: color-mix(in srgb, var(--semantic-color-semantic-info) 12%, transparent);
+    color: var(--semantic-color-semantic-info);
+  }
+
+  svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+}
+
+// Connector line from ancestor banner down to root avatar top.
+// Runs from top of rootWrap to the center of root avatar.
+// Avatar center Y: padding-top(16px) + avatar-height/2(20px) = 36px.
+.ancestorConnector {
+  position: absolute;
+  left: 40px;
+  top: 0;
+  height: 36px;
+  width: 2px;
+  background: color-mix(in srgb, var(--semantic-color-semantic-info) 18%, transparent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+// Root tweet wrapper — positions the connector line segment from avatar → bottom.
+.rootWrap {
+  position: relative;
+}
+
+// Connector segment from bottom of root avatar down to the bottom of the root card.
+// This connects visually to the repliesWrap connector, forming one continuous line.
+// Avatar center X: TweetCard padding-left (20px) + half avatar (20px) = 40px.
+// Avatar bottom Y: TweetCard padding-top (16px) + avatar height (40px) = 56px.
+.rootConnector {
+  position: absolute;
+  left: 40px;
+  top: 56px;
+  bottom: 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--semantic-color-semantic-info) 18%, transparent);
+  border-radius: 1px;
+  pointer-events: none;
+  transition: background var(--transition-fast);
+  // No z-index — painted first in DOM order, TweetCard (position: relative) paints on top.
+}
+
+.repliesWrap {
+  position: relative;
+  min-width: 0;
+}
+
+// Clickable connector line spanning the full replies section.
+// Continues the rootConnector line down through all reply avatars.
+// z-index deliberately unset (auto) so threadReply cards (z-index: 1) paint on top.
+.connectorLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 40px;
+  width: 12px; // wider hit area for clicking
+  padding: 0;
+  margin: 0;
+  margin-left: -5px; // center the 12px hit area on the 2px visual line
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 5px; // center 2px line within 12px hit area
+    width: 2px;
+    background: color-mix(in srgb, var(--semantic-color-semantic-info) 18%, transparent);
+    border-radius: 1px;
+    transition: background var(--transition-fast);
+  }
+
+  &:hover::before {
+    background: color-mix(in srgb, var(--semantic-color-semantic-info) 70%, transparent);
+  }
+}
+
+// Each reply card. position + z-index ensure the card (and its avatar) paints
+// ABOVE the connector line, so the solid avatar circle covers the line.
+.threadReply {
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid var(--borders-color-border-3);
+  min-width: 0;
+}
+
+.expandBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  background: color-mix(in srgb, var(--semantic-color-semantic-info) 6%, transparent);
+  border: none;
+  border-top: 1px solid var(--borders-color-border-3);
+  cursor: pointer;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-color-text-subtle);
+  transition: background var(--transition-fast), color var(--transition-fast);
+
+  &:hover {
+    background: color-mix(in srgb, var(--semantic-color-semantic-info) 12%, transparent);
+    color: var(--text-color-text-main);
+  }
+
+  svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+}
+
+.expandChevron {
+  margin-left: auto;
+  transition: transform var(--transition-fast);
+}
+
+.expandBarExpanded .expandChevron {
+  transform: rotate(180deg);
+}

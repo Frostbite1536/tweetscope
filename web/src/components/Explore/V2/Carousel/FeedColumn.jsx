@@ -1,5 +1,7 @@
-import { useCallback, memo } from 'react';
+import { useCallback, useMemo, memo } from 'react';
+import { groupRowsByThread } from '../../../../lib/groupRowsByThread';
 import TweetCard from '../TweetFeed/TweetCard';
+import ThreadGroup from '../TweetFeed/ThreadGroup';
 import SubClusterPills from './SubClusterPills';
 import styles from './FeedColumn.module.scss';
 
@@ -35,6 +37,11 @@ function FeedColumn({
     [onSubClusterSelect, columnIndex]
   );
 
+  const groupedItems = useMemo(
+    () => groupRowsByThread(tweets, nodeStats),
+    [tweets, nodeStats]
+  );
+
   return (
     <div
       className={`${styles.column} ${styles[focusState]}`}
@@ -54,25 +61,41 @@ function FeedColumn({
       />
 
       <div className={styles.tweetScroll}>
-        {tweets.map((row) => {
-          const rowStats = nodeStats?.get(row.ls_index);
-          return (
-            <div
-              key={row.ls_index ?? row.index}
-              className={rowStats?.threadDepth > 0 ? styles.replyDepthIndicator : undefined}
-            >
-              <TweetCard
-                row={row}
+        {groupedItems.map((item) => {
+          if (item.type === 'thread') {
+            return (
+              <ThreadGroup
+                key={`thread-${item.threadRootId}`}
+                rows={item.rows}
+                threadRootId={item.threadRootId}
                 textColumn={dataset?.text_column}
-                clusterInfo={clusterMap?.[row.ls_index]}
-                isHighlighted={hoveredIndex === row.ls_index}
+                clusterMap={clusterMap}
+                nodeStats={nodeStats}
                 onHover={onHover}
                 onClick={onClick}
-                nodeStats={rowStats}
-                onViewThread={onViewThread ? () => onViewThread(row.ls_index) : undefined}
-                onViewQuotes={onViewQuotes ? () => onViewQuotes(row.ls_index) : undefined}
+                hoveredIndex={hoveredIndex}
+                onViewThread={onViewThread}
+                onViewQuotes={onViewQuotes}
+                hasMissingAncestors={item.hasMissingAncestors}
+                missingAncestorCount={item.missingAncestorCount}
               />
-            </div>
+            );
+          }
+          const row = item.row;
+          return (
+            <TweetCard
+              key={row.ls_index ?? row.index}
+              row={row}
+              textColumn={dataset?.text_column}
+              clusterInfo={clusterMap?.[row.ls_index]}
+              isHighlighted={hoveredIndex === row.ls_index}
+              onHover={onHover}
+              onClick={onClick}
+              nodeStats={nodeStats?.get(row.ls_index)}
+              onViewThread={onViewThread ? () => onViewThread(row.ls_index) : undefined}
+              onViewQuotes={onViewQuotes ? () => onViewQuotes(row.ls_index) : undefined}
+              isReplyToMissing={item.hasMissingAncestors}
+            />
           );
         })}
 

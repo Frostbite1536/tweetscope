@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { Heart, Repeat2, ExternalLink, Twitter } from 'lucide-react';
+import { Heart, Repeat2, ExternalLink, Twitter, CornerLeftUp } from 'lucide-react';
 import { getClusterColorCSS, getClusterColorRGBA } from '../DeckGLScatter';
 import { useColorMode } from '../../../../hooks/useColorMode';
 import { urlResolver } from '../../../../lib/urlResolver';
@@ -70,6 +70,7 @@ TweetCard.propTypes = {
   nodeStats: PropTypes.object,
   onViewThread: PropTypes.func,
   onViewQuotes: PropTypes.func,
+  isReplyToMissing: PropTypes.bool,
 };
 
 function TweetCard({
@@ -85,6 +86,7 @@ function TweetCard({
   nodeStats,
   onViewThread,
   onViewQuotes,
+  isReplyToMissing = false,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showFullEmbed, setShowFullEmbed] = useState(false);
@@ -163,7 +165,6 @@ function TweetCard({
     const rgba = getClusterColorRGBA(clusterNumber, isDarkMode);
     return {
       '--highlight-bg': `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${isDarkMode ? 0.06 : 0.08})`,
-      '--highlight-gradient': `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, 0.06)`,
     };
   }, [isHighlighted, clusterNumber, isDarkMode]);
 
@@ -226,6 +227,21 @@ function TweetCard({
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
     >
+      {/* Inline "replying to" indicator — slim clickable line inside the card */}
+      {isReplyToMissing && onViewThread && (
+        <button
+          className={styles.replyToLine}
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewThread();
+          }}
+          type="button"
+        >
+          <CornerLeftUp size={11} />
+          <span>Replying to earlier tweet</span>
+        </button>
+      )}
+
       <div className={styles.tweetHeader}>
         {/* Avatar */}
         <div className={styles.avatar} style={{ backgroundColor: avatarColor }}>

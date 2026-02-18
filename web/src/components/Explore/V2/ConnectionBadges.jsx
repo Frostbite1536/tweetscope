@@ -64,17 +64,6 @@ function ConnectionBadges({ stats, onViewThread, onViewQuotes, compact = false }
     });
   }
 
-  // Priority 5: This tweet quotes others
-  if (stats.quoteOutCount > 0) {
-    badges.push({
-      key: 'quotes',
-      type: 'quote',
-      icon: Quote,
-      label: `Quotes ${stats.quoteOutCount}x`,
-      action: onViewQuotes,
-    });
-  }
-
   // Limit to 3 badges max to avoid clutter
   const visibleBadges = badges.slice(0, 3);
 
