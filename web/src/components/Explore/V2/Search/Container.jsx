@@ -21,15 +21,13 @@ const Container = () => {
 
   const { clusterLabels, scopeLoaded } = useScope();
   const {
-    searchFilter,
-    clusterFilter,
     filterQuery,
     setFilterQuery,
-    columnFilter,
     filterConfig,
-    setFilterConfig,
-    filterActive,
-    setFilterActive,
+    applyCluster,
+    applySearch,
+    applyColumn,
+    clearFilter,
   } = useFilter();
 
   // Handle updates to the search query from the input field
@@ -69,27 +67,24 @@ const Container = () => {
 
   const handleSelect = (selection) => {
     setDropdownIsOpen(false);
-    setFilterConfig(selection);
-    setFilterActive(true);
+    const { type, value, column, label } = selection;
+    if (type === filterConstants.CLUSTER) {
+      const clusterId = Number(value);
+      if (!Number.isFinite(clusterId)) return;
+      const clusterObj = clusterLabels?.find(c => c.cluster === clusterId)
+        || { cluster: clusterId, label: label || String(clusterId) };
+      applyCluster(clusterObj);
+    } else if (type === filterConstants.SEARCH) {
+      applySearch(value);
+    } else if (type === filterConstants.COLUMN) {
+      applyColumn(column, value);
+    }
   };
 
   const handleClear = () => {
-    const { type } = filterConfig;
-    if (type === filterConstants.SEARCH) {
-      const { clear } = searchFilter;
-      clear();
-    } else if (type === filterConstants.CLUSTER) {
-      const { clear } = clusterFilter;
-      clear();
-    } else if (type === filterConstants.COLUMN) {
-      const { clear } = columnFilter;
-      clear();
-    }
-
-    setFilterQuery('');
+    const filterType = filterConfig?.type;
+    clearFilter(filterType);
     setDropdownIsOpen(false);
-    setFilterActive(false);
-    setFilterConfig(null);
   };
 
   return (

@@ -196,7 +196,9 @@ export function FilterProvider({ children }) {
   const searchFilter = useNearestNeighborsSearch({ userId, datasetId, scope, deletedIndices });
 
   // ---------------------------------------------------------------------------
-  // Compatibility shims — existing consumers call these until Phase 3
+  // DEPRECATED (Phase 3 complete): setFilterConfig and setFilterActive are no
+  // longer used by any consumer for filter dispatch. Remove in Phase 5.
+  // setFilterQuery is still used by Search/Container for input field text.
   // ---------------------------------------------------------------------------
 
   const setFilterConfig = useCallback((config) => {
@@ -489,7 +491,7 @@ export function FilterProvider({ children }) {
     applyTimeRange,
     clearFilter,
 
-    // Compatibility shims (existing consumers use these until Phase 3)
+    // Deprecated shims (Phase 3 complete — remove in Phase 5)
     filterConfig,
     setFilterConfig,
     filterQuery,

@@ -59,8 +59,8 @@ const Option = (props) => {
       setFilterQuery(label);
     } else if (groupType === CLUSTERS) {
       onSelect({ type: filterConstants.CLUSTER, value: data.value, label: data.label });
-      const label = `Cluster ${data.value}`;
-      setFilterQuery(label);
+      // applyCluster sets filterQuery to the real cluster label via the reducer;
+      // do NOT override it here with a generic "Cluster N" string.
     }
   };
 

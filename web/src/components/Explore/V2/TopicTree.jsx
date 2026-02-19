@@ -26,9 +26,8 @@ function TopicTree({
   const {
     clusterFilter,
     filterConfig,
-    setFilterConfig,
-    setFilterActive,
-    setFilterQuery,
+    applyCluster,
+    clearFilter,
     filteredIndices,
   } = useFilter();
   const { isDark: isDarkMode } = useColorMode();
@@ -139,18 +138,8 @@ function TopicTree({
       onSelectCluster(cluster);
     }
 
-    // Update filter context to filter tweets in the feed
-    if (clusterFilter && setFilterConfig && setFilterActive) {
-      clusterFilter.setCluster(cluster);
-      setFilterQuery(cluster.label || String(cluster.cluster));
-      setFilterConfig({
-        type: filterConstants.CLUSTER,
-        value: cluster.cluster,
-        label: cluster.label,
-      });
-      setFilterActive(true);
-    }
-  }, [onSelectCluster, clusterFilter, setFilterConfig, setFilterActive, setFilterQuery]);
+    applyCluster(cluster);
+  }, [onSelectCluster, applyCluster]);
 
   // Handle zoom to cluster - compute bounds from hull and call callback
   const handleZoomToCluster = useCallback((cluster) => {
@@ -286,16 +275,8 @@ function TopicTree({
     setInternalSelectedCluster(null);
     setSelectedClusterData(null);
     setSearchQuery('');
-    // Preserve current expand/collapse state when clearing selection.
-    if (clusterFilter) {
-      clusterFilter.clear();
-    }
-    setFilterConfig(null);
-    setFilterQuery('');
-    if (setFilterActive) {
-      setFilterActive(false);
-    }
-  }, [clusterFilter, setFilterActive, setFilterConfig, setFilterQuery]);
+    clearFilter(filterConstants.CLUSTER);
+  }, [clearFilter]);
 
   return (
     <div className={styles.topicTree}>

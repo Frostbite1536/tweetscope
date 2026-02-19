@@ -112,12 +112,11 @@ function ExploreContent() {
     loading: filterLoading,
     shownIndices,
     filterConfig,
-    setFilterQuery,
-    clusterFilter,
-    searchFilter,
-    setFilterConfig,
     filterActive,
-    setFilterActive,
+    searchFilter,
+    applyCluster,
+    applyTimeRange,
+    clearFilter,
   } = useFilter();
 
   // ====================================================================================================
@@ -182,14 +181,12 @@ function ExploreContent() {
     if (totalDuration <= 0) {
       const staticRange = [timelineStart, timelineStart];
       setTimeRange(staticRange);
-      setFilterConfig({
-        type: filterConstants.TIME_RANGE,
-        start: staticRange[0],
-        end: staticRange[1],
-        timestampsByLsIndex: timelineData.timestampsByLsIndex,
-        label: formatTimelineRangeLabel(staticRange),
-      });
-      setFilterActive(true);
+      applyTimeRange(
+        staticRange[0],
+        staticRange[1],
+        timelineData.timestampsByLsIndex,
+        formatTimelineRangeLabel(staticRange),
+      );
       setIsPlaying(false);
       return;
     }
@@ -229,8 +226,7 @@ function ExploreContent() {
     timelineData.timestampsByLsIndex,
     timelineStart,
     timelineEnd,
-    setFilterConfig,
-    setFilterActive,
+    applyTimeRange,
   ]);
 
   const handlePlayToggle = useCallback(() => {
@@ -239,14 +235,12 @@ function ExploreContent() {
       const playbackRange = [nextRange[0], nextRange[0]];
       // Always reset end to start so playback sweeps from the chosen start
       setTimeRange(playbackRange);
-      setFilterConfig({
-        type: filterConstants.TIME_RANGE,
-        start: playbackRange[0],
-        end: playbackRange[1],
-        timestampsByLsIndex: timelineData.timestampsByLsIndex,
-        label: formatTimelineRangeLabel(playbackRange),
-      });
-      setFilterActive(true);
+      applyTimeRange(
+        playbackRange[0],
+        playbackRange[1],
+        timelineData.timestampsByLsIndex,
+        formatTimelineRangeLabel(playbackRange),
+      );
     }
     setIsPlaying((p) => !p);
   }, [
@@ -256,8 +250,7 @@ function ExploreContent() {
     timelineStart,
     timelineEnd,
     timeRange,
-    setFilterConfig,
-    setFilterActive,
+    applyTimeRange,
   ]);
 
   // Bridge time range changes to FilterContext
@@ -266,25 +259,22 @@ function ExploreContent() {
       const nextRange = clampRangeToDomain(range, [timelineStart, timelineEnd]);
       setTimeRange(nextRange);
       if (nextRange) {
-        setFilterConfig({
-          type: filterConstants.TIME_RANGE,
-          start: nextRange[0],
-          end: nextRange[1],
-          timestampsByLsIndex: timelineData.timestampsByLsIndex,
-          label: formatTimelineRangeLabel(nextRange),
-        });
-        setFilterActive(true);
+        applyTimeRange(
+          nextRange[0],
+          nextRange[1],
+          timelineData.timestampsByLsIndex,
+          formatTimelineRangeLabel(nextRange),
+        );
       } else if (filterConfig?.type === filterConstants.TIME_RANGE) {
-        setFilterConfig(null);
-        setFilterActive(false);
+        clearFilter(filterConstants.TIME_RANGE);
       }
     },
     [
       timelineStart,
       timelineEnd,
       timelineData.timestampsByLsIndex,
-      setFilterConfig,
-      setFilterActive,
+      applyTimeRange,
+      clearFilter,
       filterConfig?.type,
     ]
   );
@@ -298,14 +288,12 @@ function ExploreContent() {
     if (!normalizedRange) return;
 
     playbackFilterTimerRef.current = setTimeout(() => {
-      setFilterConfig({
-        type: filterConstants.TIME_RANGE,
-        start: normalizedRange[0],
-        end: normalizedRange[1],
-        timestampsByLsIndex: timelineData.timestampsByLsIndex,
-        label: formatTimelineRangeLabel(normalizedRange),
-      });
-      setFilterActive(true);
+      applyTimeRange(
+        normalizedRange[0],
+        normalizedRange[1],
+        timelineData.timestampsByLsIndex,
+        formatTimelineRangeLabel(normalizedRange),
+      );
     }, 300);
     return () => clearTimeout(playbackFilterTimerRef.current);
   }, [
@@ -314,19 +302,19 @@ function ExploreContent() {
     timelineStart,
     timelineEnd,
     timelineData.timestampsByLsIndex,
-    setFilterConfig,
-    setFilterActive,
+    applyTimeRange,
   ]);
 
   // Keep timeline filter state valid when scope/domain changes.
+  // Note: clearFilter(TIME_RANGE) performs a full reducer reset (all filter intent cleared).
+  // This is correct for single-mode filters — clearing time range returns to unfiltered state.
   useEffect(() => {
     if (filterConfig?.type !== filterConstants.TIME_RANGE) return;
 
     if (!timelineData.hasDates) {
       setIsPlaying(false);
       setTimeRange(null);
-      setFilterConfig(null);
-      setFilterActive(false);
+      clearFilter(filterConstants.TIME_RANGE);
       return;
     }
 
@@ -334,8 +322,7 @@ function ExploreContent() {
     if (!clampedFilterRange) {
       setIsPlaying(false);
       setTimeRange(null);
-      setFilterConfig(null);
-      setFilterActive(false);
+      clearFilter(filterConstants.TIME_RANGE);
       return;
     }
 
@@ -347,21 +334,16 @@ function ExploreContent() {
       filterConfig.label !== nextLabel;
 
     if (shouldUpdateFilter) {
-      setFilterConfig({
-        type: filterConstants.TIME_RANGE,
-        start: clampedFilterRange[0],
-        end: clampedFilterRange[1],
-        timestampsByLsIndex: timelineData.timestampsByLsIndex,
-        label: nextLabel,
-      });
+      applyTimeRange(
+        clampedFilterRange[0],
+        clampedFilterRange[1],
+        timelineData.timestampsByLsIndex,
+        nextLabel,
+      );
     }
 
     if (!isPlaying && (!timeRange || timeRange[0] !== clampedFilterRange[0] || timeRange[1] !== clampedFilterRange[1])) {
       setTimeRange(clampedFilterRange);
-    }
-
-    if (!filterActive) {
-      setFilterActive(true);
     }
   }, [
     filterConfig?.type,
@@ -369,15 +351,14 @@ function ExploreContent() {
     filterConfig?.end,
     filterConfig?.label,
     filterConfig?.timestampsByLsIndex,
-    filterActive,
     timelineData.hasDates,
     timelineData.timestampsByLsIndex,
     timelineStart,
     timelineEnd,
     isPlaying,
     timeRange,
-    setFilterConfig,
-    setFilterActive,
+    applyTimeRange,
+    clearFilter,
   ]);
 
   // If another filter becomes active, clear timeline-local range to avoid divergent UI state.
@@ -760,10 +741,7 @@ function ExploreContent() {
         clearHoverState();
 
         if (filterConfig?.type === filterConstants.CLUSTER) {
-          clusterFilter.clear();
-          setFilterQuery('');
-          setFilterConfig(null);
-          setFilterActive(false);
+          clearFilter(filterConstants.CLUSTER);
         }
         return;
       }
@@ -799,7 +777,7 @@ function ExploreContent() {
           });
       }
     },
-    [deletedIndices, clearHoverState, filterConfig, clusterFilter, setFilterQuery, setFilterConfig, setFilterActive, tweetIdMap, openThread, datasetId, scope?.id]
+    [deletedIndices, clearHoverState, filterConfig, clearFilter, tweetIdMap, openThread, datasetId, scope?.id]
   );
 
   const handleUnpinHover = useCallback(() => {
@@ -814,16 +792,9 @@ function ExploreContent() {
   const handleFilterToCluster = useCallback(
     (cluster) => {
       if (!cluster || cluster.cluster === undefined || cluster.cluster === null) return;
-      setFilterQuery(cluster.label || String(cluster.cluster));
-      setFilterConfig({
-        type: filterConstants.CLUSTER,
-        value: cluster.cluster,
-        label: cluster.label || String(cluster.cluster),
-      });
-      clusterFilter.setCluster(cluster);
-      setFilterActive(true);
+      applyCluster(cluster);
     },
-    [clusterFilter, setFilterQuery, setFilterConfig, setFilterActive]
+    [applyCluster]
   );
 
   const containerRef = useRef(null);
