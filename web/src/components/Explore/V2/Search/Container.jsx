@@ -1,7 +1,6 @@
 // SearchContainer.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from 'react-element-forge';
-import { useSearchParams } from 'react-router-dom';
 
 import SearchResults from './SearchResults';
 import { useScope } from '../../../../contexts/ScopeContext';
@@ -19,7 +18,6 @@ import { filterConstants } from './utils';
  */
 const Container = () => {
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [urlParams, setUrlParams] = useSearchParams();
 
   const { clusterLabels, scopeLoaded } = useScope();
   const {
@@ -73,22 +71,6 @@ const Container = () => {
     setDropdownIsOpen(false);
     setFilterConfig(selection);
     setFilterActive(true);
-
-    const { type, value, column } = selection;
-
-    setUrlParams((prev) => {
-      prev.delete('cluster');
-      prev.delete('search');
-      prev.delete('column');
-      prev.delete('value');
-      if (type === filterConstants.COLUMN) {
-        prev.set('column', column);
-        prev.set('value', value);
-      } else {
-        prev.set(type, value);
-      }
-      return new URLSearchParams(prev);
-    });
   };
 
   const handleClear = () => {
@@ -108,15 +90,6 @@ const Container = () => {
     setDropdownIsOpen(false);
     setFilterActive(false);
     setFilterConfig(null);
-
-    // delete all filter params from the url
-    setUrlParams((prev) => {
-      prev.delete('cluster');
-      prev.delete('search');
-      prev.delete('column');
-      prev.delete('value');
-      return new URLSearchParams(prev);
-    });
   };
 
   return (

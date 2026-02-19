@@ -29,7 +29,6 @@ function TopicTree({
     setFilterConfig,
     setFilterActive,
     setFilterQuery,
-    setUrlParams,
     filteredIndices,
   } = useFilter();
   const { isDark: isDarkMode } = useColorMode();
@@ -150,16 +149,8 @@ function TopicTree({
         label: cluster.label,
       });
       setFilterActive(true);
-      setUrlParams((prev) => {
-        prev.set('cluster', cluster.cluster);
-        prev.delete('feature');
-        prev.delete('search');
-        prev.delete('column');
-        prev.delete('value');
-        return new URLSearchParams(prev);
-      });
     }
-  }, [onSelectCluster, clusterFilter, setFilterConfig, setFilterActive, setFilterQuery, setUrlParams]);
+  }, [onSelectCluster, clusterFilter, setFilterConfig, setFilterActive, setFilterQuery]);
 
   // Handle zoom to cluster - compute bounds from hull and call callback
   const handleZoomToCluster = useCallback((cluster) => {
@@ -304,15 +295,7 @@ function TopicTree({
     if (setFilterActive) {
       setFilterActive(false);
     }
-    setUrlParams((prev) => {
-      prev.delete('cluster');
-      prev.delete('feature');
-      prev.delete('search');
-      prev.delete('column');
-      prev.delete('value');
-      return new URLSearchParams(prev);
-    });
-  }, [clusterFilter, setFilterActive, setFilterConfig, setFilterQuery, setUrlParams]);
+  }, [clusterFilter, setFilterActive, setFilterConfig, setFilterQuery]);
 
   return (
     <div className={styles.topicTree}>

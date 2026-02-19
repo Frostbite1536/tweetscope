@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ChevronsRight, ChevronsLeft, GalleryHorizontalEnd, PanelRightClose, PanelRightOpen } from 'lucide-react';
 
 import './Explore.css';
@@ -118,7 +118,6 @@ function ExploreContent() {
     setFilterConfig,
     filterActive,
     setFilterActive,
-    setUrlParams,
   } = useFilter();
 
   // ====================================================================================================
@@ -765,14 +764,6 @@ function ExploreContent() {
           setFilterQuery('');
           setFilterConfig(null);
           setFilterActive(false);
-          setUrlParams((prev) => {
-            prev.delete('cluster');
-            prev.delete('feature');
-            prev.delete('search');
-            prev.delete('column');
-            prev.delete('value');
-            return new URLSearchParams(prev);
-          });
         }
         return;
       }
@@ -808,7 +799,7 @@ function ExploreContent() {
           });
       }
     },
-    [deletedIndices, clearHoverState, filterConfig, clusterFilter, setFilterQuery, setFilterConfig, setFilterActive, setUrlParams, tweetIdMap, openThread, datasetId, scope?.id]
+    [deletedIndices, clearHoverState, filterConfig, clusterFilter, setFilterQuery, setFilterConfig, setFilterActive, tweetIdMap, openThread, datasetId, scope?.id]
   );
 
   const handleUnpinHover = useCallback(() => {
@@ -831,16 +822,8 @@ function ExploreContent() {
       });
       clusterFilter.setCluster(cluster);
       setFilterActive(true);
-      setUrlParams((prev) => {
-        prev.set('cluster', cluster.cluster);
-        prev.delete('feature');
-        prev.delete('search');
-        prev.delete('column');
-        prev.delete('value');
-        return new URLSearchParams(prev);
-      });
     },
-    [clusterFilter, setFilterQuery, setFilterConfig, setFilterActive, setUrlParams]
+    [clusterFilter, setFilterQuery, setFilterConfig, setFilterActive]
   );
 
   const containerRef = useRef(null);

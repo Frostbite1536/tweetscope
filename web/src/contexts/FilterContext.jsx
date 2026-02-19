@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useReducer, useRef } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { useScope } from './ScopeContext';
@@ -15,6 +15,7 @@ import {
 
 const FilterContext = createContext(null);
 const ROWS_PER_PAGE = 20;
+const FILTER_URL_KEYS = ['cluster', 'search', 'column', 'value', 'feature'];
 
 function uniqueOrderedIndices(values) {
   const seen = new Set();
@@ -29,15 +30,149 @@ function uniqueOrderedIndices(values) {
   return out;
 }
 
+function getFilterUrlSignature(config) {
+  if (!config) return 'none';
+
+  if (config.type === filterConstants.CLUSTER) {
+    return `cluster:${String(config.value)}`;
+  }
+
+  if (config.type === filterConstants.SEARCH) {
+    return `search:${String(config.value)}`;
+  }
+
+  if (config.type === filterConstants.COLUMN) {
+    return `column:${String(config.column)}:${String(config.value)}`;
+  }
+
+  if (config.type === filterConstants.TIME_RANGE) {
+    return 'timeRange';
+  }
+
+  return 'unknown';
+}
+
+// ---------------------------------------------------------------------------
+// Reducer — single owner of filter intent state
+// ---------------------------------------------------------------------------
+
+const ACTION = {
+  APPLY_CLUSTER: 'APPLY_CLUSTER',
+  APPLY_SEARCH: 'APPLY_SEARCH',
+  APPLY_COLUMN: 'APPLY_COLUMN',
+  APPLY_TIME_RANGE: 'APPLY_TIME_RANGE',
+  SET_FILTER_QUERY: 'SET_FILTER_QUERY',
+  CLEAR_FILTER: 'CLEAR_FILTER',
+  // Compatibility shims (used by existing callers until Phase 3 migration)
+  SET_FILTER_CONFIG: 'SET_FILTER_CONFIG',
+  SET_FILTER_ACTIVE: 'SET_FILTER_ACTIVE',
+};
+
+const initialFilterState = {
+  filterConfig: null,
+  filterQuery: '',
+  filterActive: false,
+};
+
+function filterReducer(state, action) {
+  switch (action.type) {
+    case ACTION.APPLY_CLUSTER: {
+      const { cluster } = action;
+      const label = cluster.label || String(cluster.cluster);
+      return {
+        filterConfig: {
+          type: filterConstants.CLUSTER,
+          value: cluster.cluster,
+          label,
+        },
+        filterQuery: label,
+        filterActive: true,
+      };
+    }
+
+    case ACTION.APPLY_SEARCH: {
+      const { query } = action;
+      return {
+        filterConfig: {
+          type: filterConstants.SEARCH,
+          value: query,
+          label: query,
+        },
+        filterQuery: query,
+        filterActive: true,
+      };
+    }
+
+    case ACTION.APPLY_COLUMN: {
+      const { column, value } = action;
+      const label = `${column}: ${value}`;
+      return {
+        filterConfig: {
+          type: filterConstants.COLUMN,
+          value,
+          column,
+          label,
+        },
+        filterQuery: label,
+        filterActive: true,
+      };
+    }
+
+    case ACTION.APPLY_TIME_RANGE: {
+      const { start, end, timestampsByLsIndex, label } = action;
+      return {
+        ...state,
+        filterConfig: {
+          type: filterConstants.TIME_RANGE,
+          start,
+          end,
+          timestampsByLsIndex,
+          label,
+        },
+        filterActive: true,
+        // filterQuery intentionally unchanged for time range
+      };
+    }
+
+    case ACTION.SET_FILTER_QUERY:
+      return { ...state, filterQuery: action.query };
+
+    case ACTION.CLEAR_FILTER:
+      return { ...initialFilterState };
+
+    // --- Compatibility shims (existing callers pass raw values) ---
+
+    case ACTION.SET_FILTER_CONFIG: {
+      const config = action.config;
+      return {
+        ...state,
+        filterConfig: config,
+        filterActive: config !== null && config !== undefined ? state.filterActive : false,
+      };
+    }
+
+    case ACTION.SET_FILTER_ACTIVE:
+      return { ...state, filterActive: action.active };
+
+    default:
+      return state;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
+
 export function FilterProvider({ children }) {
-  const [filterConfig, setFilterConfig] = useState(null);
+  const [state, dispatch] = useReducer(filterReducer, initialFilterState);
+  const { filterConfig, filterQuery, filterActive } = state;
+
   const [filteredIndices, setFilteredIndices] = useState([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [filterQuery, setFilterQuery] = useState('');
-  const [filterActive, setFilterActive] = useState(false);
 
   const [urlParams, setUrlParams] = useSearchParams();
+  const urlWriteSkipRef = useRef(null);
   const {
     scopeRows,
     deletedIndices,
@@ -60,37 +195,96 @@ export function FilterProvider({ children }) {
   const clusterFilter = useClusterFilter({ scopeRows, scope, scopeLoaded });
   const searchFilter = useNearestNeighborsSearch({ userId, datasetId, scope, deletedIndices });
 
+  // ---------------------------------------------------------------------------
+  // Compatibility shims — existing consumers call these until Phase 3
+  // ---------------------------------------------------------------------------
+
+  const setFilterConfig = useCallback((config) => {
+    dispatch({ type: ACTION.SET_FILTER_CONFIG, config });
+  }, []);
+
+  const setFilterQuery = useCallback((query) => {
+    dispatch({ type: ACTION.SET_FILTER_QUERY, query });
+  }, []);
+
+  const setFilterActive = useCallback((active) => {
+    dispatch({ type: ACTION.SET_FILTER_ACTIVE, active });
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // New canonical dispatchers — Phase 1 additions
+  // ---------------------------------------------------------------------------
+
+  const applyCluster = useCallback((cluster) => {
+    dispatch({ type: ACTION.APPLY_CLUSTER, cluster });
+    clusterFilter.setCluster(cluster);
+  }, [clusterFilter]);
+
+  const applySearch = useCallback((query) => {
+    dispatch({ type: ACTION.APPLY_SEARCH, query });
+  }, []);
+
+  const applyColumn = useCallback((column, value) => {
+    dispatch({ type: ACTION.APPLY_COLUMN, column, value });
+  }, []);
+
+  const applyTimeRange = useCallback((start, end, timestampsByLsIndex, label) => {
+    dispatch({ type: ACTION.APPLY_TIME_RANGE, start, end, timestampsByLsIndex, label });
+  }, []);
+
+  const clearFilter = useCallback((filterType) => {
+    dispatch({ type: ACTION.CLEAR_FILTER });
+    // Clear hook-internal state for the relevant type
+    if (!filterType || filterType === filterConstants.CLUSTER) {
+      clusterFilter.clear();
+    }
+    if (!filterType || filterType === filterConstants.SEARCH) {
+      searchFilter.clear();
+    }
+    if (!filterType || filterType === filterConstants.COLUMN) {
+      columnFilter.clear();
+    }
+  }, [clusterFilter, searchFilter, columnFilter]);
+
+  // ---------------------------------------------------------------------------
+  // URL restore — hydrate filter state from URL on load
+  // ---------------------------------------------------------------------------
+
   const hasFilterInUrl = useMemo(() => {
     return (
-      urlParams.has('column') ||
       urlParams.has('cluster') ||
-      urlParams.has('search')
+      urlParams.has('search') ||
+      (urlParams.has('column') && urlParams.has('value'))
     );
   }, [urlParams]);
 
   useEffect(() => {
     if (!scopeLoaded || !hasFilterInUrl) return;
 
-    const key = urlParams.keys().next().value;
-    const value = urlParams.get(key);
-    const numericValue = Number.parseInt(value, 10);
-
-    if (key === filterConstants.SEARCH) {
-      setFilterQuery(value);
-      setFilterConfig({ type: filterConstants.SEARCH, value, label: value });
+    if (urlParams.has('cluster')) {
+      const clusterValue = urlParams.get('cluster');
+      const numericValue = Number.parseInt(clusterValue, 10);
+      if (!Number.isInteger(numericValue)) return;
+      const cluster = clusterLabels.find((item) => item.cluster === numericValue);
+      if (!cluster) return;
+      const targetSignature = `cluster:${String(numericValue)}`;
+      if (getFilterUrlSignature(filterConfig) === targetSignature) {
+        return;
+      }
+      urlWriteSkipRef.current = targetSignature;
+      applyCluster(cluster);
       return;
     }
 
-    if (key === filterConstants.CLUSTER) {
-      const cluster = clusterLabels.find((item) => item.cluster === numericValue);
-      if (!cluster) return;
-      clusterFilter.setCluster(cluster);
-      setFilterQuery(cluster.label);
-      setFilterConfig({
-        type: filterConstants.CLUSTER,
-        value: numericValue,
-        label: cluster.label,
-      });
+    if (urlParams.has('search')) {
+      const searchValue = urlParams.get('search');
+      if (!searchValue) return;
+      const targetSignature = `search:${searchValue}`;
+      if (getFilterUrlSignature(filterConfig) === targetSignature) {
+        return;
+      }
+      urlWriteSkipRef.current = targetSignature;
+      applySearch(searchValue);
       return;
     }
 
@@ -99,16 +293,58 @@ export function FilterProvider({ children }) {
       const column = urlParams.get('column');
       const { columnFilters } = columnFilter;
       if (!validateColumnAndValue(column, columnValue, columnFilters)) return;
+      const targetSignature = `column:${String(column)}:${String(columnValue)}`;
+      if (getFilterUrlSignature(filterConfig) === targetSignature) {
+        return;
+      }
 
-      setFilterQuery(`${column}: ${columnValue}`);
-      setFilterConfig({
-        type: filterConstants.COLUMN,
-        value: columnValue,
-        column,
-        label: `${column}: ${columnValue}`,
-      });
+      urlWriteSkipRef.current = targetSignature;
+      applyColumn(column, columnValue);
     }
-  }, [scopeLoaded, hasFilterInUrl, urlParams, clusterLabels, clusterFilter, columnFilter]);
+  }, [scopeLoaded, hasFilterInUrl, urlParams, clusterLabels, columnFilter, filterConfig, applyCluster, applySearch, applyColumn]);
+
+  useEffect(() => {
+    if (!scopeLoaded) return;
+
+    if (urlWriteSkipRef.current !== null) {
+      if (getFilterUrlSignature(filterConfig) === urlWriteSkipRef.current) {
+        urlWriteSkipRef.current = null;
+      }
+      return;
+    }
+
+    if (filterConfig?.type === filterConstants.TIME_RANGE) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(urlParams);
+    for (const key of FILTER_URL_KEYS) {
+      nextParams.delete(key);
+    }
+
+    if (filterConfig) {
+      if (filterConfig.type === filterConstants.CLUSTER) {
+        nextParams.set('cluster', String(filterConfig.value));
+      } else if (filterConfig.type === filterConstants.SEARCH) {
+        nextParams.set('search', String(filterConfig.value));
+      } else if (filterConfig.type === filterConstants.COLUMN) {
+        nextParams.set('column', String(filterConfig.column));
+        nextParams.set('value', String(filterConfig.value));
+      }
+    }
+
+    const shouldWriteUrl = FILTER_URL_KEYS.some((key) => {
+      return urlParams.get(key) !== nextParams.get(key);
+    });
+
+    if (shouldWriteUrl) {
+      setUrlParams(nextParams);
+    }
+  }, [scopeLoaded, filterConfig, urlParams, setUrlParams]);
+
+  // ---------------------------------------------------------------------------
+  // Filter computation — watches filterConfig and computes filteredIndices
+  // ---------------------------------------------------------------------------
 
   const filterReqSeqRef = useRef(0);
 
@@ -187,9 +423,15 @@ export function FilterProvider({ children }) {
     columnFilter,
   ]);
 
+  // ---------------------------------------------------------------------------
+  // Derived state — pagination, visible sets, row fetching
+  // ---------------------------------------------------------------------------
+
   const visibleFilteredIndices = useMemo(() => {
     return filteredIndices.filter((index) => !deletedIndices.has(index));
   }, [filteredIndices, deletedIndices]);
+
+  const visibleIndexSet = useMemo(() => new Set(visibleFilteredIndices), [visibleFilteredIndices]);
 
   const totalPages = useMemo(
     () => Math.ceil(visibleFilteredIndices.length / ROWS_PER_PAGE),
@@ -235,12 +477,29 @@ export function FilterProvider({ children }) {
     });
   }, [pageSlices, rowQueries]);
 
+  // ---------------------------------------------------------------------------
+  // Context value
+  // ---------------------------------------------------------------------------
+
   const value = useMemo(() => ({
+    // New canonical dispatchers (Phase 1)
+    applyCluster,
+    applySearch,
+    applyColumn,
+    applyTimeRange,
+    clearFilter,
+
+    // Compatibility shims (existing consumers use these until Phase 3)
     filterConfig,
     setFilterConfig,
     filterQuery,
     setFilterQuery,
+    filterActive,
+    setFilterActive,
+
+    // Unchanged
     filteredIndices,
+    visibleIndexSet,
     shownIndices,
     page,
     setPage,
@@ -249,19 +508,25 @@ export function FilterProvider({ children }) {
     loading,
     setLoading,
     rowsLoading,
-    filterActive,
-    setFilterActive,
     searchFilter,
     clusterFilter,
     columnFilter,
     setUrlParams,
     dataTableRows,
   }), [
+    applyCluster,
+    applySearch,
+    applyColumn,
+    applyTimeRange,
+    clearFilter,
     filterConfig,
     setFilterConfig,
     filterQuery,
     setFilterQuery,
+    filterActive,
+    setFilterActive,
     filteredIndices,
+    visibleIndexSet,
     shownIndices,
     page,
     setPage,
@@ -269,8 +534,6 @@ export function FilterProvider({ children }) {
     loading,
     setLoading,
     rowsLoading,
-    filterActive,
-    setFilterActive,
     searchFilter,
     clusterFilter,
     columnFilter,

@@ -136,7 +136,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   const { scopeRows, scope } = useScope();
   const { isDark: isDarkMode } = useColorMode();
 
-  const { clusterFilter, filterConfig, filteredIndices } = useFilter();
+  const { clusterFilter, filterConfig, visibleIndexSet } = useFilter();
 
   const maxZoom = 40;
 
@@ -159,14 +159,13 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   const umapRef = useRef(null);
 
   const isFilterActive = !!filterConfig;
-  const filteredIndexSet = useMemo(() => new Set(filteredIndices || []), [filteredIndices]);
 
   // Points format: [x, y, selectionKey, activation, cluster]
   const drawingPoints = useMemo(() => {
     return scopeRows.map((p, i) => {
       const cluster = p.cluster ?? 0;
       const lsIndex = p.ls_index ?? i;
-      const isFilterMatch = isFilterActive ? filteredIndexSet.has(lsIndex) : true;
+      const isFilterMatch = isFilterActive ? visibleIndexSet.has(lsIndex) : true;
 
       // Time range check (applied locally so playback updates are reflected immediately)
       let isTimeMatch = true;
@@ -196,7 +195,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
 
       return [p.x, p.y, mapSelectionKey.normal, 0.0, cluster];
     });
-  }, [scopeRows, isFilterActive, filteredIndexSet, timeRange, timestamps]);
+  }, [scopeRows, isFilterActive, visibleIndexSet, timeRange, timestamps]);
 
 
 
