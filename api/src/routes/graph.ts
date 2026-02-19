@@ -108,7 +108,7 @@ export const graphRoutes = new Hono()
     const { dataset, tweetId } = c.req.param();
     try {
       const chainLimit = Math.max(1, normalizeIndex(c.req.query("chain_limit")) ?? 300);
-      const descLimit = Math.max(1, normalizeIndex(c.req.query("desc_limit")) ?? 3000);
+      const descLimit = Math.max(0, normalizeIndex(c.req.query("desc_limit")) ?? 3000);
 
       const result = await lanceGraphRepo.getThreadEdges(dataset, tweetId, {
         chainLimit,

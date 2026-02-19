@@ -75,8 +75,8 @@ export const queryKeys = {
     index ?? null,
     (columns || []).join(','),
   ] as const,
-  thread: (datasetId: NullableScalar, tweetId: NullableScalar) =>
-    ['thread', datasetId ?? null, tweetId ?? null] as const,
+  thread: (datasetId: NullableScalar, tweetId: NullableScalar, descLimit?: number | null) =>
+    ['thread', datasetId ?? null, tweetId ?? null, descLimit ?? null] as const,
   quotes: (datasetId: NullableScalar, tweetId: NullableScalar) =>
     ['quotes', datasetId ?? null, tweetId ?? null] as const,
 };

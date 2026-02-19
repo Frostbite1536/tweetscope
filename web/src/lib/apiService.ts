@@ -149,11 +149,14 @@ export const graphClient = {
   fetchThread: async (
     datasetId: string,
     tweetId: string,
-    options: RequestOptions = {}
+    options: RequestOptions & { descLimit?: number } = {}
   ): Promise<JsonRecord> => {
-    const { signal } = options;
+    const { signal, descLimit } = options;
+    const query: Record<string, string> = {};
+    if (descLimit != null) query.desc_limit = String(descLimit);
     const res = await client.api.datasets[':dataset'].links.thread[':tweetId'].$get({
       param: { dataset: datasetId, tweetId },
+      query,
     }, { init: { signal } });
     if (!res.ok) {
       const err: Error & { status?: number } = new Error(`Failed to fetch thread (${res.status})`);
