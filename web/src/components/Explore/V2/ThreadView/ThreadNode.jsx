@@ -14,15 +14,12 @@ function ThreadNode({
   node,
   isCurrent = false,
   isMuted = false,
-  depth = 0,
   dataset,
   clusterMap,
   nodeStats,
   onViewThread,
   onViewQuotes,
-  maxIndent = 4,
 }) {
-  const indentLevel = Math.min(depth, maxIndent);
   const hasRow = node.row != null;
   const tweetId = node.tweet_id;
   const lsIndex = node.ls_index;
@@ -38,13 +35,7 @@ function ThreadNode({
   return (
     <div
       className={`${styles.threadNode} ${isCurrent ? styles.current : ''} ${isMuted ? styles.muted : ''}`}
-      style={{ marginLeft: `${indentLevel * 20}px` }}
     >
-      {/* Thread connector line */}
-      {indentLevel > 0 && (
-        <div className={styles.connectorLine} style={{ left: `${(indentLevel - 1) * 20 + 10}px` }} />
-      )}
-
       {hasRow ? (
         <div className={styles.internalTweet}>
           <TweetCard

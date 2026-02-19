@@ -4,6 +4,86 @@ import useThreadData from '../../../../hooks/useThreadData';
 import ThreadNode from './ThreadNode';
 import styles from './ThreadView.module.scss';
 
+let supportsNearestContainerScrollIntoViewCache;
+
+function supportsNearestContainerScrollIntoView() {
+  if (supportsNearestContainerScrollIntoViewCache !== undefined) {
+    return supportsNearestContainerScrollIntoViewCache;
+  }
+
+  if (typeof document === 'undefined' || !document.body) {
+    supportsNearestContainerScrollIntoViewCache = false;
+    return supportsNearestContainerScrollIntoViewCache;
+  }
+
+  const outer = document.createElement('div');
+  const inner = document.createElement('div');
+  const target = document.createElement('div');
+
+  outer.style.cssText = [
+    'position:absolute',
+    'top:-9999px',
+    'left:0',
+    'width:120px',
+    'height:120px',
+    'overflow:auto',
+  ].join(';');
+  inner.style.cssText = [
+    'width:120px',
+    'height:240px',
+    'overflow:auto',
+  ].join(';');
+  target.style.cssText = 'margin-top:180px;height:20px;';
+
+  inner.appendChild(target);
+  outer.appendChild(inner);
+  document.body.appendChild(outer);
+
+  outer.scrollTop = 0;
+  inner.scrollTop = 0;
+
+  target.scrollIntoView({
+    behavior: 'auto',
+    block: 'start',
+    inline: 'nearest',
+    container: 'nearest',
+  });
+
+  supportsNearestContainerScrollIntoViewCache = inner.scrollTop > 0 && outer.scrollTop === 0;
+  document.body.removeChild(outer);
+  return supportsNearestContainerScrollIntoViewCache;
+}
+
+function scrollIntoContainerCenter(targetEl, containerEl) {
+  if (!targetEl || !containerEl) return;
+
+  const prefersReducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const behavior = prefersReducedMotion ? 'auto' : 'smooth';
+
+  if (supportsNearestContainerScrollIntoView()) {
+    targetEl.scrollIntoView({
+      behavior,
+      block: 'center',
+      inline: 'nearest',
+      container: 'nearest',
+    });
+    return;
+  }
+
+  const containerRect = containerEl.getBoundingClientRect();
+  const targetRect = targetEl.getBoundingClientRect();
+  const nextTop = containerEl.scrollTop
+    + (targetRect.top - containerRect.top)
+    - (containerEl.clientHeight - targetRect.height) / 2;
+
+  containerEl.scrollTo({
+    top: Math.max(0, nextTop),
+    behavior,
+  });
+}
+
 /**
  * Thread reading panel that replaces TopicTree + TweetFeed in the sidebar
  * when the user clicks "View Thread" on a connected tweet.
@@ -40,7 +120,7 @@ export default function ThreadView({
   useEffect(() => {
     if (!loading && currentRef.current && scrollRef.current) {
       const timer = setTimeout(() => {
-        currentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollIntoContainerCenter(currentRef.current, scrollRef.current);
       }, 150);
       return () => clearTimeout(timer);
     }
@@ -99,7 +179,6 @@ export default function ThreadView({
                     key={node.tweet_id}
                     node={node}
                     isMuted
-                    depth={0}
                     dataset={dataset}
                     clusterMap={clusterMap}
                     nodeStats={nodeStats}
@@ -116,7 +195,6 @@ export default function ThreadView({
                 <ThreadNode
                   node={currentTweet}
                   isCurrent
-                  depth={0}
                   dataset={dataset}
                   clusterMap={clusterMap}
                   nodeStats={nodeStats}
@@ -133,7 +211,6 @@ export default function ThreadView({
                   <ThreadNode
                     key={node.tweet_id}
                     node={node}
-                    depth={node.depth}
                     dataset={dataset}
                     clusterMap={clusterMap}
                     nodeStats={nodeStats}
