@@ -37,7 +37,6 @@ function FeedCarousel({
   onFocusedIndexChange,
   onHover,
   onClick,
-  hoveredIndex,
   nodeStats,
   onViewQuotes,
 }) {
@@ -222,7 +221,6 @@ function FeedCarousel({
                 onLoadMore={loadMore}
                 onHover={onHover}
                 onClick={onClick}
-                hoveredIndex={hoveredIndex}
                 nodeStats={nodeStats}
                 onViewThread={handleOpenThreadOverlay}
                 onViewQuotes={onViewQuotes}

@@ -12,7 +12,6 @@ TweetFeed.propTypes = {
   clusterMap: PropTypes.object,
   onHover: PropTypes.func,
   onClick: PropTypes.func,
-  hoveredIndex: PropTypes.number,
   dateColumn: PropTypes.string,
   nodeStats: PropTypes.object,
   onViewThread: PropTypes.func,
@@ -25,7 +24,6 @@ function TweetFeed({
   clusterMap = {},
   onHover = () => {},
   onClick = () => {},
-  hoveredIndex = null,
   dateColumn = null,
   nodeStats = null,
   onViewThread,
@@ -79,7 +77,6 @@ function TweetFeed({
                 distanceMap={distanceMap}
                 onHover={onHover}
                 onClick={onClick}
-                hoveredIndex={hoveredIndex}
                 onViewThread={onViewThread}
                 onViewQuotes={onViewQuotes}
                 hasMissingAncestors={item.hasMissingAncestors}
@@ -92,7 +89,6 @@ function TweetFeed({
           const similarity = distanceMap?.has(row.ls_index)
             ? 1 - distanceMap.get(row.ls_index)
             : undefined;
-          const isHighlighted = hoveredIndex === row.ls_index;
 
           return (
             <TweetCard
@@ -102,12 +98,11 @@ function TweetFeed({
               dateColumn={dateColumn}
               clusterInfo={clusterInfo}
               similarity={similarity}
-              isHighlighted={isHighlighted}
               onHover={onHover}
               onClick={onClick}
               nodeStats={nodeStats?.get(row.ls_index)}
-              onViewThread={onViewThread ? () => onViewThread(row.ls_index) : undefined}
-              onViewQuotes={onViewQuotes ? () => onViewQuotes(row.ls_index) : undefined}
+              onViewThread={onViewThread}
+              onViewQuotes={onViewQuotes}
               isReplyToMissing={item.hasMissingAncestors}
             />
           );

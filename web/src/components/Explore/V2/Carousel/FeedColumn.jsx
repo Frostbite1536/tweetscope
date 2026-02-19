@@ -1,5 +1,6 @@
 import { useCallback, useMemo, memo } from 'react';
 import { groupRowsByThread } from '../../../../lib/groupRowsByThread';
+import { useHoveredIndex } from '../../../../contexts/HoverContext';
 import TweetCard from '../TweetFeed/TweetCard';
 import ThreadGroup from '../TweetFeed/ThreadGroup';
 import SubClusterPills from './SubClusterPills';
@@ -21,7 +22,6 @@ function FeedColumn({
   onLoadMore,
   onHover,
   onClick,
-  hoveredIndex,
   nodeStats,
   onViewThread,
   onViewQuotes,
@@ -73,7 +73,6 @@ function FeedColumn({
                 nodeStats={nodeStats}
                 onHover={onHover}
                 onClick={onClick}
-                hoveredIndex={hoveredIndex}
                 onViewThread={onViewThread}
                 onViewQuotes={onViewQuotes}
                 hasMissingAncestors={item.hasMissingAncestors}
@@ -88,12 +87,11 @@ function FeedColumn({
               row={row}
               textColumn={dataset?.text_column}
               clusterInfo={clusterMap?.[row.ls_index]}
-              isHighlighted={hoveredIndex === row.ls_index}
               onHover={onHover}
               onClick={onClick}
               nodeStats={nodeStats?.get(row.ls_index)}
-              onViewThread={onViewThread ? () => onViewThread(row.ls_index) : undefined}
-              onViewQuotes={onViewQuotes ? () => onViewQuotes(row.ls_index) : undefined}
+              onViewThread={onViewThread}
+              onViewQuotes={onViewQuotes}
               isReplyToMissing={item.hasMissingAncestors}
             />
           );

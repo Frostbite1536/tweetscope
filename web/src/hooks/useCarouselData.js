@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useScope } from '@/contexts/ScopeContext';
-import { queryClient } from '@/lib/apiService';
+import { queryApi } from '@/lib/apiService';
+import { appQueryClient } from '@/query/client';
+import { queryKeys } from '@/query/keys';
 
 const ROWS_PER_PAGE = 30;
 const PREFETCH_RANGE = 2; // Fetch columns within focusedIndex +/- this range
@@ -104,8 +106,13 @@ export default function useCarouselData(focusedClusterIndex, enabled = true) {
         },
       }));
 
-      queryClient
-        .fetchDataFromIndices(dataset.id, pageIndices, scope?.id)
+      appQueryClient
+        .fetchQuery({
+          queryKey: queryKeys.rowsByIndices(dataset.id, scope?.id, pageIndices),
+          queryFn: ({ signal }) =>
+            queryApi.fetchDataFromIndices(dataset.id, pageIndices, scope?.id, { signal }),
+          staleTime: 5 * 60 * 1000,
+        })
         .then((rows) => {
           // Map rows to include ls_index and idx (same as FilterContext does)
           const mappedRows = rows.map((row, i) => ({
@@ -162,9 +169,21 @@ export default function useCarouselData(focusedClusterIndex, enabled = true) {
       if (!fetchedRef.current.has(i)) {
         fetchedRef.current.add(i);
         fetchColumnData(i, 0);
+      } else {
+        const cluster = topLevelClusters[i];
+        const indices = indicesByTopLevel[cluster?.cluster] || [];
+        const pageIndices = indices.slice(0, ROWS_PER_PAGE);
+        if (pageIndices.length > 0) {
+          appQueryClient.prefetchQuery({
+            queryKey: queryKeys.rowsByIndices(dataset.id, scope?.id, pageIndices),
+            queryFn: ({ signal }) =>
+              queryApi.fetchDataFromIndices(dataset.id, pageIndices, scope?.id, { signal }),
+            staleTime: 5 * 60 * 1000,
+          });
+        }
       }
     }
-  }, [enabled, focusedClusterIndex, topLevelClusters, dataset, fetchColumnData]);
+  }, [enabled, focusedClusterIndex, topLevelClusters, dataset, scope?.id, indicesByTopLevel, fetchColumnData]);
 
   // Reset when hierarchy changes
   useEffect(() => {

@@ -1,16 +1,16 @@
 import {
   createContext,
   useContext,
-  useState,
-  useEffect,
   useCallback,
   useMemo,
   type ReactNode,
 } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 
-import { apiUrl, catalogClient, viewClient, apiService } from '../lib/apiService';
+import { apiUrl, catalogClient, viewClient } from '../lib/apiService';
 import type { ClusterLabel, JsonRecord, ScopeData, ScopeRow } from '../api/types';
+import { queryKeys } from '../query/keys';
 
 type DatasetMeta = ScopeData['dataset'];
 type ClusterMapEntry = ClusterLabel | { cluster: string | number; label: string };
@@ -39,13 +39,18 @@ interface ScopeContextValue {
   clusterLabels: ClusterLabel[];
   clusterHierarchy: ClusterHierarchy | null;
   scopeRows: ScopeRow[];
-  deletedIndices: number[];
+  deletedIndices: Set<number>;
   scopes: ScopeData[];
   embeddings: JsonRecord[];
   tags: string[];
+  scopeError: string | null;
+  scopeRowsError: string | null;
 }
 
 const ScopeContext = createContext<ScopeContextValue | null>(null);
+const EMPTY_SCOPE_ROWS: ScopeRow[] = [];
+const EMPTY_SCOPES: ScopeData[] = [];
+const EMPTY_EMBEDDINGS: JsonRecord[] = [];
 
 function toNumber(value: unknown): number {
   if (value === undefined || value === null) return 0;
@@ -72,106 +77,64 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
     scope?: string;
   }>();
 
-  const [scope, setScope] = useState<ScopeData | null>(null);
-  const [dataset, setDataset] = useState<DatasetMeta | null>(null);
+  const scopeQuery = useQuery({
+    queryKey: queryKeys.scope(datasetId, scopeId),
+    enabled: Boolean(datasetId && scopeId),
+    queryFn: ({ signal }) => catalogClient.fetchScope(datasetId!, scopeId!, { signal }),
+    staleTime: 5 * 60 * 1000,
+  });
 
-  const [scopeLoaded, setScopeLoaded] = useState(false);
-  const [scopeRows, setScopeRows] = useState<ScopeRow[]>([]);
+  const scope = scopeQuery.data ?? null;
+  const dataset = scope?.dataset ?? null;
 
-  useEffect(() => {
-    if (!datasetId || !scopeId) {
-      setScope(null);
-      setDataset(null);
-      setScopeLoaded(false);
-      return;
-    }
+  const scopesQuery = useQuery({
+    queryKey: queryKeys.scopes(datasetId),
+    enabled: Boolean(datasetId),
+    queryFn: ({ signal }) => catalogClient.fetchScopes(datasetId!, { signal }),
+    staleTime: 5 * 60 * 1000,
+  });
 
-    let cancelled = false;
-    setScopeLoaded(false);
+  const embeddingsQuery = useQuery({
+    queryKey: queryKeys.embeddings(datasetId),
+    enabled: Boolean(datasetId),
+    queryFn: ({ signal }) => catalogClient.fetchEmbeddings(datasetId!, { signal }),
+    staleTime: 5 * 60 * 1000,
+  });
 
-    catalogClient.fetchScope(datasetId, scopeId).then((nextScope) => {
-      if (cancelled) return;
-      setScope(nextScope);
-      setDataset(nextScope.dataset);
+  const tagsetQuery = useQuery({
+    queryKey: queryKeys.tags(datasetId),
+    enabled: Boolean(datasetId),
+    queryFn: async ({ signal }) => {
+      const res = await fetch(`${apiUrl}/tags?dataset=${datasetId}`, { signal });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch tags (${res.status})`);
+      }
+      return (await res.json()) as Record<string, unknown>;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
-      console.log('=== Scope ===', nextScope);
-    });
+  const scopeRowsQuery = useQuery({
+    queryKey: queryKeys.scopeRows(datasetId, scope?.id),
+    enabled: Boolean(datasetId && scope?.id),
+    queryFn: ({ signal }) => viewClient.fetchScopeRows(datasetId!, scope!.id, { signal }),
+    select: normalizeScopeRows,
+    staleTime: 5 * 60 * 1000,
+  });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, datasetId, scopeId]);
-
-  const [scopes, setScopes] = useState<ScopeData[]>([]);
-  useEffect(() => {
-    if (!datasetId) {
-      setScopes([]);
-      return;
-    }
-
-    catalogClient.fetchScopes(datasetId).then((data) => {
-      setScopes(data);
-    });
-  }, [datasetId, setScopes]);
-
-  const [embeddings, setEmbeddings] = useState<JsonRecord[]>([]);
-  useEffect(() => {
-    if (!datasetId) {
-      setEmbeddings([]);
-      return;
-    }
-
-    catalogClient.fetchEmbeddings(datasetId).then((data) => {
-      setEmbeddings(data);
-    });
-  }, [datasetId, setEmbeddings]);
-
-  const [tagset, setTagset] = useState<Record<string, unknown>>({});
-  const fetchTagSet = useCallback(() => {
-    if (!datasetId) {
-      setTagset({});
-      return;
-    }
-
-    fetch(`${apiUrl}/tags?dataset=${datasetId}`)
-      .then((response) => response.json())
-      .then((data) => setTagset((data ?? {}) as Record<string, unknown>));
-  }, [datasetId, setTagset]);
-
-  useEffect(() => {
-    fetchTagSet();
-  }, [fetchTagSet]);
+  const scopeRows = scopeRowsQuery.data ?? EMPTY_SCOPE_ROWS;
+  const scopeLoaded = Boolean(datasetId && scope?.id && scopeRowsQuery.isSuccess);
+  const scopes = scopesQuery.data ?? EMPTY_SCOPES;
+  const embeddings = embeddingsQuery.data ?? EMPTY_EMBEDDINGS;
 
   const tags = useMemo(() => {
+    const tagset = tagsetQuery.data ?? {};
     return Object.keys(tagset);
-  }, [tagset]);
+  }, [tagsetQuery.data]);
 
-  useEffect(() => {
-    if (!scope?.id || !datasetId) {
-      setScopeRows([]);
-      setScopeLoaded(false);
-      return;
-    }
-
-    let cancelled = false;
-    viewClient
-      .fetchScopeRows(datasetId, scope.id)
-      .then((scopeRowsResponse) => {
-        if (cancelled) return;
-        setScopeRows(normalizeScopeRows(scopeRowsResponse));
-        setScopeLoaded(true);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        console.error('Fetching data failed', error);
-        setScopeRows([]);
-        setScopeLoaded(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [datasetId, scope?.id]);
+  const scopeError = scopeQuery.error instanceof Error ? scopeQuery.error.message : null;
+  const scopeRowsError =
+    scopeRowsQuery.error instanceof Error ? scopeRowsQuery.error.message : null;
 
   const buildClusterTree = useCallback((labels: ClusterLabel[]): ClusterHierarchy | null => {
     if (!labels || labels.length === 0) return null;
@@ -305,7 +268,7 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
       clusterMap: nextClusterMap,
       clusterLabels: visibleLabels,
       clusterHierarchy: hierarchy,
-      deletedIndices: nextDeletedIndices,
+      deletedIndices: new Set(nextDeletedIndices),
     };
   }, [scope, scopeRows, buildClusterTree]);
 
@@ -325,6 +288,8 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
       scopes,
       embeddings,
       tags,
+      scopeError,
+      scopeRowsError,
     }),
     [
       userId,
@@ -341,6 +306,8 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
       scopes,
       embeddings,
       tags,
+      scopeError,
+      scopeRowsError,
     ]
   );
 

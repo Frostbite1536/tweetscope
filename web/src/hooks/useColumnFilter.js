@@ -1,7 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { queryClient } from '../lib/apiService';
+import { useState, useCallback, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryApi } from '../lib/apiService';
+import { queryKeys } from '../query/keys';
 
 const useColumnFilter = (userId, datasetId, scope) => {
+  const queryClient = useQueryClient();
   const [columnToValue, setColumnToValue] = useState({});
 
   const dataset = useMemo(() => {
@@ -12,36 +15,36 @@ const useColumnFilter = (userId, datasetId, scope) => {
     if (!dataset?.column_metadata) return [];
     return Object.keys(dataset.column_metadata)
       .map((column) => ({
-        column: column,
+        column,
         categories: dataset.column_metadata[column].categories,
         counts: dataset.column_metadata[column].counts,
       }))
       .filter((d) => d.counts && Object.keys(d.counts).length > 1);
   }, [dataset]);
 
-  const filter = async (column, value) => {
-    let query = [
-      {
-        column: column,
-        type: 'eq',
-        value: value,
-      },
-    ];
-    const res = await queryClient.columnFilter(datasetId, query, scope?.id);
-    console.log('column filter res', res);
-    return res.indices;
-  };
+  const filter = useCallback(async (column, value) => {
+    const query = [{ column, type: 'eq', value }];
+    const data = await queryClient.fetchQuery({
+      queryKey: queryKeys.columnFilter(datasetId, scope?.id, column, value),
+      queryFn: ({ signal }) => queryApi.columnFilter(datasetId, query, scope?.id, { signal }),
+      staleTime: 30_000,
+    });
+    return data.indices;
+  }, [queryClient, datasetId, scope?.id]);
 
-  const clear = () => {
+  const clear = useCallback(() => {
     setColumnToValue({});
-  };
+  }, []);
 
-  return {
-    columnToValue,
-    columnFilters,
-    filter,
-    clear,
-  };
+  return useMemo(
+    () => ({
+      columnToValue,
+      columnFilters,
+      filter,
+      clear,
+    }),
+    [columnToValue, columnFilters, filter, clear]
+  );
 };
 
 export default useColumnFilter;

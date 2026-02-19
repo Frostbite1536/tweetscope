@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useCallback, useState, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import DeckGL from '@deck.gl/react';
 import { ScatterplotLayer, TextLayer, PolygonLayer, PathLayer } from '@deck.gl/layers';
 import { OrthographicView, LinearInterpolator } from '@deck.gl/core';
@@ -392,6 +392,20 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
 
   // Track current view state for label filtering
   const [currentViewState, setCurrentViewState] = useState(initialViewState);
+
+  // Debounced view state for label placement — labels hold position during
+  // active pan/zoom and reflow ~150ms after interaction settles (C2 fix).
+  const [debouncedViewState, setDebouncedViewState] = useState(null);
+  const labelDebounceRef = useRef(null);
+  useEffect(() => {
+    const vs = controlledViewState || currentViewState || initialViewState;
+    if (labelDebounceRef.current) clearTimeout(labelDebounceRef.current);
+    labelDebounceRef.current = setTimeout(() => {
+      setDebouncedViewState(vs);
+    }, 150);
+    return () => clearTimeout(labelDebounceRef.current);
+  }, [controlledViewState, currentViewState, initialViewState]);
+
   const textMeasureContext = useMemo(() => {
     if (typeof document === 'undefined') return null;
     const canvas = document.createElement('canvas');
@@ -512,15 +526,23 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
   // Prepare point data for ScatterplotLayer
   // Data coordinates are already in [-1, 1] range
   // points format: [x, y, selectionKey, activation, cluster]
+  //
+  // Uses a for-loop instead of .map() to reduce GC pressure (H3 fix).
   const scatterData = useMemo(() => {
-    return points.map((p, index) => ({
-      position: [p[0], p[1]],
-      selectionKey: p[2],
-      activation: p[3] || 0,
-      cluster: p[4] !== undefined ? p[4] : 0,
-      index,
-      ls_index: scopeRows?.[index]?.ls_index ?? index,
-    }));
+    const len = points.length;
+    const items = new Array(len);
+    for (let i = 0; i < len; i++) {
+      const p = points[i];
+      items[i] = {
+        position: [p[0], p[1]],
+        selectionKey: p[2],
+        activation: p[3] || 0,
+        cluster: p[4] !== undefined ? p[4] : 0,
+        index: i,
+        ls_index: scopeRows?.[i]?.ls_index ?? i,
+      };
+    }
+    return items;
   }, [points, scopeRows]);
 
   const highlightIndexSet = useMemo(() => {
@@ -667,7 +689,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
   const placedLabels = useMemo(() => {
     if (!visibleLabels.length) return [];
 
-    const viewState = controlledViewState || currentViewState || initialViewState;
+    const viewState = debouncedViewState || initialViewState;
     const zoom = viewState?.zoom ?? initialZoom;
     const target = viewState?.target ?? [0, 0, 0];
     const [targetX, targetY] = target;
@@ -903,8 +925,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     height,
     minZoom,
     maxZoom,
-    controlledViewState,
-    currentViewState,
+    debouncedViewState,
     initialViewState,
     initialZoom,
     textMeasureContext,
@@ -1122,7 +1143,6 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
         lineWidthScale: 1,
         lineWidthMinPixels: 0,
         lineWidthMaxPixels: 4,
-        getPosition: d => d.position,
         getRadius: d => {
           const isHovered = d.index === hoveredPointIndex;
           const isHighlighted = highlightIndexSet.has(d.ls_index);
@@ -1318,6 +1338,12 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     }
 
     return layerList;
+    // NOTE on hoveredPointIndex: Including it here causes the layers useMemo to
+    // recompute on every hover, creating new layer JS instances. This is cheap.
+    // Deck.GL diffs layers by id — same id + same `data` reference = NO GPU
+    // buffer rebuild. Only the accessors named in `updateTriggers` are
+    // re-evaluated. Other layers (polygon, path, text) get new instances but
+    // Deck.GL sees their data/triggers unchanged → zero GPU work.
   }, [
     edgeWidthScale,
     showReplyEdges,

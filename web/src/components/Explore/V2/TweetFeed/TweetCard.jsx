@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, memo, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { Heart, Repeat2, ExternalLink, Twitter, CornerLeftUp } from 'lucide-react';
 import { getClusterColorCSS, getClusterColorRGBA } from '../DeckGLScatter';
 import { useColorMode } from '../../../../hooks/useColorMode';
+import { useHoveredIndex } from '../../../../contexts/HoverContext';
 import { urlResolver } from '../../../../lib/urlResolver';
 import TwitterEmbed from './TwitterEmbed';
 import ConnectionBadges from '../ConnectionBadges';
@@ -63,7 +64,6 @@ TweetCard.propTypes = {
   dateColumn: PropTypes.string,
   clusterInfo: PropTypes.object,
   similarity: PropTypes.number,
-  isHighlighted: PropTypes.bool,
   onHover: PropTypes.func,
   onClick: PropTypes.func,
   nodeStats: PropTypes.object,
@@ -78,7 +78,6 @@ function TweetCard({
   dateColumn,
   clusterInfo,
   similarity,
-  isHighlighted = false,
   onHover,
   onClick,
   nodeStats,
@@ -86,6 +85,20 @@ function TweetCard({
   onViewQuotes,
   isReplyToMissing = false,
 }) {
+  // Hover highlight via context (C5 fix) — only this card rerenders when it
+  // becomes highlighted or un-highlighted, instead of all cards in the feed.
+  const hoveredIndex = useHoveredIndex();
+  const isHighlighted = hoveredIndex === row.ls_index;
+
+  // Stable callbacks for thread/quote actions (H1 fix) — prevents inline
+  // closures from busting React.memo on every parent render.
+  const handleViewThread = useCallback(() => {
+    if (onViewThread) onViewThread(row.ls_index);
+  }, [onViewThread, row.ls_index]);
+
+  const handleViewQuotes = useCallback(() => {
+    if (onViewQuotes) onViewQuotes(row.ls_index);
+  }, [onViewQuotes, row.ls_index]);
   const [expanded, setExpanded] = useState(false);
   const [showFullEmbed, setShowFullEmbed] = useState(false);
   const [resolvedMedia, setResolvedMedia] = useState([]);
@@ -231,7 +244,7 @@ function TweetCard({
           className={styles.replyToLine}
           onClick={(e) => {
             e.stopPropagation();
-            onViewThread();
+            handleViewThread();
           }}
           type="button"
         >
@@ -352,8 +365,8 @@ function TweetCard({
             {nodeStats && (
               <ConnectionBadges
                 stats={nodeStats}
-                onViewThread={onViewThread}
-                onViewQuotes={onViewQuotes}
+                onViewThread={onViewThread ? handleViewThread : undefined}
+                onViewQuotes={onViewQuotes ? handleViewQuotes : undefined}
               />
             )}
 

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { graphClient, queryClient } from '../lib/apiService';
+import { graphClient, queryApi } from '../lib/apiService';
+import { appQueryClient } from '../query/client';
+import { queryKeys } from '../query/keys';
 
 /**
  * Fetches a thread (parent chain + descendants) and enriches internal tweets with full row data.
@@ -43,7 +45,11 @@ export default function useThreadData(datasetId, scopeId, tweetId, currentLsInde
     (async () => {
       try {
         // 1. Fetch thread structure from backend
-        const threadData = await graphClient.fetchThread(datasetId, tweetId);
+        const threadData = await appQueryClient.fetchQuery({
+          queryKey: queryKeys.thread(datasetId, tweetId),
+          queryFn: ({ signal }) => graphClient.fetchThread(datasetId, tweetId, { signal }),
+          staleTime: 60_000,
+        });
         if (cancelled || requestId !== requestIdRef.current) return;
 
         const { parent_chain = [], descendants: rawDescendants = [], edges: rawEdges = [] } = threadData;
@@ -63,7 +69,12 @@ export default function useThreadData(datasetId, scopeId, tweetId, currentLsInde
         let rowMap = new Map();
         if (allInternalIndices.size > 0) {
           const indices = Array.from(allInternalIndices);
-          const rows = await queryClient.fetchDataFromIndices(datasetId, indices, scopeId);
+          const rows = await appQueryClient.fetchQuery({
+            queryKey: queryKeys.rowsByIndices(datasetId, scopeId, indices),
+            queryFn: ({ signal }) =>
+              queryApi.fetchDataFromIndices(datasetId, indices, scopeId, { signal }),
+            staleTime: 5 * 60 * 1000,
+          });
           if (cancelled || requestId !== requestIdRef.current) return;
           for (const row of rows) {
             rowMap.set(row.index, row);

@@ -3,6 +3,10 @@ import type { JsonRecord, ScopeData, ScopeRow, NearestNeighborsRawResponse, Node
 
 export { client };
 
+type RequestOptions = {
+  signal?: AbortSignal;
+};
+
 function withApiPrefix(rawUrl: string | undefined): string {
   const raw = (rawUrl || '').trim().replace(/\/+$/, '').replace(/\/api$/, '');
   return `${raw}/api`;
@@ -20,58 +24,77 @@ export const jobsApiUrl = apiUrl;
 // ---------------------------------------------------------------------------
 
 export const catalogClient = {
-  fetchDataset: async (datasetId: string): Promise<JsonRecord> => {
+  fetchDataset: async (datasetId: string, options: RequestOptions = {}): Promise<JsonRecord> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].meta.$get({
       param: { dataset: datasetId },
-    });
+    }, { init: { signal } });
     const data = await res.json();
     console.log('dataset meta', data);
     return data as JsonRecord;
   },
-  fetchScope: async (datasetId: string, scopeId: string): Promise<ScopeData> => {
+  fetchScope: async (
+    datasetId: string,
+    scopeId: string,
+    options: RequestOptions = {}
+  ): Promise<ScopeData> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].scopes[':scope'].$get({
       param: { dataset: datasetId, scope: scopeId },
-    });
+    }, { init: { signal } });
     return (await res.json()) as ScopeData;
   },
-  fetchScopes: async (datasetId: string): Promise<ScopeData[]> => {
+  fetchScopes: async (datasetId: string, options: RequestOptions = {}): Promise<ScopeData[]> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].scopes.$get({
       param: { dataset: datasetId },
-    });
+    }, { init: { signal } });
     const data = (await res.json()) as ScopeData[];
     return data.sort((a, b) => a.id.localeCompare(b.id));
   },
-  fetchEmbeddings: async (datasetId: string): Promise<JsonRecord[]> => {
+  fetchEmbeddings: async (
+    datasetId: string,
+    options: RequestOptions = {}
+  ): Promise<JsonRecord[]> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].embeddings.$get({
       param: { dataset: datasetId },
-    });
+    }, { init: { signal } });
     return (await res.json()) as JsonRecord[];
   },
-  fetchClusters: async (datasetId: string): Promise<JsonRecord[]> => {
+  fetchClusters: async (datasetId: string, options: RequestOptions = {}): Promise<JsonRecord[]> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].clusters.$get({
       param: { dataset: datasetId },
-    });
+    }, { init: { signal } });
     const data = (await res.json()) as JsonRecord[];
     return data.map((d) => ({
       ...d,
       url: `${apiUrl}/files/${datasetId}/clusters/${d.id}.png`,
     }));
   },
-  fetchDatasets: async (): Promise<JsonRecord[]> => {
-    const res = await client.api.datasets.$get();
+  fetchDatasets: async (options: RequestOptions = {}): Promise<JsonRecord[]> => {
+    const { signal } = options;
+    const res = await client.api.datasets.$get({}, { init: { signal } });
     return (await res.json()) as JsonRecord[];
   },
-  fetchAppConfig: async (): Promise<JsonRecord> => {
-    const res = await client.api['app-config'].$get();
+  fetchAppConfig: async (options: RequestOptions = {}): Promise<JsonRecord> => {
+    const { signal } = options;
+    const res = await client.api['app-config'].$get({}, { init: { signal } });
     return (await res.json()) as JsonRecord;
   },
 };
 
 export const viewClient = {
-  fetchScopeRows: async (datasetId: string, scopeId: string): Promise<ScopeRow[]> => {
+  fetchScopeRows: async (
+    datasetId: string,
+    scopeId: string,
+    options: RequestOptions = {}
+  ): Promise<ScopeRow[]> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].views[':view'].rows.$get({
       param: { dataset: datasetId, view: scopeId },
-    });
+    }, { init: { signal } });
     if (!res.ok) {
       const err: Error & { status?: number } = new Error(`Failed to fetch scope rows (${res.status})`);
       err.status = res.status;
@@ -82,10 +105,11 @@ export const viewClient = {
 };
 
 export const graphClient = {
-  fetchLinksMeta: async (datasetId: string): Promise<JsonRecord> => {
+  fetchLinksMeta: async (datasetId: string, options: RequestOptions = {}): Promise<JsonRecord> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].links.meta.$get({
       param: { dataset: datasetId },
-    });
+    }, { init: { signal } });
     if (!res.ok) {
       const err: Error & { status?: number } = new Error(`Failed to fetch links meta (${res.status})`);
       err.status = res.status;
@@ -93,11 +117,16 @@ export const graphClient = {
     }
     return (await res.json()) as JsonRecord;
   },
-  fetchLinksByIndices: async (datasetId: string, payload: JsonRecord | null): Promise<JsonRecord> => {
+  fetchLinksByIndices: async (
+    datasetId: string,
+    payload: JsonRecord | null,
+    options: RequestOptions = {}
+  ): Promise<JsonRecord> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].links['by-indices'].$post({
       param: { dataset: datasetId },
       json: (payload || {}) as Record<string, unknown>,
-    });
+    }, { init: { signal } });
     if (!res.ok) {
       const err: Error & { status?: number } = new Error(`Failed to fetch links by indices (${res.status})`);
       err.status = res.status;
@@ -105,10 +134,11 @@ export const graphClient = {
     }
     return (await res.json()) as JsonRecord;
   },
-  fetchNodeStats: async (datasetId: string): Promise<NodeStatsResponse> => {
+  fetchNodeStats: async (datasetId: string, options: RequestOptions = {}): Promise<NodeStatsResponse> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].links['node-stats'].$get({
       param: { dataset: datasetId },
-    });
+    }, { init: { signal } });
     if (!res.ok) {
       const err: Error & { status?: number } = new Error(`Failed to fetch node stats (${res.status})`);
       err.status = res.status;
@@ -116,10 +146,15 @@ export const graphClient = {
     }
     return (await res.json()) as unknown as NodeStatsResponse;
   },
-  fetchThread: async (datasetId: string, tweetId: string): Promise<JsonRecord> => {
+  fetchThread: async (
+    datasetId: string,
+    tweetId: string,
+    options: RequestOptions = {}
+  ): Promise<JsonRecord> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].links.thread[':tweetId'].$get({
       param: { dataset: datasetId, tweetId },
-    });
+    }, { init: { signal } });
     if (!res.ok) {
       const err: Error & { status?: number } = new Error(`Failed to fetch thread (${res.status})`);
       err.status = res.status;
@@ -127,10 +162,15 @@ export const graphClient = {
     }
     return (await res.json()) as JsonRecord;
   },
-  fetchQuotes: async (datasetId: string, tweetId: string): Promise<JsonRecord> => {
+  fetchQuotes: async (
+    datasetId: string,
+    tweetId: string,
+    options: RequestOptions = {}
+  ): Promise<JsonRecord> => {
+    const { signal } = options;
     const res = await client.api.datasets[':dataset'].links.quotes[':tweetId'].$get({
       param: { dataset: datasetId, tweetId },
-    });
+    }, { init: { signal } });
     if (!res.ok) {
       const err: Error & { status?: number } = new Error(`Failed to fetch quotes (${res.status})`);
       err.status = res.status;
@@ -140,13 +180,15 @@ export const graphClient = {
   },
 };
 
-export const queryClient = {
+export const queryApi = {
   searchNearestNeighbors: async (
     datasetId: string,
     embedding: SearchEmbeddingInput,
     query: string,
-    scope: { id: string } | null = null
+    scope: { id: string } | null = null,
+    options: RequestOptions = {}
   ): Promise<{ indices: number[]; distances: number[]; searchEmbedding: number[] }> => {
+    const { signal } = options;
     const res = await client.api.search.nn.$get({
       query: {
         dataset: datasetId,
@@ -155,7 +197,7 @@ export const queryClient = {
         ...(scope !== null ? { scope_id: scope.id } : {}),
         ...(embedding.dimensions !== undefined ? { dimensions: String(embedding.dimensions) } : {}),
       },
-    });
+    }, { init: { signal } });
     const data = (await res.json()) as NearestNeighborsRawResponse;
     const dists: number[] = [];
     const inds = data.indices.map((idx: number, i: number) => {
@@ -171,15 +213,17 @@ export const queryClient = {
   fetchDataFromIndices: async (
     datasetId: string,
     indices: number[],
-    scopeId: string | null = null
+    scopeId: string | null = null,
+    options: RequestOptions = {}
   ): Promise<Array<JsonRecord & { index: number }>> => {
+    const { signal } = options;
     const res = await client.api.indexed.$post({
       json: {
         dataset: datasetId,
         indices,
         ...(scopeId ? { scope_id: scopeId } : {}),
       },
-    });
+    }, { init: { signal } });
     const data = (await res.json()) as JsonRecord[];
     return data.map((row: JsonRecord, index: number) => ({
       index: indices[index],
@@ -189,8 +233,10 @@ export const queryClient = {
   getHoverRecord: async (
     scope: ScopeRef,
     index: number,
-    columns: string[] | null = null
+    columns: string[] | null = null,
+    options: RequestOptions = {}
   ): Promise<JsonRecord | null> => {
+    const { signal } = options;
     const res = await client.api.query.$post({
       json: {
         dataset: scope.dataset.id,
@@ -199,29 +245,35 @@ export const queryClient = {
         page: 0,
         ...(Array.isArray(columns) && columns.length ? { columns } : {}),
       },
-    });
+    }, { init: { signal } });
     const data = (await res.json()) as { rows?: JsonRecord[] };
     return data?.rows?.[0] || null;
   },
-  getHoverText: async (scope: ScopeRef, index: number): Promise<string> => {
+  getHoverText: async (
+    scope: ScopeRef,
+    index: number,
+    options: RequestOptions = {}
+  ): Promise<string> => {
     const textColumn = scope.dataset.text_column;
     if (!textColumn) return '';
-    const row = await queryClient.getHoverRecord(scope, index, [textColumn]);
+    const row = await queryApi.getHoverRecord(scope, index, [textColumn], options);
     if (!row) return '';
     return String(row[textColumn] ?? '');
   },
   columnFilter: async (
     datasetId: string,
     filters: JsonRecord[],
-    scopeId: string | null = null
+    scopeId: string | null = null,
+    options: RequestOptions = {}
   ): Promise<{ indices: number[] }> => {
+    const { signal } = options;
     const res = await client.api['column-filter'].$post({
       json: {
         dataset: datasetId,
         filters,
         ...(scopeId ? { scope_id: scopeId } : {}),
       },
-    });
+    }, { init: { signal } });
     return (await res.json()) as { indices: number[] };
   },
 };
@@ -250,6 +302,6 @@ export const apiService = {
   ...catalogClient,
   ...viewClient,
   ...graphClient,
-  ...queryClient,
+  ...queryApi,
   ...miscClient,
 };

@@ -14,7 +14,6 @@ ThreadGroup.propTypes = {
   distanceMap: PropTypes.instanceOf(Map),
   onHover: PropTypes.func,
   onClick: PropTypes.func,
-  hoveredIndex: PropTypes.number,
   onViewThread: PropTypes.func,
   onViewQuotes: PropTypes.func,
   hasMissingAncestors: PropTypes.bool,
@@ -31,7 +30,6 @@ function ThreadGroup({
   distanceMap,
   onHover,
   onClick,
-  hoveredIndex,
   onViewThread,
   onViewQuotes,
   hasMissingAncestors = false,
@@ -84,12 +82,11 @@ function ThreadGroup({
           dateColumn={dateColumn}
           clusterInfo={clusterMap?.[rootRow.ls_index]}
           similarity={rootSimilarity}
-          isHighlighted={hoveredIndex === rootRow.ls_index}
           onHover={onHover}
           onClick={onClick}
           nodeStats={nodeStats?.get(rootRow.ls_index)}
-          onViewThread={onViewThread ? () => onViewThread(rootRow.ls_index) : undefined}
-          onViewQuotes={onViewQuotes ? () => onViewQuotes(rootRow.ls_index) : undefined}
+          onViewThread={onViewThread}
+          onViewQuotes={onViewQuotes}
         />
       </div>
 
@@ -121,12 +118,11 @@ function ThreadGroup({
                   dateColumn={dateColumn}
                   clusterInfo={clusterMap?.[row.ls_index]}
                   similarity={similarity}
-                  isHighlighted={hoveredIndex === row.ls_index}
                   onHover={onHover}
                   onClick={onClick}
                   nodeStats={stats}
-                  onViewThread={onViewThread ? () => onViewThread(row.ls_index) : undefined}
-                  onViewQuotes={onViewQuotes ? () => onViewQuotes(row.ls_index) : undefined}
+                  onViewThread={onViewThread}
+                  onViewQuotes={onViewQuotes}
                 />
               </div>
             );

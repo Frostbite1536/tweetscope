@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Quote } from 'lucide-react';
-import { graphClient, queryClient } from '../../../../lib/apiService';
+import { graphClient, queryApi } from '../../../../lib/apiService';
+import { appQueryClient } from '../../../../query/client';
+import { queryKeys } from '../../../../query/keys';
 import ThreadNode from './ThreadNode';
 import styles from './ThreadView.module.scss';
 
@@ -39,7 +41,11 @@ export default function QuoteView({
 
     (async () => {
       try {
-        const data = await graphClient.fetchQuotes(datasetId, tweetId);
+        const data = await appQueryClient.fetchQuery({
+          queryKey: queryKeys.quotes(datasetId, tweetId),
+          queryFn: ({ signal }) => graphClient.fetchQuotes(datasetId, tweetId, { signal }),
+          staleTime: 60_000,
+        });
         if (cancelled || requestId !== requestIdRef.current) return;
 
         // Collect internal ls_indices for batch row fetch
@@ -51,11 +57,13 @@ export default function QuoteView({
 
         let rowMap = new Map();
         if (allIndices.size > 0) {
-          const rows = await queryClient.fetchDataFromIndices(
-            datasetId,
-            Array.from(allIndices),
-            scopeId
-          );
+          const indices = Array.from(allIndices);
+          const rows = await appQueryClient.fetchQuery({
+            queryKey: queryKeys.rowsByIndices(datasetId, scopeId, indices),
+            queryFn: ({ signal }) =>
+              queryApi.fetchDataFromIndices(datasetId, indices, scopeId, { signal }),
+            staleTime: 5 * 60 * 1000,
+          });
           if (cancelled || requestId !== requestIdRef.current) return;
           for (const row of rows) {
             rowMap.set(row.index, row);
@@ -136,7 +144,7 @@ export default function QuoteView({
                   <ThreadNode
                     key={node.tweet_id}
                     node={node}
-                    depth={0}
+
                     dataset={dataset}
                     clusterMap={clusterMap}
                     nodeStats={nodeStats}
@@ -158,7 +166,7 @@ export default function QuoteView({
                   <ThreadNode
                     key={node.tweet_id}
                     node={node}
-                    depth={0}
+
                     dataset={dataset}
                     clusterMap={clusterMap}
                     nodeStats={nodeStats}

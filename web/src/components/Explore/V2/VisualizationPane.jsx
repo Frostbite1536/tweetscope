@@ -98,7 +98,6 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   width,
   height,
   contentPaddingRight = 0,
-  onScatter,
   hovered,
   hoveredIndex,
   hoverAnchor,
@@ -109,10 +108,8 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   onUnpinHover,
   onFilterToCluster,
   hoverAnnotations,
-  selectedAnnotations,
   hoveredCluster,
   textColumn,
-  dataTableRows,
   linksEdges = [],
   linksAvailable = false,
   linksMeta = null,
@@ -139,7 +136,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   const { scopeRows, scope } = useScope();
   const { isDark: isDarkMode } = useColorMode();
 
-  const { clusterFilter, shownIndices, filterConfig, filteredIndices } = useFilter();
+  const { clusterFilter, filterConfig, filteredIndices } = useFilter();
 
   const maxZoom = 40;
 
@@ -249,19 +246,6 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   const toggleShowTimeline = useCallback(() => {
     setVizConfig((prev) => ({ ...prev, showTimeline: !prev.showTimeline }));
   }, []);
-
-  // ensure the order of selectedPoints
-  // exactly matches the ordering of indexes in shownIndices.
-  const selectedPoints = useMemo(() => {
-    if (!shownIndices || !scopeRows) return [];
-    return shownIndices
-      .map((ls_index, i) => {
-        // Find the point in scopeRows with matching ls_index
-        const point = scopeRows.find((p) => p.ls_index === ls_index);
-        return point ? { ...point, index: i } : null;
-      })
-      .filter((point) => point !== null);
-  }, [shownIndices, scopeRows]);
 
   // Async URL resolution fallback state
   const [asyncMedia, setAsyncMedia] = useState([]);
@@ -440,16 +424,6 @@ const VisualizationPane = forwardRef(function VisualizationPane({
       tweetId: null,
     };
   }, [hoveredIndex, nodeStats, linksEdges]);
-
-  // console.log({
-  //   shownIndices,
-  //   selectedPoints: selectedPoints.map((p) => {
-  //     return {
-  //       index: p.index,
-  //       ls_index: p.ls_index,
-  //     };
-  //   }),
-  // });
 
   return (
     // <div style={{ width, height }} ref={umapRef}>

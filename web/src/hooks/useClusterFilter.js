@@ -1,25 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
-export default function useClusterFilter({ scopeRows, scopeLoaded, setFilteredIndices }) {
+export default function useClusterFilter({ scopeRows }) {
   const [cluster, setCluster] = useState(null);
 
-  const filter = (cluster) => {
-    if (cluster) {
-      const annots = scopeRows.filter((d) => d.cluster === cluster.cluster);
-      const indices = annots.map((d) => d.ls_index);
-      return indices;
-    }
-    return [];
-  };
+  const filter = useCallback((nextCluster) => {
+    if (!nextCluster) return [];
+    const annots = scopeRows.filter((d) => d.cluster === nextCluster.cluster);
+    return annots.map((d) => d.ls_index);
+  }, [scopeRows]);
 
-  const clear = () => {
+  const clear = useCallback(() => {
     setCluster(null);
-  };
+  }, []);
 
-  return {
-    cluster,
-    setCluster,
-    filter,
-    clear,
-  };
+  return useMemo(
+    () => ({
+      cluster,
+      setCluster,
+      filter,
+      clear,
+    }),
+    [cluster, setCluster, filter, clear]
+  );
 }

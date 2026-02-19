@@ -1,11 +1,12 @@
-// FilterContext.js
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { useScope } from './ScopeContext'; // Assuming this provides scopeRows, deletedIndices, etc.
+import { useScope } from './ScopeContext';
 import useColumnFilter from '../hooks/useColumnFilter';
 import useNearestNeighborsSearch from '../hooks/useNearestNeighborsSearch';
 import useClusterFilter from '../hooks/useClusterFilter';
 import { apiService } from '../lib/apiService';
+import { queryKeys } from '../query/keys';
 
 import {
   filterConstants,
@@ -13,6 +14,7 @@ import {
 } from '../components/Explore/V2/Search/utils';
 
 const FilterContext = createContext(null);
+const ROWS_PER_PAGE = 20;
 
 function uniqueOrderedIndices(values) {
   const seen = new Set();
@@ -28,16 +30,14 @@ function uniqueOrderedIndices(values) {
 }
 
 export function FilterProvider({ children }) {
-  // Global filter config: { type, value } or null when no filter is active.
   const [filterConfig, setFilterConfig] = useState(null);
   const [filteredIndices, setFilteredIndices] = useState([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [filterQuery, setFilterQuery] = useState(''); // Optional query string for UI
+  const [filterQuery, setFilterQuery] = useState('');
   const [filterActive, setFilterActive] = useState(false);
 
   const [urlParams, setUrlParams] = useSearchParams();
-  // Pull shared data from a higher-level context.
   const {
     scopeRows,
     deletedIndices,
@@ -48,14 +48,14 @@ export function FilterProvider({ children }) {
     clusterLabels,
   } = useScope();
 
-  // Base set of non-deleted indices from the dataset.
   const baseIndices = useMemo(() => {
     return uniqueOrderedIndices(
-      scopeRows.map((row) => row.ls_index).filter((index) => !deletedIndices.includes(index))
+      scopeRows
+        .map((row) => row.ls_index)
+        .filter((index) => !deletedIndices.has(index))
     );
   }, [scopeRows, deletedIndices]);
 
-  // Column filter
   const columnFilter = useColumnFilter(userId, datasetId, scope);
   const clusterFilter = useClusterFilter({ scopeRows, scope, scopeLoaded });
   const searchFilter = useNearestNeighborsSearch({ userId, datasetId, scope, deletedIndices });
@@ -68,54 +68,59 @@ export function FilterProvider({ children }) {
     );
   }, [urlParams]);
 
-  // Populate filter state from url params
   useEffect(() => {
     if (!scopeLoaded || !hasFilterInUrl) return;
 
-    // let's just grab the first key for now
     const key = urlParams.keys().next().value;
     const value = urlParams.get(key);
-    const numericValue = parseInt(value);
+    const numericValue = Number.parseInt(value, 10);
 
     if (key === filterConstants.SEARCH) {
-      console.log('==== search filter url param ==== ', { value });
       setFilterQuery(value);
       setFilterConfig({ type: filterConstants.SEARCH, value, label: value });
-    } else if (key === filterConstants.CLUSTER) {
-      const cluster = clusterLabels.find((cluster) => cluster.cluster === numericValue);
-      if (cluster) {
-        const { setCluster } = clusterFilter;
-        setCluster(cluster);
-        setFilterQuery(cluster.label);
-        setFilterConfig({
-          type: filterConstants.CLUSTER,
-          value: numericValue,
-          label: cluster.label,
-        });
-      }
-    } else if (urlParams.has('column') && urlParams.has('value')) {
-      const value = urlParams.get('value');
+      return;
+    }
+
+    if (key === filterConstants.CLUSTER) {
+      const cluster = clusterLabels.find((item) => item.cluster === numericValue);
+      if (!cluster) return;
+      clusterFilter.setCluster(cluster);
+      setFilterQuery(cluster.label);
+      setFilterConfig({
+        type: filterConstants.CLUSTER,
+        value: numericValue,
+        label: cluster.label,
+      });
+      return;
+    }
+
+    if (urlParams.has('column') && urlParams.has('value')) {
+      const columnValue = urlParams.get('value');
       const column = urlParams.get('column');
       const { columnFilters } = columnFilter;
-      if (validateColumnAndValue(column, value, columnFilters)) {
-        setFilterQuery(`${column}: ${value}`);
-        setFilterConfig({
-          type: filterConstants.COLUMN,
-          value,
-          column,
-          label: `${column}: ${value}`,
-        });
-      }
-    }
-  }, [urlParams, scopeLoaded]);
+      if (!validateColumnAndValue(column, columnValue, columnFilters)) return;
 
-  // ==== Filtering ====
-  // compute filteredIndices based on the active filter.
+      setFilterQuery(`${column}: ${columnValue}`);
+      setFilterConfig({
+        type: filterConstants.COLUMN,
+        value: columnValue,
+        column,
+        label: `${column}: ${columnValue}`,
+      });
+    }
+  }, [scopeLoaded, hasFilterInUrl, urlParams, clusterLabels, clusterFilter, columnFilter]);
+
+  const filterReqSeqRef = useRef(0);
+
   useEffect(() => {
-    async function applyFilter() {
-      setLoading(true);
+    if (!scopeLoaded) return;
+
+    const reqId = ++filterReqSeqRef.current;
+    setLoading(true);
+
+    const applyFilter = async () => {
       let indices = [];
-      // If no filter is active, use the full baseIndices.
+
       if (!filterConfig && !hasFilterInUrl) {
         indices = baseIndices;
       } else if (filterConfig) {
@@ -123,23 +128,20 @@ export function FilterProvider({ children }) {
 
         switch (type) {
           case filterConstants.CLUSTER: {
-            const { setCluster, filter } = clusterFilter;
-            const cluster = clusterLabels.find((cluster) => cluster.cluster === value);
+            const cluster = clusterLabels.find((item) => item.cluster === value);
             if (cluster) {
-              setCluster(cluster);
-              indices = filter(cluster);
+              clusterFilter.setCluster(cluster);
+              indices = clusterFilter.filter(cluster);
             }
             break;
           }
           case filterConstants.SEARCH: {
-            const { filter } = searchFilter;
-            indices = await filter(value);
+            indices = await searchFilter.filter(value);
             break;
           }
           case filterConstants.COLUMN: {
-            const { filter } = columnFilter;
             const { column } = filterConfig;
-            indices = await filter(column, value);
+            indices = await columnFilter.filter(column, value);
             break;
           }
           case filterConstants.TIME_RANGE: {
@@ -147,7 +149,7 @@ export function FilterProvider({ children }) {
             if (timestampsByLsIndex && Number.isFinite(start) && Number.isFinite(end)) {
               indices = baseIndices.filter((lsIndex) => {
                 const ts = timestampsByLsIndex.get(lsIndex);
-                if (ts === undefined || Number.isNaN(ts)) return true; // Keep dateless rows (likes)
+                if (ts === undefined || Number.isNaN(ts)) return true;
                 return ts >= start && ts <= end;
               });
             } else {
@@ -160,27 +162,33 @@ export function FilterProvider({ children }) {
           }
         }
       }
+
+      if (filterReqSeqRef.current !== reqId) return;
       setFilteredIndices(uniqueOrderedIndices(indices));
-      setPage(0); // Reset to first page when filter changes.
+      setPage(0);
       setLoading(false);
-    }
-    if (scopeLoaded) {
-      applyFilter();
-    }
-  }, [filterConfig, baseIndices, scopeRows, deletedIndices, userId, datasetId, scope, scopeLoaded]);
+    };
 
-  // === Fetch Data Table Rows Logic
+    applyFilter().catch((error) => {
+      if (filterReqSeqRef.current !== reqId) return;
+      console.error('Failed to apply filter', error);
+      setFilteredIndices(baseIndices);
+      setPage(0);
+      setLoading(false);
+    });
+  }, [
+    filterConfig,
+    baseIndices,
+    scopeLoaded,
+    hasFilterInUrl,
+    clusterLabels,
+    clusterFilter,
+    searchFilter,
+    columnFilter,
+  ]);
 
-  const [dataTableRows, setDataTableRows] = useState([]);
-  const [rowsLoading, setRowsLoading] = useState(false);
-
-  // === Pagination ===
-  const ROWS_PER_PAGE = 20;
-
-  // Exclude deleted indices upfront so totalPages and shownIndices agree
   const visibleFilteredIndices = useMemo(() => {
-    const deletedSet = new Set(deletedIndices);
-    return filteredIndices.filter((index) => !deletedSet.has(index));
+    return filteredIndices.filter((index) => !deletedIndices.has(index));
   }, [filteredIndices, deletedIndices]);
 
   const totalPages = useMemo(
@@ -188,71 +196,45 @@ export function FilterProvider({ children }) {
     [visibleFilteredIndices]
   );
 
-  // Accumulative: all indices loaded so far (pages 0..page)
   const shownIndices = useMemo(() => {
     return visibleFilteredIndices.slice(0, (page + 1) * ROWS_PER_PAGE);
   }, [visibleFilteredIndices, page]);
 
-  // The delta: just the current page's indices (for fetching)
-  const currentPageIndices = useMemo(() => {
-    return visibleFilteredIndices.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
-  }, [visibleFilteredIndices, page]);
-
-  // Monotonic request counter for staleness detection
-  const reqSeqRef = useRef(0);
-
-  // Cache for default (unfiltered) page fetches
-  const rowsCache = useRef(new Map());
-
-  // Clear cache when dataset or scope changes
-  useEffect(() => {
-    rowsCache.current.clear();
-  }, [datasetId, scope?.id]);
-
-  useEffect(() => {
-    if (currentPageIndices.length === 0) {
-      if (page === 0) setDataTableRows([]);
-      return;
+  const pageSlices = useMemo(() => {
+    const maxPage = Math.min(page, Math.max(totalPages - 1, 0));
+    const slices = [];
+    for (let p = 0; p <= maxPage; p++) {
+      const indices = visibleFilteredIndices.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE);
+      if (indices.length === 0) continue;
+      slices.push({ pageIndex: p, indices });
     }
+    return slices;
+  }, [visibleFilteredIndices, page, totalPages]);
 
-    const reqId = ++reqSeqRef.current;
-    setRowsLoading(true);
+  const rowQueries = useQueries({
+    queries: pageSlices.map(({ indices }) => ({
+      queryKey: queryKeys.rowsByIndices(datasetId, scope?.id, indices),
+      enabled: Boolean(datasetId && scope?.id && indices.length > 0),
+      queryFn: ({ signal }) =>
+        apiService.fetchDataFromIndices(datasetId, indices, scope?.id, { signal }),
+      staleTime: filterConfig ? 30_000 : 5 * 60 * 1000,
+    })),
+  });
 
-    const cacheKey = `${datasetId}-${scope?.id}-${JSON.stringify(currentPageIndices)}`;
+  const rowsLoading = rowQueries.some((query) => query.isFetching);
 
-    if (!filterConfig) {
-      const cachedResult = rowsCache.current.get(cacheKey);
-      if (cachedResult) {
-        setDataTableRows((prev) => (page === 0 ? cachedResult : [...prev, ...cachedResult]));
-        setRowsLoading(false);
-        return;
-      }
-    }
+  const dataTableRows = useMemo(() => {
+    return pageSlices.flatMap(({ pageIndex }, idx) => {
+      const rows = rowQueries[idx]?.data || [];
+      const baseIdx = pageIndex * ROWS_PER_PAGE;
+      return rows.map((row, i) => ({
+        ...row,
+        idx: baseIdx + i,
+        ls_index: row.index,
+      }));
+    });
+  }, [pageSlices, rowQueries]);
 
-    apiService
-      .fetchDataFromIndices(datasetId, currentPageIndices, scope?.id)
-      .then((rows) => {
-        if (reqSeqRef.current !== reqId) return;
-        const baseIdx = page * ROWS_PER_PAGE;
-        const rowsWithIdx = rows.map((row, i) => ({
-          ...row,
-          idx: baseIdx + i,
-          ls_index: row.index,
-        }));
-        setDataTableRows((prev) => (page === 0 ? rowsWithIdx : [...prev, ...rowsWithIdx]));
-
-        if (!filterConfig) {
-          rowsCache.current.set(cacheKey, rowsWithIdx);
-        }
-      })
-      .finally(() => {
-        if (reqSeqRef.current === reqId) {
-          setRowsLoading(false);
-        }
-      });
-  }, [currentPageIndices, page, datasetId, scope, filterConfig]);
-
-  // The context exposes only the state and setters that consumer components need.
   const value = useMemo(() => ({
     filterConfig,
     setFilterConfig,
@@ -275,11 +257,25 @@ export function FilterProvider({ children }) {
     setUrlParams,
     dataTableRows,
   }), [
-    filterConfig, setFilterConfig, filterQuery, setFilterQuery,
-    filteredIndices, shownIndices, page, setPage, totalPages, ROWS_PER_PAGE,
-    loading, setLoading, rowsLoading, filterActive, setFilterActive,
-    searchFilter, clusterFilter, columnFilter,
-    setUrlParams, dataTableRows,
+    filterConfig,
+    setFilterConfig,
+    filterQuery,
+    setFilterQuery,
+    filteredIndices,
+    shownIndices,
+    page,
+    setPage,
+    totalPages,
+    loading,
+    setLoading,
+    rowsLoading,
+    filterActive,
+    setFilterActive,
+    searchFilter,
+    clusterFilter,
+    columnFilter,
+    setUrlParams,
+    dataTableRows,
   ]);
 
   return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;

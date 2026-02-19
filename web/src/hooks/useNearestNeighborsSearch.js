@@ -1,11 +1,16 @@
-import { useState, useCallback } from 'react';
-import { queryClient } from '../lib/apiService';
+import { useState, useCallback, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryApi } from '../lib/apiService';
+import { queryKeys } from '../query/keys';
 
 export default function useNearestNeighborsSearch({ userId, datasetId, scope, deletedIndices }) {
+  const queryClient = useQueryClient();
   const [distances, setDistances] = useState([]);
   const [distanceMap, setDistanceMap] = useState(() => new Map());
+  // deletedIndices is already a Set from ScopeContext
+  const deletedSet = deletedIndices;
 
-  const uniqueOrdered = (values) => {
+  const uniqueOrdered = useCallback((values) => {
     const seen = new Set();
     const out = [];
     for (const value of values || []) {
@@ -16,42 +21,51 @@ export default function useNearestNeighborsSearch({ userId, datasetId, scope, de
       out.push(n);
     }
     return out;
-  };
+  }, []);
 
-  const filter = async (query) => {
+  const filter = useCallback(async (query) => {
+    if (!datasetId || !scope?.embedding?.id || !query) {
+      setDistances([]);
+      setDistanceMap(new Map());
+      return [];
+    }
+
     try {
-      return await queryClient
-        .searchNearestNeighbors(datasetId, scope.embedding, query, scope)
-        .then((data) => {
-          const { indices, distances: rawDistances } = data;
-          setDistances(rawDistances);
+      const data = await queryClient.fetchQuery({
+        queryKey: queryKeys.nearestNeighbors(datasetId, scope?.id, scope?.embedding?.id, query),
+        queryFn: ({ signal }) =>
+          queryApi.searchNearestNeighbors(datasetId, scope.embedding, query, scope, { signal }),
+        staleTime: 30_000,
+      });
 
-          // Build ls_index → distance map from the parallel arrays
-          const dMap = new Map();
-          for (let i = 0; i < indices.length; i++) {
-            dMap.set(Number(indices[i]), rawDistances[i]);
-          }
-          setDistanceMap(dMap);
+      const { indices, distances: rawDistances } = data;
+      setDistances(rawDistances);
 
-          // Return all results (let FilterContext handle pagination)
-          const filteredIndices = uniqueOrdered(indices).filter((idx) => !deletedIndices.includes(idx));
-          return filteredIndices;
-        });
+      const dMap = new Map();
+      for (let i = 0; i < indices.length; i++) {
+        dMap.set(Number(indices[i]), rawDistances[i]);
+      }
+      setDistanceMap(dMap);
+
+      return uniqueOrdered(indices).filter((idx) => !deletedSet.has(idx));
     } catch (error) {
       console.error('Search failed:', error);
       return [];
     }
-  };
+  }, [queryClient, datasetId, scope, uniqueOrdered, deletedSet]);
 
   const clear = useCallback(() => {
     setDistances([]);
     setDistanceMap(new Map());
   }, []);
 
-  return {
-    filter,
-    clear,
-    distances,
-    distanceMap,
-  };
+  return useMemo(
+    () => ({
+      filter,
+      clear,
+      distances,
+      distanceMap,
+    }),
+    [filter, clear, distances, distanceMap]
+  );
 }

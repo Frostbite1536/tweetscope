@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './components/Home';
 import Explore from './pages/V2/FullScreenExplore';
 import { apiService } from './lib/apiService';
+import { queryKeys } from './query/keys';
 import './App.css';
 
 import 'react-element-forge/dist/style.css';
@@ -14,15 +15,28 @@ const readonly = import.meta.env.MODE == 'read_only';
 const docsUrl = 'https://enjalot.observablehq.cloud/latent-scope/';
 
 function App() {
-  const [appConfig, setAppConfig] = useState(null);
+  const appConfigQuery = useQuery({
+    queryKey: queryKeys.appConfig(),
+    queryFn: ({ signal }) => apiService.fetchAppConfig({ signal }),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
 
-  useEffect(() => {
-    apiService
-      .fetchAppConfig()
-      .then(setAppConfig)
-      .catch(() => {
-        // Fallback keeps hosted behavior if backend route is unavailable.
-        setAppConfig({
+  if (readonly) {
+    return (
+      <div>
+        <a className="docs-banner" href={docsUrl}>
+          {' '}
+          👉 Navigate to the documentation site
+        </a>
+        <iframe src={docsUrl} style={{ width: '100%', height: '100vh', border: 'none' }} />
+      </div>
+    );
+  }
+  const appConfig =
+    appConfigQuery.data ??
+    (appConfigQuery.isError
+      ? {
           mode: 'hosted',
           read_only: false,
           features: {
@@ -41,21 +55,9 @@ function App() {
           },
           public_dataset_id: null,
           public_scope_id: null,
-        });
-      });
-  }, []);
+        }
+      : null);
 
-  if (readonly) {
-    return (
-      <div>
-        <a className="docs-banner" href={docsUrl}>
-          {' '}
-          👉 Navigate to the documentation site
-        </a>
-        <iframe src={docsUrl} style={{ width: '100%', height: '100vh', border: 'none' }} />
-      </div>
-    );
-  }
   if (!appConfig) {
     return <div>Loading...</div>;
   }

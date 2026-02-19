@@ -3,13 +3,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronsRight, ChevronsLeft, GalleryHorizontalEnd, PanelRightClose, PanelRightOpen } from 'lucide-react';
 
 import './Explore.css';
-import { apiService } from '../../lib/apiService';
+import { apiService, queryApi } from '../../lib/apiService';
+import { appQueryClient } from '../../query/client';
+import { queryKeys } from '../../query/keys';
 
 import SubNav from '../../components/SubNav';
 import VisualizationPane from '../../components/Explore/V2/VisualizationPane';
 import TweetFeed from '../../components/Explore/V2/TweetFeed';
 import TopicTree from '../../components/Explore/V2/TopicTree';
 import FeedCarousel from '../../components/Explore/V2/Carousel/FeedCarousel';
+import { HoverProvider } from '../../contexts/HoverContext';
 import ThreadView from '../../components/Explore/V2/ThreadView/ThreadView';
 import QuoteView from '../../components/Explore/V2/ThreadView/QuoteView';
 
@@ -89,9 +92,20 @@ function ExploreContent() {
     features,
     scopes,
     tags,
+    scopeError,
+    scopeRowsError,
   } = useScope();
 
   const navigate = useNavigate();
+
+  // Map ls_index → scopeRow for O(1) lookup (H6 fix: don't assume ls_index === array position)
+  const scopeRowByLsIndex = useMemo(() => {
+    const map = new Map();
+    for (const row of scopeRows) {
+      map.set(row.ls_index, row);
+    }
+    return map;
+  }, [scopeRows]);
 
   // Get filter-related state from FilterContext
   const {
@@ -130,15 +144,12 @@ function ExploreContent() {
   const carouselData = useCarouselData(focusedClusterIndex, carouselEnabled);
 
   // Keep visualization-specific state
-  const [scatter, setScatter] = useState({});
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [hovered, setHovered] = useState(null);
   const [hoveredCluster, setHoveredCluster] = useState(null);
   const [hoverAnchor, setHoverAnchor] = useState(null);
   const [pinnedIndex, setPinnedIndex] = useState(null);
   const [hoverAnnotations, setHoverAnnotations] = useState([]);
-  const [dataTableRows, setDataTableRows] = useState([]);
-  const [selectedAnnotations, setSelectedAnnotations] = useState([]);
   const [linksMeta, setLinksMeta] = useState(null);
   const [linksAvailable, setLinksAvailable] = useState(false);
   const [linksLoading, setLinksLoading] = useState(false);
@@ -391,6 +402,7 @@ function ExploreContent() {
   // Hydrate hover records with a small cache to avoid repeated round-trips while scanning.
   const hydrateHoverRecord = useCallback(
     (index, setter) => {
+      if (!scope?.id || !scope?.dataset?.id) return;
       latestHoverIndexRef.current = index;
       const cached = hoverRecordCacheRef.current.get(index);
       if (cached) {
@@ -398,18 +410,29 @@ function ExploreContent() {
         return;
       }
 
-      apiService.getHoverRecord(scope, index, hoverColumns).then((data) => {
-        if (latestHoverIndexRef.current === index) {
-          if (data) {
-            hoverRecordCacheRef.current.set(index, data);
-            if (hoverRecordCacheRef.current.size > 400) {
-              const firstKey = hoverRecordCacheRef.current.keys().next().value;
-              hoverRecordCacheRef.current.delete(firstKey);
+      appQueryClient
+        .fetchQuery({
+          queryKey: queryKeys.hoverRecord(scope.dataset.id, scope.id, index, hoverColumns),
+          queryFn: ({ signal }) =>
+            apiService.getHoverRecord(scope, index, hoverColumns, { signal }),
+          staleTime: 60_000,
+        })
+        .then((data) => {
+          if (latestHoverIndexRef.current === index) {
+            if (data) {
+              hoverRecordCacheRef.current.set(index, data);
+              if (hoverRecordCacheRef.current.size > 400) {
+                const firstKey = hoverRecordCacheRef.current.keys().next().value;
+                hoverRecordCacheRef.current.delete(firstKey);
+              }
             }
+            setter(data);
           }
-          setter(data);
-        }
-      });
+        })
+        .catch((error) => {
+          console.warn('Failed to hydrate hover record', error);
+          setter(null);
+        });
     },
     [scope, hoverColumns]
   );
@@ -439,8 +462,12 @@ function ExploreContent() {
     if (!dataset?.id) return;
 
     let cancelled = false;
-    apiService
-      .fetchLinksMeta(dataset.id)
+    appQueryClient
+      .fetchQuery({
+        queryKey: queryKeys.linksMeta(dataset.id),
+        queryFn: ({ signal }) => apiService.fetchLinksMeta(dataset.id, { signal }),
+        staleTime: 5 * 60 * 1000,
+      })
       .then((meta) => {
         if (cancelled) return;
         setLinksMeta(meta || null);
@@ -469,7 +496,7 @@ function ExploreContent() {
     if (
       hoveredIndex !== null &&
       hoveredIndex !== undefined &&
-      !deletedIndices.includes(hoveredIndex)
+      !deletedIndices.has(hoveredIndex)
     ) {
       debouncedHydrateHoverRecord(hoveredIndex, (row) => {
         const textColumn = scope?.dataset?.text_column;
@@ -496,18 +523,22 @@ function ExploreContent() {
     }
 
     if (hoveredIndex !== null && hoveredIndex !== undefined) {
-      let sr = scopeRows[hoveredIndex];
-      setHoverAnnotations([[sr.x, sr.y]]);
+      const sr = scopeRowByLsIndex.get(hoveredIndex);
+      if (sr) {
+        setHoverAnnotations([[sr.x, sr.y]]);
+      } else {
+        setHoverAnnotations([]);
+      }
     } else {
       setHoverAnnotations([]);
     }
-  }, [sidebarMode, hoveredIndex, scopeRows]);
+  }, [sidebarMode, hoveredIndex, scopeRowByLsIndex]);
 
   const edgeQueryIndices = useMemo(() => {
-    if (pinnedIndex !== null && pinnedIndex !== undefined && !deletedIndices.includes(pinnedIndex)) {
+    if (pinnedIndex !== null && pinnedIndex !== undefined && !deletedIndices.has(pinnedIndex)) {
       return [pinnedIndex];
     }
-    if (hoveredIndex !== null && hoveredIndex !== undefined && !deletedIndices.includes(hoveredIndex)) {
+    if (hoveredIndex !== null && hoveredIndex !== undefined && !deletedIndices.has(hoveredIndex)) {
       return [hoveredIndex];
     }
     return [];
@@ -523,12 +554,21 @@ function ExploreContent() {
       latestLinksRequestRef.current = requestId;
       setLinksLoading(true);
 
-      apiService
-        .fetchLinksByIndices(dataset.id, {
-          indices: indices.length > 0 ? indices : null,
-          edge_kinds: ['reply', 'quote'],
-          include_external: false,
-          max_edges: EDGE_FETCH_MAX,
+      appQueryClient
+        .fetchQuery({
+          queryKey: queryKeys.linksByIndices(dataset.id, indices),
+          queryFn: ({ signal }) =>
+            apiService.fetchLinksByIndices(
+              dataset.id,
+              {
+                indices: indices.length > 0 ? indices : null,
+                edge_kinds: ['reply', 'quote'],
+                include_external: false,
+                max_edges: EDGE_FETCH_MAX,
+              },
+              { signal }
+            ),
+          staleTime: 30_000,
         })
         .then((payload) => {
           if (latestLinksRequestRef.current !== requestId) return;
@@ -653,7 +693,7 @@ function ExploreContent() {
       }
       const rawIndex = payload && typeof payload === 'object' ? payload.index : payload;
       const index = Number.isInteger(rawIndex) ? rawIndex : null;
-      const nonDeletedIndex = deletedIndices.includes(index) ? null : index;
+      const nonDeletedIndex = deletedIndices.has(index) ? null : index;
       const hasPointCoords =
         payload &&
         typeof payload === 'object' &&
@@ -717,13 +757,8 @@ function ExploreContent() {
   const handlePointSelect = useCallback(
     (indices) => {
       const idx = indices?.[0];
-      if (idx === null || idx === undefined || deletedIndices.includes(idx)) {
-        setPinnedIndex(null);
-        setHoveredIndex(null);
-        setHovered(null);
-        setHoveredCluster(null);
-        setHoverAnchor(null);
-        latestHoverIndexRef.current = null;
+      if (idx === null || idx === undefined || deletedIndices.has(idx)) {
+        clearHoverState();
 
         if (filterConfig?.type === filterConstants.CLUSTER) {
           clusterFilter.clear();
@@ -741,12 +776,39 @@ function ExploreContent() {
         }
         return;
       }
-      setPinnedIndex(idx);
-      setHoveredIndex(idx);
-      setHoveredCluster(clusterMap[idx] || null);
-      latestHoverIndexRef.current = idx;
+
+      // Open the tweet in the sidebar thread view
+      const graphViewState = vizRef.current?.getViewState?.();
+
+      // Fast path: tweetIdMap has the entry (links graph built + tweet has connections)
+      const tid = tweetIdMap?.get(idx);
+      if (tid) {
+        openThread(idx, tid, graphViewState);
+        return;
+      }
+
+      // Fallback: fetch the row to get its tweet id
+      if (datasetId && scope?.id) {
+        appQueryClient
+          .fetchQuery({
+            queryKey: queryKeys.rowsByIndices(datasetId, scope.id, [idx]),
+            queryFn: ({ signal }) =>
+              queryApi.fetchDataFromIndices(datasetId, [idx], scope.id, { signal }),
+            staleTime: 5 * 60 * 1000,
+          })
+          .then((rows) => {
+            const row = rows?.[0];
+            const rowTid = row?.id ? String(row.id) : row?.tweet_id ? String(row.tweet_id) : null;
+            if (rowTid) {
+              openThread(idx, rowTid, graphViewState);
+            }
+          })
+          .catch(() => {
+            // Silently fail — point stays unhighlighted
+          });
+      }
     },
-    [deletedIndices, clusterMap, filterConfig, clusterFilter, setFilterQuery, setFilterConfig, setFilterActive, setUrlParams]
+    [deletedIndices, clearHoverState, filterConfig, clusterFilter, setFilterQuery, setFilterConfig, setFilterActive, setUrlParams, tweetIdMap, openThread, datasetId, scope?.id]
   );
 
   const handleUnpinHover = useCallback(() => {
@@ -1107,6 +1169,17 @@ function ExploreContent() {
     };
   }, [isCollapsed, isExpanded, isDesktopSidebarLayout, clampedSidebarWidth]);
 
+  if (scopeError || scopeRowsError) {
+    return (
+      <>
+        <SubNav user={userId} dataset={dataset} scope={scope} scopes={scopes} />
+        <div style={{ padding: 16 }}>
+          Failed to load scope data. {scopeError || scopeRowsError}
+        </div>
+      </>
+    );
+  }
+
   if (!dataset)
     return (
       <>
@@ -1124,6 +1197,7 @@ function ExploreContent() {
         scopes={scopes}
         onScopeChange={handleScopeChange}
       />
+      <HoverProvider hoveredIndex={hoveredIndex}>
       <div className="page-container">
         <div
           ref={containerRef}
@@ -1154,7 +1228,6 @@ function ExploreContent() {
                 width={width}
                 height={height}
                 contentPaddingRight={mapViewportPaddingRight}
-                onScatter={setScatter}
                 hovered={hovered}
                 hoveredIndex={hoveredIndex}
                 hoverAnchor={hoverAnchor}
@@ -1165,10 +1238,8 @@ function ExploreContent() {
                 onUnpinHover={handleUnpinHover}
                 onFilterToCluster={handleFilterToCluster}
                 hoverAnnotations={hoverAnnotations}
-                selectedAnnotations={selectedAnnotations}
                 hoveredCluster={hoveredCluster}
                 textColumn={dataset?.text_column}
-                dataTableRows={dataTableRows}
                 linksEdges={isThread ? threadLinksEdges : linksEdges}
                 linksAvailable={linksAvailable}
                 linksMeta={linksMeta}
@@ -1273,7 +1344,6 @@ function ExploreContent() {
                     clusterMap={clusterMap}
                     onHover={undefined}
                     onClick={handleClicked}
-                    hoveredIndex={null}
                     nodeStats={nodeStats}
                     onViewThread={handleViewThread}
                     onViewQuotes={handleViewQuotes}
@@ -1336,7 +1406,6 @@ function ExploreContent() {
                   onFocusedIndexChange={setFocusedClusterIndex}
                   onHover={undefined}
                   onClick={undefined}
-                  hoveredIndex={null}
                   nodeStats={nodeStats}
                   onViewThread={handleViewThread}
                   onViewQuotes={handleViewQuotes}
@@ -1347,6 +1416,7 @@ function ExploreContent() {
           </div>
         </div>
       </div>
+      </HoverProvider>
     </>
   );
 }
