@@ -11,6 +11,7 @@ import SubNav from '../../components/SubNav';
 import VisualizationPane from '../../components/Explore/V2/VisualizationPane';
 import TweetFeed from '../../components/Explore/V2/TweetFeed';
 import TopicTree from '../../components/Explore/V2/TopicTree';
+import FilterActions from '../../components/Explore/V2/FilterActions';
 import FeedCarousel from '../../components/Explore/V2/Carousel/FeedCarousel';
 import { HoverProvider } from '../../contexts/HoverContext';
 import ThreadView from '../../components/Explore/V2/ThreadView/ThreadView';
@@ -111,7 +112,7 @@ function ExploreContent() {
   const {
     loading: filterLoading,
     shownIndices,
-    filterConfig,
+    filterSlots,
     filterActive,
     searchFilter,
     applyCluster,
@@ -265,7 +266,7 @@ function ExploreContent() {
           timelineData.timestampsByLsIndex,
           formatTimelineRangeLabel(nextRange),
         );
-      } else if (filterConfig?.type === filterConstants.TIME_RANGE) {
+      } else if (filterSlots.timeRange) {
         clearFilter(filterConstants.TIME_RANGE);
       }
     },
@@ -275,7 +276,7 @@ function ExploreContent() {
       timelineData.timestampsByLsIndex,
       applyTimeRange,
       clearFilter,
-      filterConfig?.type,
+      filterSlots.timeRange,
     ]
   );
 
@@ -306,10 +307,8 @@ function ExploreContent() {
   ]);
 
   // Keep timeline filter state valid when scope/domain changes.
-  // Note: clearFilter(TIME_RANGE) performs a full reducer reset (all filter intent cleared).
-  // This is correct for single-mode filters — clearing time range returns to unfiltered state.
   useEffect(() => {
-    if (filterConfig?.type !== filterConstants.TIME_RANGE) return;
+    if (!filterSlots.timeRange) return;
 
     if (!timelineData.hasDates) {
       setIsPlaying(false);
@@ -318,7 +317,8 @@ function ExploreContent() {
       return;
     }
 
-    const clampedFilterRange = clampRangeToDomain([filterConfig.start, filterConfig.end], [timelineStart, timelineEnd]);
+    const trSlot = filterSlots.timeRange;
+    const clampedFilterRange = clampRangeToDomain([trSlot.start, trSlot.end], [timelineStart, timelineEnd]);
     if (!clampedFilterRange) {
       setIsPlaying(false);
       setTimeRange(null);
@@ -328,10 +328,10 @@ function ExploreContent() {
 
     const nextLabel = formatTimelineRangeLabel(clampedFilterRange);
     const shouldUpdateFilter =
-      filterConfig.start !== clampedFilterRange[0] ||
-      filterConfig.end !== clampedFilterRange[1] ||
-      filterConfig.timestampsByLsIndex !== timelineData.timestampsByLsIndex ||
-      filterConfig.label !== nextLabel;
+      trSlot.start !== clampedFilterRange[0] ||
+      trSlot.end !== clampedFilterRange[1] ||
+      trSlot.timestampsByLsIndex !== timelineData.timestampsByLsIndex ||
+      trSlot.label !== nextLabel;
 
     if (shouldUpdateFilter) {
       applyTimeRange(
@@ -346,11 +346,7 @@ function ExploreContent() {
       setTimeRange(clampedFilterRange);
     }
   }, [
-    filterConfig?.type,
-    filterConfig?.start,
-    filterConfig?.end,
-    filterConfig?.label,
-    filterConfig?.timestampsByLsIndex,
+    filterSlots.timeRange,
     timelineData.hasDates,
     timelineData.timestampsByLsIndex,
     timelineStart,
@@ -361,12 +357,12 @@ function ExploreContent() {
     clearFilter,
   ]);
 
-  // If another filter becomes active, clear timeline-local range to avoid divergent UI state.
+  // If the time range slot is cleared externally, sync local timeline state.
   useEffect(() => {
-    if (filterConfig?.type === filterConstants.TIME_RANGE) return;
+    if (filterSlots.timeRange) return;
     if (isPlaying) setIsPlaying(false);
     if (timeRange !== null) setTimeRange(null);
-  }, [filterConfig?.type, isPlaying, timeRange]);
+  }, [filterSlots.timeRange, isPlaying, timeRange]);
 
   // Add a ref to track the latest requested index
   const latestHoverIndexRef = useRef(null);
@@ -740,7 +736,7 @@ function ExploreContent() {
       if (idx === null || idx === undefined || deletedIndices.has(idx)) {
         clearHoverState();
 
-        if (filterConfig?.type === filterConstants.CLUSTER) {
+        if (filterSlots.cluster) {
           clearFilter(filterConstants.CLUSTER);
         }
         return;
@@ -777,7 +773,7 @@ function ExploreContent() {
           });
       }
     },
-    [deletedIndices, clearHoverState, filterConfig, clearFilter, tweetIdMap, openThread, datasetId, scope?.id]
+    [deletedIndices, clearHoverState, filterSlots.cluster, clearFilter, tweetIdMap, openThread, datasetId, scope?.id]
   );
 
   const handleUnpinHover = useCallback(() => {
@@ -1286,6 +1282,8 @@ function ExploreContent() {
                     </button>
                   )}
 
+                  <FilterActions />
+
                   {clusterLabels && clusterLabels.length > 0 && (
                     <TopicTree
                       onZoomToCluster={handleZoomToCluster}
@@ -1294,7 +1292,7 @@ function ExploreContent() {
                   )}
                   <TweetFeed
                     dataset={dataset}
-                    distanceMap={searchFilter.distanceMap}
+                    distanceMap={filterSlots.search?.mode === 'semantic' ? searchFilter.distanceMap : undefined}
                     clusterMap={clusterMap}
                     onHover={undefined}
                     onClick={handleClicked}

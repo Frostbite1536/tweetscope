@@ -5,7 +5,10 @@
 .resultRow {
   padding: 8px 16px;
   cursor: pointer;
-  
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
   &:hover {
     background-color: var(--neutrals-color-neutral-1);
   }
@@ -32,108 +35,42 @@
   margin-bottom: 8px;
 }
 
-/* Dark mode styles */
-@media (prefers-color-scheme: dark) {
-  .resultsList {
-    background-color: #333;
-  }
-
-  .resultRow {
-    &:hover {
-      background-color: #555;
-    }
-  }
-
-  .resultContent {
-    color: #fff;
-  }
-
-  .groupHeading {
-    color: #999;
-  }
-}
-
-:global(:root[data-theme="dark"]) {
-  .resultsList {
-    background-color: #333;
-  }
-
-  .resultRow {
-    &:hover {
-      background-color: #555;
-    }
-  }
-
-  .resultContent {
-    color: #fff;
-  }
-
-  .groupHeading {
-    color: #999;
-  }
-}
-
 .searchButtonContainer {
-    padding-top: 6px;
+  padding-top: 6px;
 }
 
+.underline {
+  text-decoration: underline;
+  text-decoration-color: var(--interactions---primary-color-interaction-primary);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
 
-.resultsList {
-    width: 100%;
-  }
-  
-  .resultRow {
-    padding: 8px 16px;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between; 
-    align-items: center;
+.searchResultContent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-    &:hover {
-      background-color: var(--neutrals-color-neutral-1);
-    }
-  }
-  
- 
-  .searchIcon {
-    color: var(--text-color-text-subtle);
-  }
+.columnResultContent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-  .underline {
-    text-decoration: underline;
-    text-decoration-color: var(--interactions---primary-color-interaction-primary);
-    text-underline-offset: 3px;
-    text-decoration-thickness: 1px;
-  }
+.columnLabel {
+  color: var(--text-color-text-subtle);
+  font-size: 12px;
+}
 
-  .searchResultContent {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+.resultButton {
+  background-color: var(--neutrals-color-neutral-1) !important;
+  border-radius: 12px !important;
+  padding: 4px !important;
+  width: 24px !important;
+  height: 24px !important;
 
-  .columnResultContent {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .columnLabel {
-    color: var(--text-color-text-subtle);
-    font-size: 12px;
-  }
-
-
-  .resultButton {
-    background-color: var(--neutrals-color-neutral-1) !important;
-    border-radius: 12px !important;
-    padding: 4px !important;
-    width: 24px !important;
-    height: 24px !important;
-  }
-
-  .resultButton:hover {
+  &:hover {
     background-color: var(--neutrals-color-neutral-2) !important;
   }
-  
-  
+}

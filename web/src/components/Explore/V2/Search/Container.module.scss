@@ -1,10 +1,98 @@
 .searchContainer {
     display: flex;
     flex-direction: column;
-    // align-items: center;
-    justify-content: center;
-    height: 100%;
+    justify-content: flex-start;
+    height: auto;
     width: 100%;
+    padding: 10px 12px 8px;
+    gap: 8px;
+    border-bottom: 1px solid var(--glass-border-subtle, var(--borders-color-border-1));
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--neutrals-color-neutral-1) 36%, transparent),
+      transparent 80%
+    );
+}
+
+// ---- Filter Chips Row ----
+
+.chipRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding-bottom: 2px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    background: var(--chip-bg, var(--neutrals-color-neutral-1));
+    border: 1px solid var(--chip-border, var(--borders-color-border-2));
+    border-radius: 999px;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--chip-color, var(--text-color-text-main));
+    max-width: 240px;
+    line-height: 1.4;
+}
+
+.chipIcon {
+    flex-shrink: 0;
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+.chipLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.chipClear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    margin-left: var(--space-1);
+    background: var(--chip-clear-bg, var(--neutrals-color-neutral-2));
+    border: none;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--chip-color, var(--text-color-text-main));
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+
+    &:hover {
+        background: var(--chip-clear-hover-bg, var(--neutrals-color-neutral-3));
+        transform: scale(1.1);
+    }
+}
+
+.chipClearAll {
+    padding: 2px var(--space-2);
+    background: var(--neutrals-color-neutral-1);
+    border: 1px solid var(--borders-color-border-2);
+    border-radius: 999px;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-color-text-subtle);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+
+    &:hover {
+        color: var(--text-color-text-main);
+    }
 }
 
 .searchBarContainer {
@@ -12,11 +100,27 @@
 }
 
 .searchInput {
-    width: 80%;
-    padding: 10px;
-    border: 1px solid var(--borders-color-border-1);
-    border-radius: 4px;
+    width: 100%;
+    min-height: 42px;
+    padding: 10px 106px 10px 12px;
+    border: 1px solid var(--borders-color-border-2);
+    border-radius: 10px;
+    background: var(--neutrals-color-neutral-1);
     font-size: 14px;
+    color: var(--text-color-text-main);
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+
+    &::placeholder {
+        color: var(--text-color-text-subtle);
+    }
+
+    &:focus {
+        outline: none;
+        border-color: var(--interactions---primary-color-interaction-primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--interactions---primary-color-interaction-primary) 16%, transparent);
+        background: var(--neutrals-color-neutral-0);
+    }
 }
 
 .searchResults {
@@ -26,11 +130,13 @@
     width: 100%;
     z-index: 1000;
     background: var(--neutrals-color-neutral-0);
+    border: 1px solid var(--borders-color-border-2);
     border-radius: 8px;
     box-shadow: var(--glass-shadow, 0 2px 10px rgba(40, 39, 38, 0.1));
-    margin-top: 8px;
+    margin-top: 6px;
     animation: fadeIn 0.2s ease-out forwards;
     transform-origin: top center;
+    overflow: hidden;
 }
 
 @keyframes fadeIn {
@@ -48,12 +154,80 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 12px;
+    gap: 10px;
+    margin-top: 2px;
+    min-height: 22px;
+}
+
+.searchResultsMetadataItem {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.searchResultsMetadataLabel {
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-color-text-subtle);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.searchResultsMetadataValue {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--borders-color-border-2);
+    background: var(--neutrals-color-neutral-1);
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-color-text-main);
+    white-space: nowrap;
 }
 
 .inputWrapper {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding-top: 6px;
+    position: relative;
+}
+
+.modeToggle {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 4px 9px;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: 'Instrument Sans', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border: 1px solid var(--borders-color-border-2);
+    border-radius: 999px;
+    background: var(--neutrals-color-neutral-1);
+    color: var(--text-color-text-subtle);
+    cursor: pointer;
+    transition: all var(--transition-fast, 150ms) ease;
+    white-space: nowrap;
+
+    &:hover {
+        background: var(--interactions---secondary-color-interaction-secondary-hover, var(--neutrals-color-neutral-2));
+        color: var(--text-color-text-main);
+        border-color: var(--borders-color-border-3);
+    }
+}
+
+.modeToggleSemantic {
+    background: var(--semantic-color-semantic-info, var(--neutrals-color-neutral-1));
+    color: var(--neutrals-color-neutral-0);
+    border-color: var(--semantic-color-semantic-info, var(--borders-color-border-2));
+
+    &:hover {
+        background: var(--semantic-color-semantic-info-hover, var(--neutrals-color-neutral-2));
+        color: var(--neutrals-color-neutral-0);
+    }
 }

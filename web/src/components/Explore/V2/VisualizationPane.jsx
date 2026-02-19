@@ -136,7 +136,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   const { scopeRows, scope } = useScope();
   const { isDark: isDarkMode } = useColorMode();
 
-  const { clusterFilter, filterConfig, visibleIndexSet } = useFilter();
+  const { clusterFilter, filterActive, visibleIndexSet } = useFilter();
 
   const maxZoom = 40;
 
@@ -158,7 +158,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
 
   const umapRef = useRef(null);
 
-  const isFilterActive = !!filterConfig;
+  const isFilterActive = filterActive;
 
   // Points format: [x, y, selectionKey, activation, cluster]
   const drawingPoints = useMemo(() => {

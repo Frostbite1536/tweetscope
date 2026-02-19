@@ -32,15 +32,17 @@ const underlineText = (text, query) => {
 // Custom Option component that includes an icon. Note the added branch for NN options.
 const Option = (props) => {
   const { data, selectProps } = props;
-  const { onSelect, inputValue, setFilterQuery } = selectProps;
+  const { onSelect, inputValue } = selectProps;
   const { isDark: isDarkMode } = useColorMode();
 
   const handleClick = (e) => {
     e.preventDefault();
-    if (data.isNN) {
-      // Call the onSelect for NN search
+    if (data.isKeywordSearch) {
+      onSelect({ type: filterConstants.KEYWORD_SEARCH, value: data.value, label: data.value });
+      return;
+    }
+    if (data.isSemanticSearch) {
       onSelect({ type: filterConstants.SEARCH, value: data.value, label: data.value });
-      setFilterQuery(data.value);
       return;
     }
     // Determine which group this option belongs to
@@ -56,7 +58,6 @@ const Option = (props) => {
         column: data.column,
         label,
       });
-      setFilterQuery(label);
     } else if (groupType === CLUSTERS) {
       onSelect({ type: filterConstants.CLUSTER, value: data.value, label: data.label });
       // applyCluster sets filterQuery to the real cluster label via the reducer;
@@ -64,8 +65,8 @@ const Option = (props) => {
     }
   };
 
-  // If this is our nearest-neighbors option, render it specially.
-  if (data.isNN) {
+  // Keyword search option
+  if (data.isKeywordSearch) {
     return (
       <div onClick={handleClick}>
         <components.Option {...props}>
@@ -78,7 +79,28 @@ const Option = (props) => {
               size="small"
               className={styles.resultButton}
             />
-            <span>Search for nearest neighbors to: "{data.value}"</span>
+            <span>Keyword search: &ldquo;{data.value}&rdquo;</span>
+          </div>
+        </components.Option>
+      </div>
+    );
+  }
+
+  // Semantic search option
+  if (data.isSemanticSearch) {
+    return (
+      <div onClick={handleClick}>
+        <components.Option {...props}>
+          <div className={styles.resultContent}>
+            <Button
+              onClick={handleClick}
+              icon="zap"
+              color="primary"
+              variant="clear"
+              size="small"
+              className={styles.resultButton}
+            />
+            <span>Semantic search: &ldquo;{data.value}&rdquo;</span>
           </div>
         </components.Option>
       </div>
@@ -161,7 +183,7 @@ const CustomMenu = ({ children, ...props }) => {
 
 export const NUM_SEARCH_RESULTS = 4;
 
-const SearchResults = ({ query, menuIsOpen, onSelect, setFilterQuery }) => {
+const SearchResults = ({ query, menuIsOpen, onSelect, searchMode }) => {
   const { userId, datasetId, scope, clusterLabels } = useScope();
   const columnFilter = useColumnFilter(userId, datasetId, scope);
   const { columnFilters } = columnFilter;
@@ -195,18 +217,18 @@ const SearchResults = ({ query, menuIsOpen, onSelect, setFilterQuery }) => {
   }, [columnFilters, query]);
 
   // Build grouped options.
-  // First, if the user has typed something, add a NN option.
+  // When user has typed something, show both keyword and semantic search options.
+  // The active search mode's option comes first.
   const groupedOptions = [];
   if (query.trim() !== '') {
+    const keywordOpt = { value: query, label: query, isKeywordSearch: true };
+    const semanticOpt = { value: query, label: query, isSemanticSearch: true };
+    const searchOptions = searchMode === 'keyword'
+      ? [keywordOpt, semanticOpt]
+      : [semanticOpt, keywordOpt];
     groupedOptions.push({
-      label: 'Nearest Neighbors',
-      options: [
-        {
-          value: query,
-          label: query,
-          isNN: true, // flag so Option knows to render the NN option
-        },
-      ],
+      label: 'Search',
+      options: searchOptions,
     });
   }
 
@@ -225,13 +247,8 @@ const SearchResults = ({ query, menuIsOpen, onSelect, setFilterQuery }) => {
 
   const filterOption = (option, inputValue) => {
     if (!inputValue) return true;
-
-    // If this is a group, check if any of its options match
-    if (option.options) {
-      return option.options.some((subOption) =>
-        subOption.label.toLowerCase().includes(inputValue.toLowerCase())
-      );
-    }
+    // Always show search action options
+    if (option.data?.isKeywordSearch || option.data?.isSemanticSearch) return true;
     // For individual options
     return option.label.toLowerCase().includes(inputValue.toLowerCase());
   };
@@ -285,7 +302,6 @@ const SearchResults = ({ query, menuIsOpen, onSelect, setFilterQuery }) => {
         }),
       }}
       query={query}
-      setFilterQuery={setFilterQuery}
       onMenuOpen={() => true}
       onMenuClose={() => false}
       onChange={() => false}
@@ -305,7 +321,7 @@ SearchResults.propTypes = {
   query: PropTypes.string.isRequired,
   menuIsOpen: PropTypes.bool.isRequired,
   onSelect: PropTypes.func.isRequired,
-  setFilterQuery: PropTypes.func.isRequired,
+  searchMode: PropTypes.string,
 };
 
 export default SearchResults;

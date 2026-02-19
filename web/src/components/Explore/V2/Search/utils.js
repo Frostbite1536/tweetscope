@@ -26,6 +26,7 @@ export const validateColumnAndValue = (column, value, columnFilters) => {
 
 export const filterConstants = {
   SEARCH: 'search',
+  KEYWORD_SEARCH: 'keyword',
   CLUSTER: 'cluster',
   COLUMN: 'column',
   TIME_RANGE: 'timeRange',

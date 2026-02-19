@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useScope } from './ScopeContext';
 import useColumnFilter from '../hooks/useColumnFilter';
 import useNearestNeighborsSearch from '../hooks/useNearestNeighborsSearch';
+import useKeywordSearch from '../hooks/useKeywordSearch';
 import useClusterFilter from '../hooks/useClusterFilter';
 import { apiService } from '../lib/apiService';
 import { queryKeys } from '../query/keys';
@@ -15,7 +16,7 @@ import {
 
 const FilterContext = createContext(null);
 const ROWS_PER_PAGE = 20;
-const FILTER_URL_KEYS = ['cluster', 'search', 'column', 'value', 'feature'];
+const FILTER_URL_KEYS = ['cluster', 'search', 'keyword', 'column', 'value', 'feature'];
 
 function uniqueOrderedIndices(values) {
   const seen = new Set();
@@ -30,48 +31,40 @@ function uniqueOrderedIndices(values) {
   return out;
 }
 
-function getFilterUrlSignature(config) {
-  if (!config) return 'none';
-
-  if (config.type === filterConstants.CLUSTER) {
-    return `cluster:${String(config.value)}`;
-  }
-
-  if (config.type === filterConstants.SEARCH) {
-    return `search:${String(config.value)}`;
-  }
-
-  if (config.type === filterConstants.COLUMN) {
-    return `column:${String(config.column)}:${String(config.value)}`;
-  }
-
-  if (config.type === filterConstants.TIME_RANGE) {
-    return 'timeRange';
-  }
-
-  return 'unknown';
-}
 
 // ---------------------------------------------------------------------------
-// Reducer — single owner of filter intent state
+// Reducer — slot-based composable filter state (Phase 6)
 // ---------------------------------------------------------------------------
 
 const ACTION = {
   APPLY_CLUSTER: 'APPLY_CLUSTER',
   APPLY_SEARCH: 'APPLY_SEARCH',
+  APPLY_KEYWORD_SEARCH: 'APPLY_KEYWORD_SEARCH',
   APPLY_COLUMN: 'APPLY_COLUMN',
   APPLY_TIME_RANGE: 'APPLY_TIME_RANGE',
   SET_FILTER_QUERY: 'SET_FILTER_QUERY',
-  CLEAR_FILTER: 'CLEAR_FILTER',
-  // Compatibility shims (used by existing callers until Phase 3 migration)
-  SET_FILTER_CONFIG: 'SET_FILTER_CONFIG',
-  SET_FILTER_ACTIVE: 'SET_FILTER_ACTIVE',
+  CLEAR_SLOT: 'CLEAR_SLOT',
+  CLEAR_ALL: 'CLEAR_ALL',
+};
+
+// Slot keys — one slot per filter dimension
+const SLOT = {
+  CLUSTER: 'cluster',
+  SEARCH: 'search',
+  COLUMN: 'column',
+  TIME_RANGE: 'timeRange',
+};
+
+const emptySlots = {
+  [SLOT.CLUSTER]: null,
+  [SLOT.SEARCH]: null,
+  [SLOT.COLUMN]: null,
+  [SLOT.TIME_RANGE]: null,
 };
 
 const initialFilterState = {
-  filterConfig: null,
+  filterSlots: { ...emptySlots },
   filterQuery: '',
-  filterActive: false,
 };
 
 function filterReducer(state, action) {
@@ -80,26 +73,35 @@ function filterReducer(state, action) {
       const { cluster } = action;
       const label = cluster.label || String(cluster.cluster);
       return {
-        filterConfig: {
-          type: filterConstants.CLUSTER,
-          value: cluster.cluster,
-          label,
+        ...state,
+        filterSlots: {
+          ...state.filterSlots,
+          [SLOT.CLUSTER]: { value: cluster.cluster, label },
         },
-        filterQuery: label,
-        filterActive: true,
       };
     }
 
     case ACTION.APPLY_SEARCH: {
       const { query } = action;
       return {
-        filterConfig: {
-          type: filterConstants.SEARCH,
-          value: query,
-          label: query,
+        ...state,
+        filterSlots: {
+          ...state.filterSlots,
+          [SLOT.SEARCH]: { value: query, label: query, mode: 'semantic' },
         },
-        filterQuery: query,
-        filterActive: true,
+        filterQuery: '',
+      };
+    }
+
+    case ACTION.APPLY_KEYWORD_SEARCH: {
+      const { query } = action;
+      return {
+        ...state,
+        filterSlots: {
+          ...state.filterSlots,
+          [SLOT.SEARCH]: { value: query, label: query, mode: 'keyword' },
+        },
+        filterQuery: '',
       };
     }
 
@@ -107,14 +109,11 @@ function filterReducer(state, action) {
       const { column, value } = action;
       const label = `${column}: ${value}`;
       return {
-        filterConfig: {
-          type: filterConstants.COLUMN,
-          value,
-          column,
-          label,
+        ...state,
+        filterSlots: {
+          ...state.filterSlots,
+          [SLOT.COLUMN]: { value, column, label },
         },
-        filterQuery: label,
-        filterActive: true,
       };
     }
 
@@ -122,14 +121,10 @@ function filterReducer(state, action) {
       const { start, end, timestampsByLsIndex, label } = action;
       return {
         ...state,
-        filterConfig: {
-          type: filterConstants.TIME_RANGE,
-          start,
-          end,
-          timestampsByLsIndex,
-          label,
+        filterSlots: {
+          ...state.filterSlots,
+          [SLOT.TIME_RANGE]: { start, end, timestampsByLsIndex, label },
         },
-        filterActive: true,
         // filterQuery intentionally unchanged for time range
       };
     }
@@ -137,22 +132,19 @@ function filterReducer(state, action) {
     case ACTION.SET_FILTER_QUERY:
       return { ...state, filterQuery: action.query };
 
-    case ACTION.CLEAR_FILTER:
-      return { ...initialFilterState };
-
-    // --- Compatibility shims (existing callers pass raw values) ---
-
-    case ACTION.SET_FILTER_CONFIG: {
-      const config = action.config;
+    case ACTION.CLEAR_SLOT: {
+      const { slotKey } = action;
       return {
         ...state,
-        filterConfig: config,
-        filterActive: config !== null && config !== undefined ? state.filterActive : false,
+        filterSlots: {
+          ...state.filterSlots,
+          [slotKey]: null,
+        },
       };
     }
 
-    case ACTION.SET_FILTER_ACTIVE:
-      return { ...state, filterActive: action.active };
+    case ACTION.CLEAR_ALL:
+      return { ...initialFilterState };
 
     default:
       return state;
@@ -163,9 +155,36 @@ function filterReducer(state, action) {
 // Provider
 // ---------------------------------------------------------------------------
 
+export { SLOT as FILTER_SLOT };
+
 export function FilterProvider({ children }) {
   const [state, dispatch] = useReducer(filterReducer, initialFilterState);
-  const { filterConfig, filterQuery, filterActive } = state;
+  const { filterSlots, filterQuery } = state;
+
+  // Derived: is any filter active?
+  const filterActive = useMemo(
+    () => Object.values(filterSlots).some((s) => s !== null),
+    [filterSlots],
+  );
+
+  // Backward-compat: single filterConfig for consumers not yet migrated.
+  // Returns the "primary" active filter or null. Prefer filterSlots directly.
+  const filterConfig = useMemo(() => {
+    if (filterSlots.cluster) {
+      return { type: filterConstants.CLUSTER, value: filterSlots.cluster.value, label: filterSlots.cluster.label };
+    }
+    if (filterSlots.search) {
+      const type = filterSlots.search.mode === 'keyword' ? filterConstants.KEYWORD_SEARCH : filterConstants.SEARCH;
+      return { type, value: filterSlots.search.value, label: filterSlots.search.label };
+    }
+    if (filterSlots.column) {
+      return { type: filterConstants.COLUMN, value: filterSlots.column.value, column: filterSlots.column.column, label: filterSlots.column.label };
+    }
+    if (filterSlots.timeRange) {
+      return { type: filterConstants.TIME_RANGE, ...filterSlots.timeRange };
+    }
+    return null;
+  }, [filterSlots]);
 
   const [filteredIndices, setFilteredIndices] = useState([]);
   const [page, setPage] = useState(0);
@@ -194,23 +213,10 @@ export function FilterProvider({ children }) {
   const columnFilter = useColumnFilter(userId, datasetId, scope);
   const clusterFilter = useClusterFilter({ scopeRows, scope, scopeLoaded });
   const searchFilter = useNearestNeighborsSearch({ userId, datasetId, scope, deletedIndices });
-
-  // ---------------------------------------------------------------------------
-  // DEPRECATED (Phase 3 complete): setFilterConfig and setFilterActive are no
-  // longer used by any consumer for filter dispatch. Remove in Phase 5.
-  // setFilterQuery is still used by Search/Container for input field text.
-  // ---------------------------------------------------------------------------
-
-  const setFilterConfig = useCallback((config) => {
-    dispatch({ type: ACTION.SET_FILTER_CONFIG, config });
-  }, []);
+  const keywordSearchFilter = useKeywordSearch({ datasetId, scope, deletedIndices });
 
   const setFilterQuery = useCallback((query) => {
     dispatch({ type: ACTION.SET_FILTER_QUERY, query });
-  }, []);
-
-  const setFilterActive = useCallback((active) => {
-    dispatch({ type: ACTION.SET_FILTER_ACTIVE, active });
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -226,6 +232,10 @@ export function FilterProvider({ children }) {
     dispatch({ type: ACTION.APPLY_SEARCH, query });
   }, []);
 
+  const applyKeywordSearch = useCallback((query) => {
+    dispatch({ type: ACTION.APPLY_KEYWORD_SEARCH, query });
+  }, []);
+
   const applyColumn = useCallback((column, value) => {
     dispatch({ type: ACTION.APPLY_COLUMN, column, value });
   }, []);
@@ -234,88 +244,127 @@ export function FilterProvider({ children }) {
     dispatch({ type: ACTION.APPLY_TIME_RANGE, start, end, timestampsByLsIndex, label });
   }, []);
 
+  // Map filter type constants to slot keys for clearFilter backward compat
+  const typeToSlot = useMemo(() => ({
+    [filterConstants.CLUSTER]: SLOT.CLUSTER,
+    [filterConstants.SEARCH]: SLOT.SEARCH,
+    [filterConstants.KEYWORD_SEARCH]: SLOT.SEARCH,
+    [filterConstants.COLUMN]: SLOT.COLUMN,
+    [filterConstants.TIME_RANGE]: SLOT.TIME_RANGE,
+  }), []);
+
   const clearFilter = useCallback((filterType) => {
-    dispatch({ type: ACTION.CLEAR_FILTER });
+    if (filterType) {
+      const slotKey = typeToSlot[filterType];
+      if (slotKey) {
+        dispatch({ type: ACTION.CLEAR_SLOT, slotKey });
+      }
+    } else {
+      dispatch({ type: ACTION.CLEAR_ALL });
+    }
     // Clear hook-internal state for the relevant type
     if (!filterType || filterType === filterConstants.CLUSTER) {
       clusterFilter.clear();
     }
-    if (!filterType || filterType === filterConstants.SEARCH) {
+    if (!filterType || filterType === filterConstants.SEARCH || filterType === filterConstants.KEYWORD_SEARCH) {
       searchFilter.clear();
+      keywordSearchFilter.clear();
     }
     if (!filterType || filterType === filterConstants.COLUMN) {
       columnFilter.clear();
     }
-  }, [clusterFilter, searchFilter, columnFilter]);
+  }, [typeToSlot, clusterFilter, searchFilter, keywordSearchFilter, columnFilter]);
+
+  const clearAllFilters = useCallback(() => {
+    dispatch({ type: ACTION.CLEAR_ALL });
+    clusterFilter.clear();
+    searchFilter.clear();
+    keywordSearchFilter.clear();
+    columnFilter.clear();
+  }, [clusterFilter, searchFilter, keywordSearchFilter, columnFilter]);
 
   // ---------------------------------------------------------------------------
-  // URL restore — hydrate filter state from URL on load
+  // URL restore — hydrate ALL filter slots from URL on load
   // ---------------------------------------------------------------------------
 
   const hasFilterInUrl = useMemo(() => {
     return (
       urlParams.has('cluster') ||
+      urlParams.has('keyword') ||
       urlParams.has('search') ||
       (urlParams.has('column') && urlParams.has('value'))
     );
   }, [urlParams]);
 
+  // Build a URL "signature" from all active slots for dedup
+  const slotsUrlSignature = useMemo(() => {
+    const parts = [];
+    if (filterSlots.cluster) parts.push(`cluster:${filterSlots.cluster.value}`);
+    if (filterSlots.search) {
+      const key = filterSlots.search.mode === 'keyword' ? 'keyword' : 'search';
+      parts.push(`${key}:${filterSlots.search.value}`);
+    }
+    if (filterSlots.column) parts.push(`column:${filterSlots.column.column}:${filterSlots.column.value}`);
+    return parts.join('|') || 'none';
+  }, [filterSlots]);
+
   useEffect(() => {
     if (!scopeLoaded || !hasFilterInUrl) return;
 
+    // Parse ALL URL params and hydrate each matching slot.
+    // We track expected signatures to avoid re-dispatching on our own URL writes.
+    const expectedParts = [];
+
     if (urlParams.has('cluster')) {
-      const clusterValue = urlParams.get('cluster');
-      const numericValue = Number.parseInt(clusterValue, 10);
-      if (!Number.isInteger(numericValue)) return;
-      const cluster = clusterLabels.find((item) => item.cluster === numericValue);
-      if (!cluster) return;
-      const targetSignature = `cluster:${String(numericValue)}`;
-      if (getFilterUrlSignature(filterConfig) === targetSignature) {
-        return;
+      const numericValue = Number.parseInt(urlParams.get('cluster'), 10);
+      if (Number.isInteger(numericValue)) {
+        const cluster = clusterLabels.find((item) => item.cluster === numericValue);
+        if (cluster && filterSlots.cluster?.value !== numericValue) {
+          expectedParts.push(`cluster:${numericValue}`);
+          applyCluster(cluster);
+        }
       }
-      urlWriteSkipRef.current = targetSignature;
-      applyCluster(cluster);
-      return;
     }
 
-    if (urlParams.has('search')) {
-      const searchValue = urlParams.get('search');
-      if (!searchValue) return;
-      const targetSignature = `search:${searchValue}`;
-      if (getFilterUrlSignature(filterConfig) === targetSignature) {
-        return;
+    if (urlParams.has('keyword')) {
+      const keywordValue = urlParams.get('keyword');
+      if (keywordValue && !(filterSlots.search?.mode === 'keyword' && filterSlots.search?.value === keywordValue)) {
+        expectedParts.push(`keyword:${keywordValue}`);
+        applyKeywordSearch(keywordValue);
       }
-      urlWriteSkipRef.current = targetSignature;
-      applySearch(searchValue);
-      return;
+    } else if (urlParams.has('search')) {
+      const searchValue = urlParams.get('search');
+      if (searchValue && !(filterSlots.search?.mode === 'semantic' && filterSlots.search?.value === searchValue)) {
+        expectedParts.push(`search:${searchValue}`);
+        applySearch(searchValue);
+      }
     }
 
     if (urlParams.has('column') && urlParams.has('value')) {
       const columnValue = urlParams.get('value');
       const column = urlParams.get('column');
       const { columnFilters } = columnFilter;
-      if (!validateColumnAndValue(column, columnValue, columnFilters)) return;
-      const targetSignature = `column:${String(column)}:${String(columnValue)}`;
-      if (getFilterUrlSignature(filterConfig) === targetSignature) {
-        return;
+      if (validateColumnAndValue(column, columnValue, columnFilters) &&
+          !(filterSlots.column?.column === column && filterSlots.column?.value === columnValue)) {
+        expectedParts.push(`column:${column}:${columnValue}`);
+        applyColumn(column, columnValue);
       }
-
-      urlWriteSkipRef.current = targetSignature;
-      applyColumn(column, columnValue);
     }
-  }, [scopeLoaded, hasFilterInUrl, urlParams, clusterLabels, columnFilter, filterConfig, applyCluster, applySearch, applyColumn]);
 
+    if (expectedParts.length > 0) {
+      urlWriteSkipRef.current = expectedParts.join('|');
+    }
+  }, [scopeLoaded, hasFilterInUrl, urlParams, clusterLabels, columnFilter, filterSlots, applyCluster, applyKeywordSearch, applySearch, applyColumn]);
+
+  // Write filterSlots → URL params
   useEffect(() => {
     if (!scopeLoaded) return;
 
+    // Skip URL write when we just hydrated from URL
     if (urlWriteSkipRef.current !== null) {
-      if (getFilterUrlSignature(filterConfig) === urlWriteSkipRef.current) {
+      if (slotsUrlSignature === urlWriteSkipRef.current) {
         urlWriteSkipRef.current = null;
       }
-      return;
-    }
-
-    if (filterConfig?.type === filterConstants.TIME_RANGE) {
       return;
     }
 
@@ -324,16 +373,21 @@ export function FilterProvider({ children }) {
       nextParams.delete(key);
     }
 
-    if (filterConfig) {
-      if (filterConfig.type === filterConstants.CLUSTER) {
-        nextParams.set('cluster', String(filterConfig.value));
-      } else if (filterConfig.type === filterConstants.SEARCH) {
-        nextParams.set('search', String(filterConfig.value));
-      } else if (filterConfig.type === filterConstants.COLUMN) {
-        nextParams.set('column', String(filterConfig.column));
-        nextParams.set('value', String(filterConfig.value));
+    if (filterSlots.cluster) {
+      nextParams.set('cluster', String(filterSlots.cluster.value));
+    }
+    if (filterSlots.search) {
+      if (filterSlots.search.mode === 'keyword') {
+        nextParams.set('keyword', String(filterSlots.search.value));
+      } else {
+        nextParams.set('search', String(filterSlots.search.value));
       }
     }
+    if (filterSlots.column) {
+      nextParams.set('column', String(filterSlots.column.column));
+      nextParams.set('value', String(filterSlots.column.value));
+    }
+    // timeRange is not serialized to URL
 
     const shouldWriteUrl = FILTER_URL_KEYS.some((key) => {
       return urlParams.get(key) !== nextParams.get(key);
@@ -342,10 +396,10 @@ export function FilterProvider({ children }) {
     if (shouldWriteUrl) {
       setUrlParams(nextParams);
     }
-  }, [scopeLoaded, filterConfig, urlParams, setUrlParams]);
+  }, [scopeLoaded, filterSlots, slotsUrlSignature, urlParams, setUrlParams]);
 
   // ---------------------------------------------------------------------------
-  // Filter computation — watches filterConfig and computes filteredIndices
+  // Filter computation — intersects ALL active slots (AND logic)
   // ---------------------------------------------------------------------------
 
   const filterReqSeqRef = useRef(0);
@@ -356,72 +410,77 @@ export function FilterProvider({ children }) {
     const reqId = ++filterReqSeqRef.current;
     setLoading(true);
 
-    const applyFilter = async () => {
-      let indices = [];
+    const computeIntersection = async () => {
+      // If nothing active and no pending URL hydration, return everything
+      if (!filterActive && !hasFilterInUrl) {
+        return baseIndices;
+      }
 
-      if (!filterConfig && !hasFilterInUrl) {
-        indices = baseIndices;
-      } else if (filterConfig) {
-        const { type, value } = filterConfig;
+      let indices = baseIndices;
 
-        switch (type) {
-          case filterConstants.CLUSTER: {
-            const cluster = clusterLabels.find((item) => item.cluster === value);
-            if (cluster) {
-              clusterFilter.setCluster(cluster);
-              indices = clusterFilter.filter(cluster);
-            }
-            break;
-          }
-          case filterConstants.SEARCH: {
-            indices = await searchFilter.filter(value);
-            break;
-          }
-          case filterConstants.COLUMN: {
-            const { column } = filterConfig;
-            indices = await columnFilter.filter(column, value);
-            break;
-          }
-          case filterConstants.TIME_RANGE: {
-            const { start, end, timestampsByLsIndex } = filterConfig;
-            if (timestampsByLsIndex && Number.isFinite(start) && Number.isFinite(end)) {
-              indices = baseIndices.filter((lsIndex) => {
-                const ts = timestampsByLsIndex.get(lsIndex);
-                if (ts === undefined || Number.isNaN(ts)) return true;
-                return ts >= start && ts <= end;
-              });
-            } else {
-              indices = baseIndices;
-            }
-            break;
-          }
-          default: {
-            indices = baseIndices;
-          }
+      // Cluster slot
+      if (filterSlots.cluster) {
+        const cluster = clusterLabels.find((item) => item.cluster === filterSlots.cluster.value);
+        if (cluster) {
+          const clusterSet = new Set(clusterFilter.filter(cluster));
+          indices = indices.filter((i) => clusterSet.has(i));
         }
       }
 
-      if (filterReqSeqRef.current !== reqId) return;
-      setFilteredIndices(uniqueOrderedIndices(indices));
-      setPage(0);
-      setLoading(false);
+      // Search slot (keyword or semantic)
+      if (filterSlots.search) {
+        const hook = filterSlots.search.mode === 'keyword' ? keywordSearchFilter : searchFilter;
+        const searchIndices = await hook.filter(filterSlots.search.value);
+        const searchSet = new Set(searchIndices);
+        indices = indices.filter((i) => searchSet.has(i));
+      }
+
+      // Column slot
+      if (filterSlots.column) {
+        const columnIndices = await columnFilter.filter(filterSlots.column.column, filterSlots.column.value);
+        const columnSet = new Set(columnIndices);
+        indices = indices.filter((i) => columnSet.has(i));
+      }
+
+      // Time range slot
+      if (filterSlots.timeRange) {
+        const { start, end, timestampsByLsIndex } = filterSlots.timeRange;
+        if (timestampsByLsIndex && Number.isFinite(start) && Number.isFinite(end)) {
+          indices = indices.filter((lsIndex) => {
+            const ts = timestampsByLsIndex.get(lsIndex);
+            if (ts === undefined || Number.isNaN(ts)) return true;
+            return ts >= start && ts <= end;
+          });
+        }
+      }
+
+      return indices;
     };
 
-    applyFilter().catch((error) => {
-      if (filterReqSeqRef.current !== reqId) return;
-      console.error('Failed to apply filter', error);
-      setFilteredIndices(baseIndices);
-      setPage(0);
-      setLoading(false);
-    });
+    computeIntersection()
+      .then((indices) => {
+        if (filterReqSeqRef.current !== reqId) return;
+        setFilteredIndices(uniqueOrderedIndices(indices));
+        setPage(0);
+        setLoading(false);
+      })
+      .catch((error) => {
+        if (filterReqSeqRef.current !== reqId) return;
+        console.error('Failed to apply filter', error);
+        setFilteredIndices(baseIndices);
+        setPage(0);
+        setLoading(false);
+      });
   }, [
-    filterConfig,
+    filterSlots,
+    filterActive,
     baseIndices,
     scopeLoaded,
     hasFilterInUrl,
     clusterLabels,
     clusterFilter,
     searchFilter,
+    keywordSearchFilter,
     columnFilter,
   ]);
 
@@ -461,7 +520,7 @@ export function FilterProvider({ children }) {
       enabled: Boolean(datasetId && scope?.id && indices.length > 0),
       queryFn: ({ signal }) =>
         apiService.fetchDataFromIndices(datasetId, indices, scope?.id, { signal }),
-      staleTime: filterConfig ? 30_000 : 5 * 60 * 1000,
+      staleTime: filterActive ? 30_000 : 5 * 60 * 1000,
     })),
   });
 
@@ -484,22 +543,22 @@ export function FilterProvider({ children }) {
   // ---------------------------------------------------------------------------
 
   const value = useMemo(() => ({
-    // New canonical dispatchers (Phase 1)
+    // Canonical dispatchers
     applyCluster,
     applySearch,
+    applyKeywordSearch,
     applyColumn,
     applyTimeRange,
     clearFilter,
+    clearAllFilters,
 
-    // Deprecated shims (Phase 3 complete — remove in Phase 5)
-    filterConfig,
-    setFilterConfig,
+    // Slot-based state (Phase 6)
+    filterSlots,
+    filterConfig, // backward compat — derived from filterSlots
     filterQuery,
     setFilterQuery,
     filterActive,
-    setFilterActive,
 
-    // Unchanged
     filteredIndices,
     visibleIndexSet,
     shownIndices,
@@ -511,6 +570,7 @@ export function FilterProvider({ children }) {
     setLoading,
     rowsLoading,
     searchFilter,
+    keywordSearchFilter,
     clusterFilter,
     columnFilter,
     setUrlParams,
@@ -518,15 +578,16 @@ export function FilterProvider({ children }) {
   }), [
     applyCluster,
     applySearch,
+    applyKeywordSearch,
     applyColumn,
     applyTimeRange,
     clearFilter,
+    clearAllFilters,
+    filterSlots,
     filterConfig,
-    setFilterConfig,
     filterQuery,
     setFilterQuery,
     filterActive,
-    setFilterActive,
     filteredIndices,
     visibleIndexSet,
     shownIndices,
@@ -537,6 +598,7 @@ export function FilterProvider({ children }) {
     setLoading,
     rowsLoading,
     searchFilter,
+    keywordSearchFilter,
     clusterFilter,
     columnFilter,
     setUrlParams,

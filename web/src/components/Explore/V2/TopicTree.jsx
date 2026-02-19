@@ -25,7 +25,7 @@ function TopicTree({
   const { clusterHierarchy, clusterLabels, scope, scopeRows } = useScope();
   const {
     clusterFilter,
-    filterConfig,
+    filterSlots,
     applyCluster,
     clearFilter,
     filteredIndices,
@@ -112,7 +112,7 @@ function TopicTree({
     const activeCluster = clusterFilter?.cluster;
     if (
       activeCluster &&
-      filterConfig?.type === filterConstants.CLUSTER &&
+      filterSlots.cluster &&
       activeCluster.cluster !== undefined &&
       activeCluster.cluster !== null
     ) {
@@ -123,11 +123,11 @@ function TopicTree({
       return;
     }
 
-    if (!activeCluster && (!filterConfig || filterConfig.type !== filterConstants.CLUSTER)) {
+    if (!activeCluster && !filterSlots.cluster) {
       setInternalSelectedCluster(null);
       setSelectedClusterData(null);
     }
-  }, [clusterFilter?.cluster, filterConfig, clusterLabels]);
+  }, [clusterFilter?.cluster, filterSlots.cluster, clusterLabels]);
 
   const handleSelectCluster = useCallback((cluster) => {
     setInternalSelectedCluster(cluster.cluster);
@@ -260,7 +260,7 @@ function TopicTree({
             <input
               type="text"
               className={styles.searchInput}
-              placeholder="Search topics..."
+              placeholder="Filter topic list..."
               disabled
             />
           </div>
@@ -305,7 +305,7 @@ function TopicTree({
             <input
               type="text"
               className={styles.searchInput}
-              placeholder="Search topics..."
+              placeholder="Filter topic list..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
