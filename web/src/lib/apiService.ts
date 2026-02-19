@@ -1,5 +1,5 @@
 import { client } from '../api/client';
-import type { JsonRecord, ScopeData, ScopeRow, NearestNeighborsRawResponse, NodeStatsResponse, ScopeRef, SearchEmbeddingInput } from '../api/types';
+import type { JsonRecord, ScopeData, ScopeRow, NearestNeighborsRawResponse, KeywordSearchRawResponse, NodeStatsResponse, ScopeRef, SearchEmbeddingInput } from '../api/types';
 
 export { client };
 
@@ -152,12 +152,18 @@ export const graphClient = {
     options: RequestOptions & { descLimit?: number } = {}
   ): Promise<JsonRecord> => {
     const { signal, descLimit } = options;
-    const query: Record<string, string> = {};
-    if (descLimit != null) query.desc_limit = String(descLimit);
-    const res = await client.api.datasets[':dataset'].links.thread[':tweetId'].$get({
-      param: { dataset: datasetId, tweetId },
-      query,
-    }, { init: { signal } });
+    const payload = descLimit != null
+      ? {
+          param: { dataset: datasetId, tweetId },
+          query: { desc_limit: String(descLimit) },
+        }
+      : {
+          param: { dataset: datasetId, tweetId },
+        };
+    const res = await client.api.datasets[':dataset'].links.thread[':tweetId'].$get(
+      payload as any,
+      { init: { signal } }
+    );
     if (!res.ok) {
       const err: Error & { status?: number } = new Error(`Failed to fetch thread (${res.status})`);
       err.status = res.status;
@@ -212,6 +218,27 @@ export const queryApi = {
       indices: inds,
       searchEmbedding: data.search_embedding[0],
     };
+  },
+  searchKeyword: async (
+    datasetId: string,
+    query: string,
+    scope: { id: string },
+    options: RequestOptions = {}
+  ): Promise<{ indices: number[]; scores: number[] }> => {
+    const { signal } = options;
+    const res = await client.api.search.fts.$get({
+      query: {
+        dataset: datasetId,
+        query,
+        scope_id: scope.id,
+      },
+    }, { init: { signal } });
+    if (!res.ok) {
+      const err: Error & { status?: number } = new Error(`Keyword search failed (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    return (await res.json()) as KeywordSearchRawResponse;
   },
   fetchDataFromIndices: async (
     datasetId: string,

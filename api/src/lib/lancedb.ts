@@ -153,17 +153,130 @@ export async function getDatasetTable(
   return table;
 }
 
+// ---------------------------------------------------------------------------
+// FTS (Full-Text Search / BM25)
+// ---------------------------------------------------------------------------
+
+export interface FtsResult {
+  index: number;
+  _score: number;
+}
+
+const ftsIndexCache = new Map<string, boolean>();
+
+function ftsCacheKey(tableId: string, column: string): string {
+  return `${tableId}::${column}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Ensure an FTS index exists on the given column. Creates one lazily if missing.
+ * Caches the check per table+column to avoid repeated listIndices() calls.
+ */
+export async function ensureFtsIndex(
+  tableId: string,
+  column: string,
+): Promise<void> {
+  const cacheKey = ftsCacheKey(tableId, column);
+  if (ftsIndexCache.get(cacheKey)) return;
+
+  const table = await getTable(tableId);
+  let indices = await table.listIndices();
+  let ftsIndex = indices.find(
+    (i) => i.indexType === "FTS" && i.columns.includes(column),
+  );
+
+  if (!ftsIndex) {
+    console.warn(`FTS index missing for ${tableId}:${column}, creating lazily`);
+    await table.createIndex(column, {
+      config: lancedb.Index.fts({ withPosition: true }),
+    });
+
+    // createIndex is async. Wait briefly for index registration and first stats.
+    const maxAttempts = 40;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await sleep(250);
+      indices = await table.listIndices();
+      ftsIndex = indices.find(
+        (i) => i.indexType === "FTS" && i.columns.includes(column),
+      );
+      if (ftsIndex) break;
+    }
+  }
+
+  if (!ftsIndex) {
+    throw new Error(`Failed to create/find FTS index for ${tableId}:${column}`);
+  }
+
+  // Wait for indexing to finish so first query is deterministic.
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const stats = await table.indexStats(ftsIndex.name);
+    if (stats && stats.numUnindexedRows === 0) {
+      ftsIndexCache.set(cacheKey, true);
+      return;
+    }
+    await sleep(250);
+  }
+
+  throw new Error(`FTS index not ready yet for ${tableId}:${column}; try again shortly`);
+}
+
+/**
+ * Full-text (BM25) search. Returns results ordered by _score (higher = better).
+ */
+export async function ftsSearch(
+  tableId: string,
+  query: string,
+  opts: { column: string; limit?: number; where?: string } = { column: "text" },
+): Promise<FtsResult[]> {
+  const tableColumns = await getTableColumns(tableId);
+  const requestedColumn = opts.column;
+  const resolvedColumn = tableColumns.includes(requestedColumn)
+    ? requestedColumn
+    : (tableColumns.includes("text") ? "text" : null);
+  if (!resolvedColumn) {
+    throw new Error(
+      `No valid FTS text column found for ${tableId}; requested "${requestedColumn}"`,
+    );
+  }
+
+  await ensureFtsIndex(tableId, resolvedColumn);
+
+  const table = await getTable(tableId);
+  const indexCol = await getIndexColumn(tableId);
+
+  let q = table
+    .search(query, "fts", resolvedColumn)
+    .select([indexCol])
+    .limit(opts.limit ?? 100);
+
+  if (opts.where) {
+    q = q.where(opts.where);
+  }
+
+  const results = await q.toArray();
+  return results.map((r: Record<string, unknown>) => ({
+    index: (r[indexCol] ?? r.index) as number,
+    _score: r._score as number,
+  }));
+}
+
 export async function vectorSearch(
   tableId: string,
   embedding: number[],
   opts: { limit?: number; where?: string } = {}
 ): Promise<SearchResult[]> {
   const table = await getTable(tableId);
+  const indexCol = await getIndexColumn(tableId);
   // table.search() with a vector returns VectorQuery | Query union.
   // Casting to VectorQuery to access distanceType().
   let query = (table.search(embedding) as lancedb.VectorQuery)
     .distanceType("cosine")
-    .select(["index"])
+    .select([indexCol])
     .limit(opts.limit ?? 100);
 
   if (opts.where) {
@@ -172,7 +285,7 @@ export async function vectorSearch(
 
   const results = await query.toArray();
   return results.map((r: Record<string, unknown>) => ({
-    index: r.index as number,
+    index: (r[indexCol] ?? r.index) as number,
     _distance: r._distance as number,
   }));
 }

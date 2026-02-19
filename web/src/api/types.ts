@@ -29,6 +29,11 @@ export interface NearestNeighborsResponse {
   searchEmbedding: number[];
 }
 
+export interface KeywordSearchRawResponse {
+  indices: number[];
+  scores: number[];
+}
+
 export interface NodeStatsResponse {
   ls_index: Array<number | null>;
   tweet_id: Array<string | null>;

@@ -53,6 +53,16 @@ export const queryKeys = {
     column ?? null,
     value ?? null,
   ] as const,
+  keywordSearch: (
+    datasetId: NullableScalar,
+    scopeId: NullableScalar,
+    query: NullableScalar
+  ) => [
+    'keywordSearch',
+    datasetId ?? null,
+    scopeId ?? null,
+    query ?? '',
+  ] as const,
   nodeStats: (datasetId: NullableScalar) => ['nodeStats', datasetId ?? null] as const,
   linksMeta: (datasetId: NullableScalar) => ['linksMeta', datasetId ?? null] as const,
   linksByIndices: (

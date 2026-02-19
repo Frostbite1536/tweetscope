@@ -10,7 +10,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import { embedQuery } from "../lib/voyageai.js";
-import { vectorSearch } from "../lib/lancedb.js";
+import { vectorSearch, ftsSearch } from "../lib/lancedb.js";
 import { getScopeMeta } from "./data.js";
 
 /**
@@ -32,6 +32,22 @@ function getModelConfig(scopeMeta?: Record<string, unknown>) {
     model,
     apiKey: process.env.VOYAGE_API_KEY ?? "",
   };
+}
+
+function getScopeTextColumn(scopeMeta?: Record<string, unknown>): string {
+  const direct = scopeMeta?.text_column;
+  if (typeof direct === "string" && direct.trim()) {
+    return direct.trim();
+  }
+
+  const dataset = scopeMeta?.dataset as Record<string, unknown> | undefined;
+  const nested = dataset?.text_column;
+  if (typeof nested === "string" && nested.trim()) {
+    return nested.trim();
+  }
+
+  // Backward-compat fallback for legacy exports.
+  return "text";
 }
 
 const nnQuerySchema = z.object({
@@ -96,4 +112,61 @@ export const searchRoutes = new Hono()
       distances,
       search_embedding: [embedding],
     });
-  });
+  })
+  .get(
+    "/fts",
+    zValidator(
+      "query",
+      z.object({
+        dataset: z.string(),
+        query: z.string().min(1),
+        scope_id: z.string(),
+        limit: z
+          .string()
+          .optional()
+          .transform((v) => (v ? parseInt(v, 10) : 100)),
+      }),
+    ),
+    async (c) => {
+      const { dataset, query, scope_id, limit } = c.req.valid("query");
+      const safeLimit = Number.isInteger(limit) && limit > 0
+        ? Math.min(limit, 1000)
+        : 100;
+
+      const scopeMeta = await getScopeMeta(dataset, scope_id);
+      const tableIdRaw = scopeMeta.lancedb_table_id;
+      if (typeof tableIdRaw !== "string" || !tableIdRaw.trim()) {
+        return c.json(
+          { error: `scope ${scope_id} is missing lancedb_table_id; re-run scope export` },
+          500,
+        );
+      }
+
+      const textColumn = getScopeTextColumn(scopeMeta);
+
+      let results;
+      try {
+        results = await ftsSearch(tableIdRaw, query, {
+          column: textColumn,
+          limit: safeLimit,
+          where: "deleted = false",
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "FTS search failed";
+        const status = message.includes("not ready yet") ? 503 : 500;
+        return c.json({ error: message }, status);
+      }
+
+      const seen = new Set<number>();
+      const indices: number[] = [];
+      const scores: number[] = [];
+      for (const result of results) {
+        if (seen.has(result.index)) continue;
+        seen.add(result.index);
+        indices.push(result.index);
+        scores.push(result._score);
+      }
+
+      return c.json({ indices, scores });
+    },
+  );
