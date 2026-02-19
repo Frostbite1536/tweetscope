@@ -6,7 +6,7 @@ export default function SubClusterPills({ subClusters, activeSubCluster, onSelec
   return (
     <div className={styles.pillBar}>
       <button
-        className={`${styles.pill} ${!activeSubCluster ? styles.active : ''}`}
+        className={`${styles.pill} ${activeSubCluster === null || activeSubCluster === undefined ? styles.active : ''}`}
         onClick={() => onSelect(null)}
       >
         All

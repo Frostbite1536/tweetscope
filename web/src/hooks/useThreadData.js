@@ -14,7 +14,7 @@ import { queryKeys } from '../query/keys';
  * - internalIndices: Set of ls_index values for all internal thread members
  * - loading, error, tweetCount
  */
-export default function useThreadData(datasetId, scopeId, tweetId, currentLsIndex, enabled = false) {
+export default function useThreadData(datasetId, scopeId, tweetId, currentLsIndex, enabled = false, { descLimit } = {}) {
   const [parentChain, setParentChain] = useState([]);
   const [currentTweet, setCurrentTweet] = useState(null);
   const [descendants, setDescendants] = useState([]);
@@ -45,9 +45,10 @@ export default function useThreadData(datasetId, scopeId, tweetId, currentLsInde
     (async () => {
       try {
         // 1. Fetch thread structure from backend
+        const fetchOpts = descLimit != null ? { descLimit } : {};
         const threadData = await appQueryClient.fetchQuery({
-          queryKey: queryKeys.thread(datasetId, tweetId),
-          queryFn: ({ signal }) => graphClient.fetchThread(datasetId, tweetId, { signal }),
+          queryKey: queryKeys.thread(datasetId, tweetId, descLimit),
+          queryFn: ({ signal }) => graphClient.fetchThread(datasetId, tweetId, { signal, ...fetchOpts }),
           staleTime: 60_000,
         });
         if (cancelled || requestId !== requestIdRef.current) return;
@@ -82,7 +83,7 @@ export default function useThreadData(datasetId, scopeId, tweetId, currentLsInde
         }
 
         // 4. Build enriched parent chain (oldest ancestor first — reverse from API which returns newest first)
-        const enrichedParentChain = parent_chain.reverse().map((node, i) => ({
+        const enrichedParentChain = [...parent_chain].reverse().map((node, i) => ({
           tweet_id: node.tweet_id,
           ls_index: node.ls_index ?? null,
           row: node.ls_index != null ? rowMap.get(node.ls_index) : null,
@@ -145,7 +146,7 @@ export default function useThreadData(datasetId, scopeId, tweetId, currentLsInde
     })();
 
     return () => { cancelled = true; };
-  }, [datasetId, scopeId, tweetId, currentLsIndex, enabled]);
+  }, [datasetId, scopeId, tweetId, currentLsIndex, enabled, descLimit]);
 
   return { parentChain, currentTweet, descendants, edges, internalIndices, loading, error, tweetCount };
 }

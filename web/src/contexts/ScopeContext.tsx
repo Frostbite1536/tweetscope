@@ -158,7 +158,7 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
     });
 
     labels.forEach((label) => {
-      if (!label.parent_cluster) return;
+      if (label.parent_cluster === null || label.parent_cluster === undefined) return;
       const parent = labelMap.get(String(label.parent_cluster));
       const child = labelMap.get(String(label.cluster));
       if (parent && child) {
@@ -167,7 +167,7 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
     });
 
     const roots = labels
-      .filter((label) => Number(label.layer ?? 0) === maxLayer || !label.parent_cluster)
+      .filter((label) => Number(label.layer ?? 0) === maxLayer || label.parent_cluster === null || label.parent_cluster === undefined)
       .map((label) => labelMap.get(String(label.cluster)))
       .filter((node): node is ClusterTreeNode => Boolean(node));
 

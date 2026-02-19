@@ -56,7 +56,7 @@ export default function useCarouselData(focusedClusterIndex, enabled = true) {
     scopeRows.forEach((row) => {
       if (row.deleted) return;
       const topLevel = c2tl[row.cluster];
-      if (topLevel && groups[topLevel]) {
+      if (topLevel !== undefined && topLevel !== null && groups[topLevel]) {
         groups[topLevel].push(row);
       }
     });
@@ -208,7 +208,7 @@ export default function useCarouselData(focusedClusterIndex, enabled = true) {
       const index = Number(indexStr);
       if (!col?.rows) { map[index] = []; continue; }
       const activeSubCluster = activeSubClusters[index];
-      if (!activeSubCluster) { map[index] = col.rows; continue; }
+      if (activeSubCluster === null || activeSubCluster === undefined) { map[index] = col.rows; continue; }
       map[index] = col.rows.filter((row) => {
         const info = clusterMap[row.ls_index];
         return info?.cluster === activeSubCluster;
