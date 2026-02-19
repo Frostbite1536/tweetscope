@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
-import TabHeader from './TabHeader';
 import CarouselTOC from './CarouselTOC';
 import FeedColumn from './FeedColumn';
 import ThreadOverlay from './ThreadOverlay';
@@ -161,16 +160,6 @@ function FeedCarousel({
 
   return (
     <div className={styles.wrapper}>
-      <TabHeader
-        clusters={topLevelClusters}
-        scrollX={scrollX}
-        columnWidth={COLUMN_WIDTH + GAP}
-        focusedIndex={focusedClusterIndex}
-        onTabClick={scrollToColumn}
-        initialOffset={initialOffset}
-        tocWidth={TOC_WIDTH + GAP + spacerWidth}
-      />
-
       <div ref={containerRef} className={styles.carousel} onScroll={handleScroll}>
         <CarouselTOC
           topLevelClusters={topLevelClusters}

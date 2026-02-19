@@ -1,9 +1,11 @@
 import { useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { useFilter } from '../../../../contexts/FilterContext';
+import { useScope } from '../../../../contexts/ScopeContext';
 import { groupRowsByThread } from '../../../../lib/groupRowsByThread';
 import TweetCard from './TweetCard';
 import ThreadGroup from './ThreadGroup';
+import StandaloneWithAncestors from './StandaloneWithAncestors';
 import styles from './TweetFeed.module.scss';
 
 TweetFeed.propTypes = {
@@ -29,6 +31,7 @@ function TweetFeed({
   onViewThread,
   onViewQuotes,
 }) {
+  const { scope } = useScope();
   const { dataTableRows, page, setPage, totalPages, loading, rowsLoading } = useFilter();
 
   const handleLoadMore = useCallback(() => {
@@ -85,6 +88,26 @@ function TweetFeed({
             );
           }
           const row = item.row;
+          if (item.hasMissingAncestors) {
+            return (
+              <StandaloneWithAncestors
+                key={row.ls_index}
+                row={row}
+                textColumn={dataset.text_column}
+                dateColumn={dateColumn}
+                clusterMap={clusterMap}
+                nodeStats={nodeStats}
+                distanceMap={distanceMap}
+                onHover={onHover}
+                onClick={onClick}
+                onViewThread={onViewThread}
+                onViewQuotes={onViewQuotes}
+                datasetId={dataset?.id}
+                scopeId={scope?.id}
+                dataset={dataset}
+              />
+            );
+          }
           const clusterInfo = clusterMap[row.ls_index];
           const similarity = distanceMap?.has(row.ls_index)
             ? 1 - distanceMap.get(row.ls_index)
@@ -103,7 +126,6 @@ function TweetFeed({
               nodeStats={nodeStats?.get(row.ls_index)}
               onViewThread={onViewThread}
               onViewQuotes={onViewQuotes}
-              isReplyToMissing={item.hasMissingAncestors}
             />
           );
         })}

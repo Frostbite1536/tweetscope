@@ -16,6 +16,7 @@
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
   gap: 32px;
+  padding-top: var(--space-6);
   padding-left: 32px;
   padding-right: calc((100vw - 550px) / 2);
   scroll-behavior: smooth;

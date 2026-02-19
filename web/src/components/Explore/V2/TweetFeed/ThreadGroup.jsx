@@ -34,6 +34,7 @@ function ThreadGroup({
   onViewQuotes,
   hasMissingAncestors = false,
   missingAncestorCount = 0,
+  borderless = false,
 }) {
   const [expanded, setExpanded] = useState(false);
   const repliesId = useId();
@@ -53,7 +54,7 @@ function ThreadGroup({
   };
 
   return (
-    <div className={styles.threadGroup} role="group" aria-label={`Thread of ${rows.length} tweets`}>
+    <div className={`${styles.threadGroup} ${borderless ? styles.borderless : ''}`} role="group" aria-label={`Thread of ${rows.length} tweets`}>
       {/* Missing ancestors banner */}
       {hasMissingAncestors && (
         <button

@@ -1,10 +1,6 @@
-.column {
+.columnOuter {
   display: flex;
   flex-direction: column;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border-subtle);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
   height: 100%;
   flex-shrink: 0;
   scroll-snap-align: center;
@@ -15,7 +11,6 @@
   &.focused {
     opacity: 1;
     transform: scale(1.05);
-    box-shadow: var(--glass-shadow-hover);
   }
 
   &.adjacent {
@@ -31,10 +26,68 @@
 
 .columnHeader {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2) var(--space-3);
+  flex-shrink: 0;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+
+  .focused & {
+    box-shadow: var(--glass-shadow-hover);
+  }
+}
+
+.columnHeaderTop {
+  display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  padding: var(--space-4) var(--space-4) var(--space-2);
-  flex-shrink: 0;
+}
+
+.descriptionWrap {
+  padding: 0;
+}
+
+.descText {
+  margin: 0;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-color-text-subtle);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+
+  &.expanded {
+    -webkit-line-clamp: unset;
+  }
+}
+
+.moreBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: var(--space-1);
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--interactions---primary-color-interaction-primary);
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .clusterLabel {

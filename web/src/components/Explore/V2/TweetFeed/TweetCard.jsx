@@ -70,6 +70,7 @@ TweetCard.propTypes = {
   onViewThread: PropTypes.func,
   onViewQuotes: PropTypes.func,
   isReplyToMissing: PropTypes.bool,
+  onExpandAncestors: PropTypes.func,
 };
 
 function TweetCard({
@@ -84,6 +85,7 @@ function TweetCard({
   onViewThread,
   onViewQuotes,
   isReplyToMissing = false,
+  onExpandAncestors,
 }) {
   // Hover highlight via context (C5 fix) — only this card rerenders when it
   // becomes highlighted or un-highlighted, instead of all cards in the feed.
@@ -239,12 +241,13 @@ function TweetCard({
       onClick={handleClick}
     >
       {/* Inline "replying to" indicator — slim clickable line inside the card */}
-      {isReplyToMissing && onViewThread && (
+      {isReplyToMissing && (onExpandAncestors || onViewThread) && (
         <button
           className={styles.replyToLine}
           onClick={(e) => {
             e.stopPropagation();
-            handleViewThread();
+            if (onExpandAncestors) onExpandAncestors();
+            else handleViewThread();
           }}
           type="button"
         >

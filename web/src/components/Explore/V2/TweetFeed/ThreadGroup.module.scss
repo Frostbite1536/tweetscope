@@ -11,6 +11,12 @@
   &:hover {
     border-color: var(--borders-color-border-2);
   }
+
+  &.borderless {
+    border: none;
+    border-radius: 0;
+    margin: 0;
+  }
 }
 
 // "N earlier tweets in this thread" banner — shown when thread root is not visible.
