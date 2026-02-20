@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useScope } from '@/contexts/ScopeContext';
 import { queryApi } from '@/lib/apiService';
+import { getLikesCount } from '@/lib/engagement';
 import { appQueryClient } from '@/query/client';
 import { queryKeys } from '@/query/keys';
 
@@ -65,8 +66,8 @@ export default function useCarouselData(focusedClusterIndex, enabled = true) {
     const indicesByTL = {};
     for (const [clusterId, rows] of Object.entries(groups)) {
       rows.sort((a, b) => {
-        const aLikes = Number(a.favorites ?? a.favorite_count ?? a.like_count ?? a.likes ?? 0);
-        const bLikes = Number(b.favorites ?? b.favorite_count ?? b.like_count ?? b.likes ?? 0);
+        const aLikes = getLikesCount(a);
+        const bLikes = getLikesCount(b);
         return bLikes - aLikes;
       });
       indicesByTL[clusterId] = rows.map((r) => r.ls_index);

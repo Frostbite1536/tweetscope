@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, useReducer } from 'react';
 import { useScope } from '@/contexts/ScopeContext';
 import { graphClient, queryApi } from '@/lib/apiService';
+import { getLikesCount, getRetweetsCount } from '@/lib/engagement';
 import { appQueryClient } from '@/query/client';
 import { queryKeys } from '@/query/keys';
 
@@ -121,8 +122,8 @@ export default function useThreadCarouselData(focusedThreadIndex, enabled = true
     const map = new Map();
     for (const row of scopeRows) {
       if (row.deleted) continue;
-      const fav = Number(row.favorites ?? row.favorite_count ?? row.like_count ?? row.likes ?? 0);
-      const rt = Number(row.retweets ?? row.retweet_count ?? 0);
+      const fav = getLikesCount(row);
+      const rt = getRetweetsCount(row);
       map.set(row.ls_index, fav + rt);
     }
     return map;

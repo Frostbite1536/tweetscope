@@ -10,6 +10,11 @@ import { useFilter } from '../../../contexts/FilterContext';
 
 import { Heart, Repeat2 } from 'lucide-react';
 import { mapSelectionKey } from '../../../lib/colors';
+import {
+  getLikesRawValue,
+  getRetweetsRawValue,
+  toMetricNumber,
+} from '../../../lib/engagement.js';
 import { urlResolver } from '../../../lib/urlResolver';
 import styles from './VisualizationPane.module.scss';
 import hoverStyles from './HoverCard.module.scss';
@@ -30,13 +35,6 @@ function getFirstValue(obj, keys) {
   return null;
 }
 
-function toNumber(value) {
-  if (value === undefined || value === null) return 0;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  const num = Number(String(value).replace(/,/g, ''));
-  return Number.isFinite(num) ? num : 0;
-}
-
 function formatDate(dateValue) {
   if (!dateValue) return null;
   try {
@@ -49,7 +47,7 @@ function formatDate(dateValue) {
 }
 
 function formatCount(value) {
-  const num = toNumber(value);
+  const num = toMetricNumber(value);
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
   return String(num);
@@ -253,8 +251,8 @@ const VisualizationPane = forwardRef(function VisualizationPane({
     if (!hovered) return null;
     const record = hovered || {};
     const dateValue = getFirstValue(record, DATE_COLUMN_NAMES);
-    const likesValue = getFirstValue(record, ['favorites', 'favorite_count', 'like_count', 'likes']);
-    const retweetValue = getFirstValue(record, ['retweets', 'retweet_count']);
+    const likesValue = getLikesRawValue(record);
+    const retweetValue = getRetweetsRawValue(record);
 
     const username = record.username || null;
     const tweetId = record.id ? String(record.id) : null;
@@ -288,8 +286,8 @@ const VisualizationPane = forwardRef(function VisualizationPane({
       displayName: record.display_name || null,
       dateLabel: formatDate(dateValue),
       typeLabel,
-      likes: likesValue === null ? null : toNumber(likesValue),
-      retweets: retweetValue === null ? null : toNumber(retweetValue),
+      likes: likesValue === null ? null : toMetricNumber(likesValue),
+      retweets: retweetValue === null ? null : toMetricNumber(retweetValue),
       tweetUrl,
       quotedTweets,
       mediaUrls,
