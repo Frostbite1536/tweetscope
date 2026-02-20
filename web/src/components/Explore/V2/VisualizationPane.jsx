@@ -22,8 +22,10 @@ import ConfigurationPanel from '../ConfigurationPanel';
 import TimelineControls from './TimelineControls';
 import TwitterEmbed from './TweetFeed/TwitterEmbed';
 import { Button } from 'react-element-forge';
+import useHoverCardPlacement from './useHoverCardPlacement';
 
 const DATE_COLUMN_NAMES = ['created_at', 'date', 'timestamp', 'time', 'posted_at', 'published_at'];
+const TIMELINE_EXCLUSION_HEIGHT = 110;
 
 function getFirstValue(obj, keys) {
   if (!obj) return null;
@@ -130,7 +132,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   nodeStats = null,
   onViewThread,
   onViewQuotes,
-  threadHighlightIndices = null,
+  highlightIndices = null,
 }, ref) {
   const { scopeRows, scope, clusterLabels, clusterHierarchy } = useScope();
   const { isDark: isDarkMode } = useColorMode();
@@ -326,35 +328,42 @@ const VisualizationPane = forwardRef(function VisualizationPane({
     });
   }, [hoverCardData]);
 
-  const hoverCardPosition = useMemo(() => {
-    if (!hovered) return null;
-    const cardWidth = 360;
-    const margin = 12;
-    const offset = 14;
-    const visibleWidth = Math.max(320, width - contentPaddingRight);
+  const hoverCardExclusionZones = useMemo(() => {
+    const zones = [];
 
-    const anchorX = Number.isFinite(hoverAnchor?.x) ? hoverAnchor.x : visibleWidth - margin - cardWidth;
-    const anchorY = Number.isFinite(hoverAnchor?.y) ? hoverAnchor.y : 20;
-
-    let left = anchorX + offset;
-    if (left + cardWidth > visibleWidth - margin) {
-      left = anchorX - cardWidth - offset;
+    if (vizConfig.showTimeline && timelineHasDates) {
+      const timelineLeft = 56;
+      const timelineRight = Math.max(timelineLeft + 60, width - contentPaddingRight - 16);
+      zones.push({
+        left: timelineLeft,
+        top: Math.max(0, height - TIMELINE_EXCLUSION_HEIGHT),
+        right: timelineRight,
+        bottom: Math.max(1, height - 8),
+      });
     }
-    left = Math.min(Math.max(left, margin), Math.max(margin, visibleWidth - cardWidth - margin));
 
-    const estimatedHeight = hoverPinned ? 320 : 260;
-    let top = anchorY + offset;
-    if (top + estimatedHeight > height - margin) {
-      top = anchorY - estimatedHeight - offset;
-    }
-    top = Math.min(Math.max(top, margin), Math.max(margin, height - estimatedHeight - margin));
+    // Desktop-only app: keep the bottom-left config button area clear.
+    zones.push({
+      left: 6,
+      top: Math.max(0, height - 64),
+      right: 64,
+      bottom: Math.max(1, height - 4),
+    });
 
-    return {
-      left,
-      top,
-      width: Math.min(cardWidth, visibleWidth - margin * 2),
-    };
-  }, [hovered, hoverAnchor, hoverPinned, width, height, contentPaddingRight]);
+    return zones;
+  }, [vizConfig.showTimeline, timelineHasDates, width, height, contentPaddingRight]);
+
+  const { cardRef: hoverCardRef, position: hoverCardPosition } = useHoverCardPlacement({
+    enabled: Boolean(hovered),
+    anchor: hoverAnchor,
+    viewportWidth: width,
+    viewportHeight: height,
+    contentPaddingRight,
+    exclusionZones: hoverCardExclusionZones,
+    preferredWidth: 360,
+    minWidth: 200,
+    fallbackHeight: hoverPinned ? 320 : 260,
+  });
 
   const handleCopyText = useCallback(() => {
     if (!hoverCardData?.rawText || !navigator?.clipboard?.writeText) return;
@@ -472,7 +481,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
             showReplyEdges={linksAvailable && vizConfig.showReplyEdges}
             showQuoteEdges={linksAvailable && vizConfig.showQuoteEdges}
             edgeWidthScale={vizConfig.edgeWidthScale}
-            highlightIndices={threadHighlightIndices}
+            highlightIndices={highlightIndices}
             maxZoom={maxZoom}
           />
         )}
@@ -501,12 +510,14 @@ const VisualizationPane = forwardRef(function VisualizationPane({
         const allMedia = hoverCardData.mediaUrls.length > 0 ? hoverCardData.mediaUrls : asyncMedia.map((m) => m.media_url);
         return (
           <div
+            ref={hoverCardRef}
             className={`${hoverStyles.hoverCard} ${hoverPinned ? hoverStyles.pinned : ''}`}
             style={{
               position: 'absolute',
               left: hoverCardPosition.left,
               top: hoverCardPosition.top,
               width: hoverCardPosition.width,
+              transformOrigin: hoverCardPosition.transformOrigin,
               zIndex: 350,
             }}
             onMouseEnter={onHoverCardMouseEnter}
