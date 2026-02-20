@@ -105,6 +105,7 @@ function StandaloneWithAncestors({
                 dataset={dataset}
                 clusterMap={clusterMap}
                 nodeStats={nodeStats}
+                onClick={onClick}
                 onViewThread={onViewThread}
                 onViewQuotes={onViewQuotes}
               />

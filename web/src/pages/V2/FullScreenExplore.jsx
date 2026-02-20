@@ -27,6 +27,9 @@ import useNodeStats from '../../hooks/useNodeStats';
 import { filterConstants } from '../../components/Explore/V2/Search/utils';
 
 const EDGE_FETCH_MAX = 2500;
+const SIDEBAR_CARD_FOCUS_MIN_ZOOM = 8.75;
+const SIDEBAR_CARD_FOCUS_MAX_ZOOM = 13.5;
+const SIDEBAR_CARD_FOCUS_ZOOM_STEP = 1.1;
 
 const HOVER_METADATA_COLUMNS = [
   'id',
@@ -364,10 +367,16 @@ function ExploreContent() {
 
   // Add a ref to track the latest requested index
   const latestHoverIndexRef = useRef(null);
+  const latestHoverAnchorIndexRef = useRef(null);
   const hoverRecordCacheRef = useRef(new Map());
   const latestLinksRequestRef = useRef(0);
   const hoverDismissTimerRef = useRef(null);
   const hoverCardHoveredRef = useRef(false);
+  const hoverFocusViewportRef = useRef({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    paddingRight: 0,
+  });
 
   const hoverColumns = useMemo(() => {
     return Array.from(new Set([scope?.dataset?.text_column, ...HOVER_METADATA_COLUMNS].filter(Boolean)));
@@ -416,6 +425,7 @@ function ExploreContent() {
   useEffect(() => {
     hoverRecordCacheRef.current.clear();
     latestHoverIndexRef.current = null;
+    latestHoverAnchorIndexRef.current = null;
   }, [scope?.id]);
 
   // Cleanup dismiss timer on unmount
@@ -486,6 +496,7 @@ function ExploreContent() {
       debouncedHydrateHoverRecord.cancel?.();
       setHovered(null);
       latestHoverIndexRef.current = null;
+      latestHoverAnchorIndexRef.current = null;
     }
   }, [sidebarMode, hoveredIndex, deletedIndices, clusterMap, debouncedHydrateHoverRecord, scope]);
 
@@ -517,6 +528,25 @@ function ExploreContent() {
     }
     return [];
   }, [pinnedIndex, hoveredIndex, deletedIndices]);
+
+  const graphHighlightIndices = useMemo(() => {
+    const indices = new Set();
+
+    if (pinnedIndex !== null && pinnedIndex !== undefined && !deletedIndices.has(pinnedIndex)) {
+      indices.add(pinnedIndex);
+    }
+
+    if (sidebarMode === SIDEBAR_MODES.THREAD && threadHighlightIndices instanceof Set) {
+      for (const idx of threadHighlightIndices) {
+        const normalized = Number(idx);
+        if (Number.isInteger(normalized) && !deletedIndices.has(normalized)) {
+          indices.add(normalized);
+        }
+      }
+    }
+
+    return indices.size > 0 ? indices : null;
+  }, [pinnedIndex, deletedIndices, sidebarMode, threadHighlightIndices]);
 
   const fetchLinksEdges = useCallback(
     (indices) => {
@@ -585,7 +615,66 @@ function ExploreContent() {
   }, [sidebarMode, linksAvailable, edgeQueryIndices, debouncedFetchLinksEdges]);
 
   // Handlers for responding to individual data points
-  const handleClicked = useCallback(() => {}, []);
+  const handleClicked = useCallback((lsIndex) => {
+    const idx = Number(lsIndex);
+    if (!Number.isInteger(idx) || deletedIndices.has(idx)) return;
+
+    const row = scopeRowByLsIndex.get(idx) || scopeRowByLsIndex.get(String(idx));
+    if (!row) return;
+
+    const clusterInfo = clusterMap[idx] || clusterMap[String(idx)] || null;
+    const textColumn = dataset?.text_column;
+
+    // Keep hover/pin state in sync so the graph card and edge overlays track the selected tweet.
+    const metrics = hoverFocusViewportRef.current || {};
+    const viewportWidth =
+      Number.isFinite(metrics.width) && metrics.width > 0 ? metrics.width : window.innerWidth;
+    const viewportHeight =
+      Number.isFinite(metrics.height) && metrics.height > 0 ? metrics.height : window.innerHeight;
+    const paddingRight =
+      Number.isFinite(metrics.paddingRight) && metrics.paddingRight > 0 ? metrics.paddingRight : 0;
+    const visibleWidth = Math.max(320, viewportWidth - paddingRight);
+
+    setPinnedIndex(idx);
+    setHoveredIndex(idx);
+    setHoveredCluster(clusterInfo);
+    setHoverAnchor({
+      x: visibleWidth / 2,
+      y: viewportHeight / 2,
+    });
+    latestHoverAnchorIndexRef.current = idx;
+    setHovered({
+      ...(row || {}),
+      text: textColumn ? row?.[textColumn] : '',
+      index: idx,
+      cluster: clusterInfo,
+    });
+    latestHoverIndexRef.current = idx;
+
+    const x = Number(row.x);
+    const y = Number(row.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+    const viewState = vizRef.current?.getViewState?.();
+    const currentZoom = Number(viewState?.zoom);
+    const zoom = Number.isFinite(currentZoom)
+      ? Math.min(
+        SIDEBAR_CARD_FOCUS_MAX_ZOOM,
+        Math.max(currentZoom + SIDEBAR_CARD_FOCUS_ZOOM_STEP, SIDEBAR_CARD_FOCUS_MIN_ZOOM)
+      )
+      : SIDEBAR_CARD_FOCUS_MIN_ZOOM;
+    const scale = Math.pow(2, zoom);
+    const targetOffsetX = paddingRight > 0 ? paddingRight / (2 * scale) : 0;
+
+    vizRef.current?.setViewState?.(
+      {
+        ...(viewState || {}),
+        target: [x + targetOffsetX, y, 0],
+        zoom,
+      },
+      420
+    );
+  }, [deletedIndices, scopeRowByLsIndex, clusterMap, dataset]);
 
   // Thread view handlers
   const handleViewThread = useCallback((lsIndex) => {
@@ -658,7 +747,15 @@ function ExploreContent() {
     setHoveredCluster(null);
     setHovered(null);
     latestHoverIndexRef.current = null;
+    latestHoverAnchorIndexRef.current = null;
   }, []);
+
+  const dismissThreadContext = useCallback(() => {
+    // Map interactions (empty-click or cluster navigation) should leave tweet-specific views.
+    if (sidebarMode === SIDEBAR_MODES.THREAD || sidebarMode === SIDEBAR_MODES.QUOTES) {
+      closeThread();
+    }
+  }, [sidebarMode, closeThread]);
 
   const handleHover = useCallback(
     (payload) => {
@@ -681,7 +778,11 @@ function ExploreContent() {
           hoverDismissTimerRef.current = null;
         }
         if (hasPointCoords) {
-          setHoverAnchor({ x: payload.x, y: payload.y });
+          // Keep the anchor stable while staying on the same point to avoid card jitter.
+          if (latestHoverAnchorIndexRef.current !== nonDeletedIndex) {
+            setHoverAnchor({ x: payload.x, y: payload.y });
+            latestHoverAnchorIndexRef.current = nonDeletedIndex;
+          }
         }
         setHoveredIndex((prev) => (prev === nonDeletedIndex ? prev : nonDeletedIndex));
         const nextCluster = nonDeletedIndex >= 0 ? clusterMap[nonDeletedIndex] : null;
@@ -732,6 +833,9 @@ function ExploreContent() {
     (indices) => {
       const idx = indices?.[0];
       if (idx === null || idx === undefined || deletedIndices.has(idx)) {
+        // Clicking empty map space should clear any pinned tweet focus.
+        setPinnedIndex(null);
+        dismissThreadContext();
         clearHoverState();
 
         if (filterSlots.cluster) {
@@ -739,18 +843,17 @@ function ExploreContent() {
         }
         return;
       }
+      // Map point click should pin/focus the hover card and open thread mode.
+      handleClicked(idx);
 
-      // Open the tweet in the sidebar thread view
       const graphViewState = vizRef.current?.getViewState?.();
-
-      // Fast path: tweetIdMap has the entry (links graph built + tweet has connections)
       const tid = tweetIdMap?.get(idx);
       if (tid) {
         openThread(idx, tid, graphViewState);
         return;
       }
 
-      // Fallback: fetch the row to get its tweet id
+      // Fallback: fetch row data when tweetIdMap is missing this index.
       if (datasetId && scope?.id) {
         appQueryClient
           .fetchQuery({
@@ -767,11 +870,22 @@ function ExploreContent() {
             }
           })
           .catch(() => {
-            // Silently fail — point stays unhighlighted
+            // Silently fail thread open; node remains pinned/focused.
           });
       }
     },
-    [deletedIndices, clearHoverState, filterSlots.cluster, clearFilter, tweetIdMap, openThread, datasetId, scope?.id]
+    [
+      deletedIndices,
+      dismissThreadContext,
+      clearHoverState,
+      filterSlots.cluster,
+      clearFilter,
+      handleClicked,
+      tweetIdMap,
+      openThread,
+      datasetId,
+      scope?.id,
+    ]
   );
 
   const handleUnpinHover = useCallback(() => {
@@ -781,6 +895,7 @@ function ExploreContent() {
     setHoveredCluster(null);
     setHoverAnchor(null);
     latestHoverIndexRef.current = null;
+    latestHoverAnchorIndexRef.current = null;
   }, []);
 
   const handleFilterToCluster = useCallback(
@@ -800,6 +915,10 @@ function ExploreContent() {
       // Find matching cluster from clusterLabels to get hull
       const clusterObj = clusterLabels?.find(c => c.cluster === clusterIndex);
       if (!clusterObj) return;
+
+      setPinnedIndex(null);
+      clearHoverState();
+      dismissThreadContext();
 
       // Filter sidebar to this cluster
       handleFilterToCluster({ cluster: clusterIndex, label });
@@ -823,7 +942,7 @@ function ExploreContent() {
         }
       }
     },
-    [clusterLabels, scopeRows, handleFilterToCluster]
+    [clusterLabels, scopeRows, clearHoverState, dismissThreadContext, handleFilterToCluster]
   );
 
   const handleScopeChange = useCallback(
@@ -917,6 +1036,14 @@ function ExploreContent() {
   const mapViewportPaddingRight = isDesktopOverlay ? clampedSidebarWidth + 24 : 0;
   const visualizationViewportWidth = Math.max(320, width - mapViewportPaddingRight);
 
+  useEffect(() => {
+    hoverFocusViewportRef.current = {
+      width,
+      height,
+      paddingRight: mapViewportPaddingRight,
+    };
+  }, [width, height, mapViewportPaddingRight]);
+
   const startDragging = (e) => {
     if (sidebarMode === SIDEBAR_MODES.EXPANDED || sidebarMode === SIDEBAR_MODES.COLLAPSED) return;
     e.preventDefault();
@@ -954,6 +1081,7 @@ function ExploreContent() {
     setPinnedIndex(null);
     setHoverAnnotations([]);
     latestHoverIndexRef.current = null;
+    latestHoverAnchorIndexRef.current = null;
   }, [sidebarMode]);
 
   // ====================================================================================================
@@ -1166,7 +1294,7 @@ function ExploreContent() {
                 nodeStats={nodeStats}
                 onViewThread={handleViewThread}
                 onViewQuotes={handleViewQuotes}
-                threadHighlightIndices={isThread ? threadHighlightIndices : null}
+                highlightIndices={graphHighlightIndices}
               />
             ) : null}
 
@@ -1264,6 +1392,7 @@ function ExploreContent() {
                   onBack={handleCloseThread}
                   onViewThread={handleViewThread}
                   onViewQuotes={handleViewQuotes}
+                  onClickTweet={handleClicked}
                   onThreadDataChange={handleThreadDataChange}
                 />
               )}
@@ -1280,6 +1409,7 @@ function ExploreContent() {
                   onBack={handleCloseThread}
                   onViewThread={handleViewThread}
                   onViewQuotes={handleViewQuotes}
+                  onClickTweet={handleClicked}
                 />
               )}
 

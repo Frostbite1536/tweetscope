@@ -19,6 +19,7 @@ function ThreadNode({
   nodeStats,
   onViewThread,
   onViewQuotes,
+  onClick,
 }) {
   const hasRow = node.row != null;
   const tweetId = node.tweet_id;
@@ -43,6 +44,7 @@ function ThreadNode({
             textColumn={dataset?.text_column}
             clusterInfo={clusterMap?.[lsIndex]}
             nodeStats={nodeStats?.get(lsIndex)}
+            onClick={onClick}
             onViewThread={onViewThread && lsIndex != null ? () => onViewThread(lsIndex) : undefined}
             onViewQuotes={onViewQuotes && lsIndex != null ? () => onViewQuotes(lsIndex) : undefined}
           />

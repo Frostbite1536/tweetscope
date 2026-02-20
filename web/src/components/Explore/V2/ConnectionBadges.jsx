@@ -1,14 +1,15 @@
 import { memo } from 'react';
-import { CornerDownRight, MessageSquare, GitBranch, Quote } from 'lucide-react';
+import { CornerDownRight, MessageSquare, Quote } from 'lucide-react';
 import styles from './ConnectionBadges.module.scss';
 
 function ConnectionBadges({ stats, onViewThread, onViewQuotes, compact = false }) {
   if (!stats) return null;
 
   const badges = [];
+  const hasDirectReplies = Number(stats.replyChildCount) > 0;
 
-  // Priority 1: Reply indicator (this tweet replies to something)
-  if (stats.threadDepth > 0 || stats.replyOutCount > 0) {
+  // Priority 1: Reply indicator (other tweets reply to this tweet)
+  if (hasDirectReplies) {
     badges.push({
       key: 'reply',
       type: 'thread',
@@ -29,31 +30,7 @@ function ConnectionBadges({ stats, onViewThread, onViewQuotes, compact = false }
     });
   }
 
-  // Priority 3: Has direct replies in dataset
-  if (stats.replyChildCount > 0 && stats.threadDepth > 0) {
-    // Already showing "Reply" badge — combine into thread size if available
-    if (stats.threadSize > 2) {
-      // Thread badge already shown — skip
-    } else {
-      badges.push({
-        key: 'replies',
-        type: 'thread',
-        icon: GitBranch,
-        label: `${stats.replyChildCount} ${stats.replyChildCount === 1 ? 'reply' : 'replies'}`,
-        action: onViewThread,
-      });
-    }
-  } else if (stats.replyChildCount > 0) {
-    badges.push({
-      key: 'replies',
-      type: 'thread',
-      icon: GitBranch,
-      label: `${stats.replyChildCount} ${stats.replyChildCount === 1 ? 'reply' : 'replies'}`,
-      action: onViewThread,
-    });
-  }
-
-  // Priority 4: Quoted by others
+  // Priority 3: Quoted by others
   if (stats.quoteInCount > 0) {
     badges.push({
       key: 'quoted',

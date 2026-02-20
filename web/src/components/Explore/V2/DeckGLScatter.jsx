@@ -443,8 +443,20 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
 
   const highlightIndexSet = useMemo(() => {
     if (!highlightIndices) return new Set();
-    if (highlightIndices instanceof Set) return highlightIndices;
-    return new Set(Array.isArray(highlightIndices) ? highlightIndices : []);
+
+    const rawValues = highlightIndices instanceof Set
+      ? Array.from(highlightIndices)
+      : (Array.isArray(highlightIndices) ? highlightIndices : []);
+
+    const normalized = new Set();
+    for (const value of rawValues) {
+      if (value === null || value === undefined) continue;
+      normalized.add(value);
+      normalized.add(String(value));
+      const numeric = Number(value);
+      if (Number.isInteger(numeric)) normalized.add(numeric);
+    }
+    return normalized;
   }, [highlightIndices]);
 
   const lsIndexPositionMap = useMemo(() => {
@@ -1304,13 +1316,30 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     }),
   ], []);
 
-  // Handle view state change - update controlled state and call onView
-  const handleViewStateChangeWithControl = useCallback(({ viewState: newViewState }) => {
-    // Update controlled view state if we had a programmatic change
+  // Handle view state change - keep programmatic transitions alive until they finish,
+  // then release back to user-controlled interaction.
+  const handleViewStateChangeWithControl = useCallback(({ viewState: newViewState, interactionState }) => {
     if (controlledViewState) {
-      setControlledViewState(null);
+      const isUserInteracting = Boolean(
+        interactionState?.isDragging ||
+        interactionState?.isPanning ||
+        interactionState?.isZooming ||
+        interactionState?.isRotating
+      );
+      const inTransition = Boolean(interactionState?.inTransition);
+
+      if (isUserInteracting) {
+        // User took over during a programmatic motion.
+        setControlledViewState(null);
+      } else if (inTransition) {
+        // Keep feeding the interpolated frame back while transition runs.
+        setControlledViewState(newViewState);
+      } else {
+        // Transition completed (or immediate setViewState with no transition).
+        setControlledViewState(null);
+      }
     }
-    // Call the original handler
+
     handleViewStateChange({ viewState: newViewState });
   }, [controlledViewState, handleViewStateChange]);
 

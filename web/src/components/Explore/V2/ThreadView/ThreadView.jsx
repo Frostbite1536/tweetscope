@@ -99,6 +99,7 @@ export default function ThreadView({
   onBack,
   onViewThread,
   onViewQuotes,
+  onClickTweet,
   showHeader = true,
   onThreadDataChange,
 }) {
@@ -184,6 +185,7 @@ export default function ThreadView({
                     nodeStats={nodeStats}
                     onViewThread={onViewThread}
                     onViewQuotes={onViewQuotes}
+                    onClick={onClickTweet}
                   />
                 ))}
               </div>
@@ -200,6 +202,7 @@ export default function ThreadView({
                   nodeStats={nodeStats}
                   onViewThread={onViewThread}
                   onViewQuotes={onViewQuotes}
+                  onClick={onClickTweet}
                 />
               </div>
             )}
@@ -216,6 +219,7 @@ export default function ThreadView({
                     nodeStats={nodeStats}
                     onViewThread={onViewThread}
                     onViewQuotes={onViewQuotes}
+                    onClick={onClickTweet}
                   />
                 ))}
               </div>

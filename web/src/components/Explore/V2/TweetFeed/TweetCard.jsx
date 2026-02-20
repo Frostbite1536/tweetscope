@@ -89,7 +89,7 @@ function TweetCard({
   // Hover highlight via context (C5 fix) — only this card rerenders when it
   // becomes highlighted or un-highlighted, instead of all cards in the feed.
   const hoveredIndex = useHoveredIndex();
-  const isHighlighted = hoveredIndex === row.ls_index;
+  const isHighlighted = String(hoveredIndex) === String(row.ls_index);
 
   // Stable callbacks for thread/quote actions (H1 fix) — prevents inline
   // closures from busting React.memo on every parent render.

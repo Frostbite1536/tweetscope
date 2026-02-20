@@ -20,6 +20,7 @@ export default function QuoteView({
   onBack,
   onViewThread,
   onViewQuotes,
+  onClickTweet,
 }) {
   const [incoming, setIncoming] = useState([]);
   const [outgoing, setOutgoing] = useState([]);
@@ -150,6 +151,7 @@ export default function QuoteView({
                     nodeStats={nodeStats}
                     onViewThread={onViewThread}
                     onViewQuotes={onViewQuotes}
+                    onClick={onClickTweet}
                   />
                 ))}
               </div>
@@ -172,6 +174,7 @@ export default function QuoteView({
                     nodeStats={nodeStats}
                     onViewThread={onViewThread}
                     onViewQuotes={onViewQuotes}
+                    onClick={onClickTweet}
                   />
                 ))}
               </div>
