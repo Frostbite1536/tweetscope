@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { Heart, Repeat2, ExternalLink, Twitter, CornerLeftUp } from 'lucide-react';
-import { getClusterColorCSS, getClusterColorRGBA } from '../DeckGLScatter';
 import { useColorMode } from '../../../../hooks/useColorMode';
+import { useClusterColors, resolveClusterColorCSS, resolveClusterColorRGBA } from '@/hooks/useClusterColors';
+import { useScope } from '../../../../contexts/ScopeContext';
 import { useHoveredIndex } from '../../../../contexts/HoverContext';
 import { urlResolver } from '../../../../lib/urlResolver';
 import TwitterEmbed from './TwitterEmbed';
@@ -63,7 +64,6 @@ TweetCard.propTypes = {
   textColumn: PropTypes.string.isRequired,
   dateColumn: PropTypes.string,
   clusterInfo: PropTypes.object,
-  similarity: PropTypes.number,
   onHover: PropTypes.func,
   onClick: PropTypes.func,
   nodeStats: PropTypes.object,
@@ -78,7 +78,6 @@ function TweetCard({
   textColumn,
   dateColumn,
   clusterInfo,
-  similarity,
   onHover,
   onClick,
   nodeStats,
@@ -110,6 +109,8 @@ function TweetCard({
   const cardRef = useRef(null);
   const isMountedRef = useRef(true);
   const { colorMode, isDark: isDarkMode } = useColorMode();
+  const { clusterLabels, clusterHierarchy } = useScope();
+  const { colorMap } = useClusterColors(clusterLabels, clusterHierarchy);
 
   // Track mount state
   useEffect(() => {
@@ -170,12 +171,12 @@ function TweetCard({
   }, [isVisible, hasResolved, tcoLinks]);
   const clusterNumber = clusterInfo?.cluster ?? 0;
   const clusterLabel = clusterInfo?.label || `Cluster ${clusterNumber}`;
-  const avatarColor = getClusterColorCSS(clusterNumber, isDarkMode);
+  const avatarColor = resolveClusterColorCSS(colorMap, clusterNumber, isDarkMode);
 
   // Cluster-aware highlight: use the cluster's own color for the highlight tint
   const highlightStyle = useMemo(() => {
     if (!isHighlighted) return undefined;
-    const rgba = getClusterColorRGBA(clusterNumber, isDarkMode);
+    const rgba = resolveClusterColorRGBA(colorMap, clusterNumber, isDarkMode);
     return {
       '--highlight-bg': `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${isDarkMode ? 0.06 : 0.08})`,
     };
@@ -398,13 +399,6 @@ function TweetCard({
               </>
             )}
 
-            {/* Similarity badge */}
-            {similarity !== undefined && (
-              <div className={styles.similarityBadge}>
-                <span className={styles.similarityIcon}>~</span>
-                <span>{(similarity * 100).toFixed(1)}%</span>
-              </div>
-            )}
           </div>
         </div>
       </div>

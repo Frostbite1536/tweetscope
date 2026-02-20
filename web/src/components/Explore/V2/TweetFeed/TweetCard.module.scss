@@ -307,22 +307,3 @@
     background: rgba(29, 155, 240, 0.18);
   }
 }
-
-.similarityBadge {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-family: 'Instrument Sans', system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-color-text-subtle);
-  background: var(--glass-bg);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-full);
-}
-
-.similarityIcon {
-  font-size: 10px;
-  font-weight: 600;
-}
-

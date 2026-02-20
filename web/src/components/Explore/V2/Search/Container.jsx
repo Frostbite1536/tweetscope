@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Search, X, Type, Sparkles } from 'lucide-react';
 
 import SearchResults from './SearchResults';
 import { useScope } from '../../../../contexts/ScopeContext';
 import styles from './Container.module.scss';
 import { useFilter, FILTER_SLOT } from '../../../../contexts/FilterContext';
-import { filterConstants } from './utils';
+import { filterConstants, isSameClusterValue } from './utils';
 import { useColorMode } from '../../../../hooks/useColorMode';
-import { getClusterColorCSS } from '../DeckGLScatter';
+import { useClusterColors, resolveClusterColorCSS } from '@/hooks/useClusterColors';
 
 const SEARCH_MODES = {
   KEYWORD: 'keyword',
@@ -14,7 +15,7 @@ const SEARCH_MODES = {
 };
 
 // ---------------------------------------------------------------------------
-// FilterChips — renders active filter slots as removable chips
+// FilterChips — renders active filter slots as removable inline chips
 // ---------------------------------------------------------------------------
 
 const CHIP_META = {
@@ -27,12 +28,14 @@ const CHIP_META = {
 
 const FilterChips = ({ filterSlots, onClearSlot, onClearAll }) => {
   const { isDark: isDarkMode } = useColorMode();
+  const { clusterLabels, clusterHierarchy } = useScope();
+  const { colorMap } = useClusterColors(clusterLabels, clusterHierarchy);
 
   const chips = [];
 
   if (filterSlots.cluster) {
     const clusterId = filterSlots.cluster.value;
-    const clusterColor = getClusterColorCSS(clusterId, isDarkMode);
+    const clusterColor = resolveClusterColorCSS(colorMap, clusterId, isDarkMode);
     chips.push({
       key: FILTER_SLOT.CLUSTER,
       label: filterSlots.cluster.label,
@@ -96,7 +99,7 @@ const FilterChips = ({ filterSlots, onClearSlot, onClearAll }) => {
             onClick={() => onClearSlot(chip.key)}
             aria-label={`Remove ${chip.label} filter`}
           >
-            ×
+            <X size={9} />
           </button>
         </span>
       ))}
@@ -151,11 +154,11 @@ const Container = () => {
   // ==== DROPDOWN STATE ====
 
   const [dropdownIsOpen, setDropdownIsOpen] = useState(false);
-  const selectRef = useRef(null);
+  const containerRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (selectRef.current && !selectRef.current.contains(event.target)) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
         setDropdownIsOpen(false);
       }
     };
@@ -167,10 +170,11 @@ const Container = () => {
     setDropdownIsOpen(false);
     const { type, value, column, label } = selection;
     if (type === filterConstants.CLUSTER) {
-      const clusterId = Number(value);
-      if (!Number.isFinite(clusterId)) return;
-      const clusterObj = clusterLabels?.find(c => c.cluster === clusterId)
-        || { cluster: clusterId, label: label || String(clusterId) };
+      const clusterObj = clusterLabels?.find((c) => isSameClusterValue(c.cluster, value))
+        || {
+          cluster: Number.isFinite(Number(value)) ? Number(value) : value,
+          label: label || String(value),
+        };
       applyCluster(clusterObj);
     } else if (type === filterConstants.KEYWORD_SEARCH) {
       applyKeywordSearch(value);
@@ -191,7 +195,6 @@ const Container = () => {
   }, [filterQuery, searchMode, handleSelect]);
 
   const handleClearSlot = useCallback((slotKey) => {
-    // Map slot key to the filterConstants type for clearFilter
     const slotToType = {
       [FILTER_SLOT.CLUSTER]: filterConstants.CLUSTER,
       [FILTER_SLOT.SEARCH]: filterConstants.SEARCH,
@@ -201,21 +204,19 @@ const Container = () => {
     clearFilter(slotToType[slotKey]);
   }, [clearFilter]);
 
-  const toggleSearchMode = () => {
-    setSearchMode((prev) =>
-      prev === SEARCH_MODES.KEYWORD ? SEARCH_MODES.SEMANTIC : SEARCH_MODES.KEYWORD
-    );
-  };
+  const menuIsOpen = dropdownIsOpen || (isInputFocused && filterQuery === '');
 
   return (
-    <div className={styles.searchContainer}>
-      <FilterChips
-        filterSlots={filterSlots}
-        onClearSlot={handleClearSlot}
-        onClearAll={clearAllFilters}
-      />
-      <div className={styles.searchBarContainer}>
+    <div className={styles.searchContainer} ref={containerRef}>
+      {/* Search row: icon + chips + input + mode pill */}
+      <div className={styles.searchBarRow}>
+        <Search size={15} className={styles.searchIcon} />
         <div className={styles.inputWrapper}>
+          <FilterChips
+            filterSlots={filterSlots}
+            onClearSlot={handleClearSlot}
+            onClearAll={clearAllFilters}
+          />
           <input
             className={styles.searchInput}
             type="text"
@@ -230,76 +231,74 @@ const Container = () => {
             onFocus={handleInputFocus}
             onBlur={handleInputBlur}
           />
+        </div>
+        {/* Inner pill toggle */}
+        <div className={styles.modePill}>
           <button
-            className={`${styles.modeToggle} ${searchMode === SEARCH_MODES.SEMANTIC ? styles.modeToggleSemantic : ''}`}
-            onClick={toggleSearchMode}
-            title={searchMode === SEARCH_MODES.KEYWORD
-              ? 'Keyword search (BM25) — click to switch to Semantic'
-              : 'Semantic search (AI) — click to switch to Keyword'}
+            className={`${styles.modeButton} ${searchMode === SEARCH_MODES.KEYWORD ? styles.modeButtonActive : ''}`}
+            onClick={() => setSearchMode(SEARCH_MODES.KEYWORD)}
             type="button"
           >
-            {searchMode === SEARCH_MODES.KEYWORD ? 'Keyword' : 'Semantic'}
+            <Type size={11} className={styles.modeIcon} />
+            Keyword
+          </button>
+          <button
+            className={`${styles.modeButton} ${searchMode === SEARCH_MODES.SEMANTIC ? styles.modeButtonActiveSemantic : ''}`}
+            onClick={() => setSearchMode(SEARCH_MODES.SEMANTIC)}
+            type="button"
+          >
+            <Sparkles size={11} className={styles.modeIcon} />
+            Semantic
           </button>
         </div>
-
-        <div className={styles.searchResults} ref={selectRef}>
-          <div className={styles.searchResultsHeader}>
-            <SearchResults
-              query={filterQuery}
-              onSelect={handleSelect}
-              menuIsOpen={dropdownIsOpen || (isInputFocused && filterQuery === '')}
-              searchMode={searchMode}
-            />
-          </div>
-        </div>
       </div>
+
+      {/* Dropdown results */}
+      {menuIsOpen && (
+        <div className={styles.searchResultsDropdown}>
+          <SearchResults
+            query={filterQuery}
+            onSelect={handleSelect}
+            menuIsOpen={menuIsOpen}
+            searchMode={searchMode}
+          />
+        </div>
+      )}
+
+      {/* Simplified metadata */}
       <SearchResultsMetadata filterSlots={filterSlots} />
     </div>
   );
 };
 
+// ---------------------------------------------------------------------------
+// SearchResultsMetadata — simplified count display
+// ---------------------------------------------------------------------------
+
 const SearchResultsMetadata = ({ filterSlots }) => {
-  const { shownIndices, filteredIndices, filterActive } = useFilter();
+  const { filteredIndices, filterActive } = useFilter();
 
-  if (!filterActive) {
-    return (
-      <div className={styles.searchResultsMetadata}>
-        <div className={styles.searchResultsMetadataItem}>
-          <span className={styles.searchResultsMetadataLabel}>
-            Showing first {shownIndices.length} rows
-          </span>
-        </div>
-        <div className={styles.searchResultsMetadataItem}>
-          <span className={styles.searchResultsMetadataValue}>
-            {filteredIndices.length} total
-          </span>
-        </div>
-      </div>
-    );
-  }
+  const label = filterActive
+    ? (() => {
+        const parts = [];
+        if (filterSlots.cluster) parts.push(filterSlots.cluster.label);
+        if (filterSlots.search) parts.push(filterSlots.search.label);
+        if (filterSlots.column) parts.push(filterSlots.column.label);
+        if (filterSlots.timeRange) parts.push(filterSlots.timeRange.label || 'Time range');
+        return parts.join(' + ');
+      })()
+    : null;
 
-  // Build a summary of all active filter labels
-  const activeLabels = [];
-  if (filterSlots.cluster) activeLabels.push(`Cluster: ${filterSlots.cluster.label}`);
-  if (filterSlots.search) {
-    const prefix = filterSlots.search.mode === 'keyword' ? 'Keyword' : 'Semantic';
-    activeLabels.push(`${prefix}: ${filterSlots.search.label}`);
-  }
-  if (filterSlots.column) activeLabels.push(`Column: ${filterSlots.column.label}`);
-  if (filterSlots.timeRange) activeLabels.push(filterSlots.timeRange.label || 'Time range');
-
-  const totalResults = filteredIndices.length;
+  const count = filteredIndices.length;
 
   return (
-    <div className={styles.searchResultsMetadata}>
-      <div className={styles.searchResultsMetadataItem}>
-        <span className={styles.searchResultsMetadataLabel}>
-          {activeLabels.join(' + ')}
-        </span>
-      </div>
-      <div className={styles.searchResultsMetadataItem}>
-        <span className={styles.searchResultsMetadataValue}>{totalResults} rows</span>
-      </div>
+    <div className={styles.metadataRow}>
+      {label && (
+        <span className={styles.metadataLabel} title={label}>{label}</span>
+      )}
+      <span className={styles.metadataCount}>
+        {count} {filterActive ? 'results' : 'total'}
+      </span>
     </div>
   );
 };

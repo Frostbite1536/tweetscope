@@ -1,0 +1,84 @@
+.wrapper {
+  position: relative;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+// Mirrors TweetCard's .replyToLine — same font, size, opacity, hover.
+// Padding matches TweetCard's internal padding so it aligns with the default state.
+.collapseLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-5) var(--space-5) 0;
+  margin: 0 0 var(--space-1) 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-color-text-subtle);
+  opacity: 0.6;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+  text-align: left;
+
+  &:hover {
+    opacity: 1;
+    color: var(--semantic-color-semantic-info);
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+.ancestorSection {
+  position: relative;
+  padding: 0 var(--space-5);
+}
+
+.ancestorList {
+  position: relative;
+}
+
+// Connector from bottom of ancestor section down to the tweet card's avatar center.
+// Avatar center: TweetCard padding-top(16px) + half avatar(20px) = 36px.
+.tweetWrap {
+  position: relative;
+}
+
+.connectorToTweet {
+  position: absolute;
+  left: 40px; // TweetCard padding-left(20px) + half-avatar(20px)
+  top: 0;
+  height: 36px;
+  width: 2px;
+  background: color-mix(in srgb, var(--semantic-color-semantic-info) 18%, transparent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.loadingState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  color: var(--text-color-text-subtle);
+  font-size: 12px;
+}
+
+.spinIcon {
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.errorState {
+  padding: var(--space-3) var(--space-4);
+  font-size: 12px;
+  color: var(--text-color-text-subtle);
+}

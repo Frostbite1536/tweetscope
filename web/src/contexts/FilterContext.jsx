@@ -11,12 +11,14 @@ import { queryKeys } from '../query/keys';
 
 import {
   filterConstants,
+  isSameClusterValue,
   validateColumnAndValue,
 } from '../components/Explore/V2/Search/utils';
 
 const FilterContext = createContext(null);
 const ROWS_PER_PAGE = 20;
 const FILTER_URL_KEYS = ['cluster', 'search', 'keyword', 'column', 'value', 'feature'];
+const HYDRATED_URL_KEYS = ['cluster', 'search', 'keyword', 'column', 'value'];
 
 function uniqueOrderedIndices(values) {
   const seen = new Set();
@@ -29,6 +31,16 @@ function uniqueOrderedIndices(values) {
     out.push(n);
   }
   return out;
+}
+
+function buildUrlFilterSignature(params) {
+  const parts = [];
+  for (const key of HYDRATED_URL_KEYS) {
+    const value = params.get(key);
+    if (value === null) continue;
+    parts.push(`${key}:${value}`);
+  }
+  return parts.join('|') || 'none';
 }
 
 
@@ -191,7 +203,12 @@ export function FilterProvider({ children }) {
   const [loading, setLoading] = useState(false);
 
   const [urlParams, setUrlParams] = useSearchParams();
+  const urlFilterSignature = useMemo(
+    () => buildUrlFilterSignature(urlParams),
+    [urlParams],
+  );
   const urlWriteSkipRef = useRef(null);
+  const lastHydratedUrlSignatureRef = useRef(null);
   const {
     scopeRows,
     deletedIndices,
@@ -211,9 +228,13 @@ export function FilterProvider({ children }) {
   }, [scopeRows, deletedIndices]);
 
   const columnFilter = useColumnFilter(userId, datasetId, scope);
-  const clusterFilter = useClusterFilter({ scopeRows, scope, scopeLoaded });
+  const clusterFilter = useClusterFilter({ scopeRows, clusterLabels });
   const searchFilter = useNearestNeighborsSearch({ userId, datasetId, scope, deletedIndices });
   const keywordSearchFilter = useKeywordSearch({ datasetId, scope, deletedIndices });
+  const clusterFilterFn = clusterFilter.filter;
+  const columnFilterFn = columnFilter.filter;
+  const semanticSearchFilterFn = searchFilter.filter;
+  const keywordSearchFilterFn = keywordSearchFilter.filter;
 
   const setFilterQuery = useCallback((query) => {
     dispatch({ type: ACTION.SET_FILTER_QUERY, query });
@@ -309,18 +330,21 @@ export function FilterProvider({ children }) {
   }, [filterSlots]);
 
   useEffect(() => {
-    if (!scopeLoaded || !hasFilterInUrl) return;
+    if (!scopeLoaded) return;
+    if (urlFilterSignature === lastHydratedUrlSignatureRef.current) return;
+    lastHydratedUrlSignatureRef.current = urlFilterSignature;
+    if (!hasFilterInUrl) return;
 
     // Parse ALL URL params and hydrate each matching slot.
     // We track expected signatures to avoid re-dispatching on our own URL writes.
     const expectedParts = [];
 
     if (urlParams.has('cluster')) {
-      const numericValue = Number.parseInt(urlParams.get('cluster'), 10);
-      if (Number.isInteger(numericValue)) {
-        const cluster = clusterLabels.find((item) => item.cluster === numericValue);
-        if (cluster && filterSlots.cluster?.value !== numericValue) {
-          expectedParts.push(`cluster:${numericValue}`);
+      const rawValue = urlParams.get('cluster');
+      if (rawValue !== null) {
+        const cluster = clusterLabels.find((item) => isSameClusterValue(item.cluster, rawValue));
+        if (cluster && !isSameClusterValue(filterSlots.cluster?.value, cluster.cluster)) {
+          expectedParts.push(`cluster:${cluster.cluster}`);
           applyCluster(cluster);
         }
       }
@@ -354,7 +378,7 @@ export function FilterProvider({ children }) {
     if (expectedParts.length > 0) {
       urlWriteSkipRef.current = expectedParts.join('|');
     }
-  }, [scopeLoaded, hasFilterInUrl, urlParams, clusterLabels, columnFilter, filterSlots, applyCluster, applyKeywordSearch, applySearch, applyColumn]);
+  }, [scopeLoaded, hasFilterInUrl, urlParams, urlFilterSignature, clusterLabels, columnFilter, filterSlots, applyCluster, applyKeywordSearch, applySearch, applyColumn]);
 
   // Write filterSlots → URL params
   useEffect(() => {
@@ -420,24 +444,28 @@ export function FilterProvider({ children }) {
 
       // Cluster slot
       if (filterSlots.cluster) {
-        const cluster = clusterLabels.find((item) => item.cluster === filterSlots.cluster.value);
+        const cluster = clusterLabels.find((item) =>
+          isSameClusterValue(item.cluster, filterSlots.cluster.value)
+        );
         if (cluster) {
-          const clusterSet = new Set(clusterFilter.filter(cluster));
+          const clusterSet = new Set(clusterFilterFn(cluster));
           indices = indices.filter((i) => clusterSet.has(i));
         }
       }
 
       // Search slot (keyword or semantic)
       if (filterSlots.search) {
-        const hook = filterSlots.search.mode === 'keyword' ? keywordSearchFilter : searchFilter;
-        const searchIndices = await hook.filter(filterSlots.search.value);
+        const searchFn = filterSlots.search.mode === 'keyword'
+          ? keywordSearchFilterFn
+          : semanticSearchFilterFn;
+        const searchIndices = await searchFn(filterSlots.search.value);
         const searchSet = new Set(searchIndices);
         indices = indices.filter((i) => searchSet.has(i));
       }
 
       // Column slot
       if (filterSlots.column) {
-        const columnIndices = await columnFilter.filter(filterSlots.column.column, filterSlots.column.value);
+        const columnIndices = await columnFilterFn(filterSlots.column.column, filterSlots.column.value);
         const columnSet = new Set(columnIndices);
         indices = indices.filter((i) => columnSet.has(i));
       }
@@ -478,10 +506,10 @@ export function FilterProvider({ children }) {
     scopeLoaded,
     hasFilterInUrl,
     clusterLabels,
-    clusterFilter,
-    searchFilter,
-    keywordSearchFilter,
-    columnFilter,
+    clusterFilterFn,
+    semanticSearchFilterFn,
+    keywordSearchFilterFn,
+    columnFilterFn,
   ]);
 
   // ---------------------------------------------------------------------------

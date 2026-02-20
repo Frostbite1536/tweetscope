@@ -11,7 +11,6 @@ ThreadGroup.propTypes = {
   dateColumn: PropTypes.string,
   clusterMap: PropTypes.object,
   nodeStats: PropTypes.object,
-  distanceMap: PropTypes.instanceOf(Map),
   onHover: PropTypes.func,
   onClick: PropTypes.func,
   onViewThread: PropTypes.func,
@@ -27,7 +26,6 @@ function ThreadGroup({
   dateColumn,
   clusterMap,
   nodeStats,
-  distanceMap,
   onHover,
   onClick,
   onViewThread,
@@ -43,9 +41,6 @@ function ThreadGroup({
 
   const rootRow = rows[0];
   const remainingCount = rows.length - 1;
-  const rootSimilarity = distanceMap?.has(rootRow.ls_index)
-    ? 1 - distanceMap.get(rootRow.ls_index)
-    : undefined;
 
   const handleLoadAncestors = (e) => {
     e.stopPropagation();
@@ -82,7 +77,6 @@ function ThreadGroup({
           textColumn={textColumn}
           dateColumn={dateColumn}
           clusterInfo={clusterMap?.[rootRow.ls_index]}
-          similarity={rootSimilarity}
           onHover={onHover}
           onClick={onClick}
           nodeStats={nodeStats?.get(rootRow.ls_index)}
@@ -104,9 +98,6 @@ function ThreadGroup({
           />
           {rows.slice(1).map((row) => {
             const stats = nodeStats?.get(row.ls_index);
-            const similarity = distanceMap?.has(row.ls_index)
-              ? 1 - distanceMap.get(row.ls_index)
-              : undefined;
             return (
               <div
                 key={row.ls_index}
@@ -118,7 +109,6 @@ function ThreadGroup({
                   textColumn={textColumn}
                   dateColumn={dateColumn}
                   clusterInfo={clusterMap?.[row.ls_index]}
-                  similarity={similarity}
                   onHover={onHover}
                   onClick={onClick}
                   nodeStats={stats}

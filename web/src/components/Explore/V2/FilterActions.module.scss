@@ -1,20 +1,8 @@
-@media (prefers-color-scheme: dark) {
-  .filter-actions-button {
-    border: .5px solid var(--neutrals-color-neutral-3) !important;
-  }
-}
-
-:global(:root[data-theme="dark"]) {
-  .filter-actions-button {
-    border: .5px solid var(--neutrals-color-neutral-3) !important;
-  }
-}
-
 .container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 0 8px;
+  gap: 0;
+  padding: 0;
 }
 
 .actionsContainer {
@@ -48,13 +36,7 @@
     opacity: 0.75;
   }
 
-  @media (prefers-color-scheme: dark) {
-    border: .5px solid var(--neutrals-color-neutral-3);
-  }
-
-  :global(:root[data-theme="dark"]) & {
-    border: .5px solid var(--neutrals-color-neutral-3);
-  }
+  border: .5px solid var(--borders-color-border-2);
 }
 
 .actionsRow {

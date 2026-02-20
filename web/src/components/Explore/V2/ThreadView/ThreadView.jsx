@@ -85,7 +85,7 @@ function scrollIntoContainerCenter(targetEl, containerEl) {
 }
 
 /**
- * Thread reading panel that replaces TopicTree + TweetFeed in the sidebar
+ * Thread reading panel that replaces the normal sidebar feed
  * when the user clicks "View Thread" on a connected tweet.
  */
 export default function ThreadView({

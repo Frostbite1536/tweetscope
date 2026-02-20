@@ -10,7 +10,6 @@ import styles from './TweetFeed.module.scss';
 
 TweetFeed.propTypes = {
   dataset: PropTypes.object.isRequired,
-  distanceMap: PropTypes.instanceOf(Map),
   clusterMap: PropTypes.object,
   onHover: PropTypes.func,
   onClick: PropTypes.func,
@@ -22,7 +21,6 @@ TweetFeed.propTypes = {
 
 function TweetFeed({
   dataset,
-  distanceMap,
   clusterMap = {},
   onHover = () => {},
   onClick = () => {},
@@ -77,7 +75,6 @@ function TweetFeed({
                 dateColumn={dateColumn}
                 clusterMap={clusterMap}
                 nodeStats={nodeStats}
-                distanceMap={distanceMap}
                 onHover={onHover}
                 onClick={onClick}
                 onViewThread={onViewThread}
@@ -97,7 +94,6 @@ function TweetFeed({
                 dateColumn={dateColumn}
                 clusterMap={clusterMap}
                 nodeStats={nodeStats}
-                distanceMap={distanceMap}
                 onHover={onHover}
                 onClick={onClick}
                 onViewThread={onViewThread}
@@ -109,9 +105,6 @@ function TweetFeed({
             );
           }
           const clusterInfo = clusterMap[row.ls_index];
-          const similarity = distanceMap?.has(row.ls_index)
-            ? 1 - distanceMap.get(row.ls_index)
-            : undefined;
 
           return (
             <TweetCard
@@ -120,7 +113,6 @@ function TweetFeed({
               textColumn={dataset.text_column}
               dateColumn={dateColumn}
               clusterInfo={clusterInfo}
-              similarity={similarity}
               onHover={onHover}
               onClick={onClick}
               nodeStats={nodeStats?.get(row.ls_index)}

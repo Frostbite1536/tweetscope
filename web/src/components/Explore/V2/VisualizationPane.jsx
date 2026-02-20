@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
-import Scatter, { getClusterColorCSS } from './DeckGLScatter';
+import Scatter from './DeckGLScatter';
+import { useClusterColors, resolveClusterColorCSS } from '@/hooks/useClusterColors';
 
 import { useColorMode } from '../../../hooks/useColorMode';
 import ConnectionBadges from './ConnectionBadges';
@@ -133,8 +134,9 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   onViewQuotes,
   threadHighlightIndices = null,
 }, ref) {
-  const { scopeRows, scope } = useScope();
+  const { scopeRows, scope, clusterLabels, clusterHierarchy } = useScope();
   const { isDark: isDarkMode } = useColorMode();
+  const { colorMap } = useClusterColors(clusterLabels, clusterHierarchy);
 
   const { clusterFilter, filterActive, visibleIndexSet } = useFilter();
 
@@ -204,7 +206,6 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   // ====================================================================================================
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [vizConfig, setVizConfig] = useState({
-    showHeatMap: false,
     showClusterOutlines: true,
     pointSize: 1,
     pointOpacity: 1,
@@ -214,9 +215,6 @@ const VisualizationPane = forwardRef(function VisualizationPane({
     showTimeline: false,
   });
 
-  const toggleShowHeatMap = useCallback(() => {
-    setVizConfig((prev) => ({ ...prev, showHeatMap: !prev.showHeatMap }));
-  }, []);
 
   const toggleShowClusterOutlines = useCallback(() => {
     setVizConfig((prev) => ({ ...prev, showClusterOutlines: !prev.showClusterOutlines }));
@@ -442,7 +440,6 @@ const VisualizationPane = forwardRef(function VisualizationPane({
           onClose={() => setIsPanelOpen(false)}
           title="View Settings"
           vizConfig={vizConfig}
-          toggleShowHeatMap={toggleShowHeatMap}
           toggleShowClusterOutlines={toggleShowClusterOutlines}
           updatePointSize={updatePointSize}
           updatePointOpacity={updatePointOpacity}
@@ -544,7 +541,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
               <div className={hoverStyles.clusterHint}>
                 <span
                   className={hoverStyles.clusterDotSmall}
-                  style={{ backgroundColor: getClusterColorCSS(hoveredCluster.cluster, isDarkMode) }}
+                  style={{ backgroundColor: resolveClusterColorCSS(colorMap, hoveredCluster.cluster, isDarkMode) }}
                 />
                 <span>{hoveredCluster.label}</span>
               </div>

@@ -207,6 +207,28 @@ export const queryApi = {
         ...(embedding.dimensions !== undefined ? { dimensions: String(embedding.dimensions) } : {}),
       },
     }, { init: { signal } });
+    if (!res.ok) {
+      let message = `Nearest-neighbor search failed (${res.status})`;
+      const raw = await res.text();
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as { error?: unknown; detail?: unknown };
+          if (typeof parsed.error === 'string' && parsed.error.trim()) {
+            message = parsed.error;
+          } else if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+            message = parsed.detail;
+          } else {
+            message = raw;
+          }
+        } catch {
+          message = raw;
+        }
+      }
+      const err: Error & { status?: number } = new Error(message);
+      err.status = res.status;
+      throw err;
+    }
+
     const data = (await res.json()) as NearestNeighborsRawResponse;
     const dists: number[] = [];
     const inds = data.indices.map((idx: number, i: number) => {

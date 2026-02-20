@@ -256,8 +256,71 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // Propagate leaf metrics upward so parent labels have meaningful weights.
+    // Without this, non-leaf nodes often remain at count=0 because rows are
+    // assigned at layer 0 clusters only.
+    const aggregateByAncestor = new Map<string, { count: number; likes: number }>();
+    const addToAncestor = (ancestorId: string, count: number, likes: number) => {
+      const current = aggregateByAncestor.get(ancestorId) ?? { count: 0, likes: 0 };
+      current.count += count;
+      current.likes += likes;
+      aggregateByAncestor.set(ancestorId, current);
+    };
+
+    preparedLabels.forEach((label) => {
+      const count = Number(label.count ?? 0);
+      const likes = Number(label.likes ?? 0);
+      if (count <= 0 && likes <= 0) return;
+
+      let parentId =
+        label.parent_cluster === null || label.parent_cluster === undefined
+          ? null
+          : String(label.parent_cluster);
+
+      while (parentId !== null) {
+        addToAncestor(parentId, count, likes);
+        const parent =
+          clusterLookupMap.get(parentId) ??
+          clusterLookupMap.get(Number(parentId));
+        if (!parent || parent.parent_cluster === null || parent.parent_cluster === undefined) {
+          parentId = null;
+        } else {
+          parentId = String(parent.parent_cluster);
+        }
+      }
+    });
+
+    preparedLabels.forEach((label) => {
+      const agg = aggregateByAncestor.get(String(label.cluster));
+      if (!agg) return;
+      label.count = Number(label.count ?? 0) + agg.count;
+      label.likes = Number(label.likes ?? 0) + agg.likes;
+    });
+
+    // Keep all non-deleted row clusters plus their ancestors so hierarchy
+    // remains intact even though scope rows are assigned at layer 0.
+    const labelById = new Map<string, ClusterLabel>();
+    preparedLabels.forEach((label) => {
+      labelById.set(String(label.cluster), label);
+    });
+
+    const visibleClusterIds = new Set<string>();
+    nonDeletedClusters.forEach((clusterId) => {
+      let currentId: string | null = String(clusterId);
+      while (currentId !== null) {
+        if (visibleClusterIds.has(currentId)) break;
+        visibleClusterIds.add(currentId);
+        const node = labelById.get(currentId);
+        if (!node || node.parent_cluster === null || node.parent_cluster === undefined) {
+          currentId = null;
+        } else {
+          currentId = String(node.parent_cluster);
+        }
+      }
+    });
+
     const visibleLabels = preparedLabels.filter((label) =>
-      nonDeletedClusters.has(label.cluster)
+      visibleClusterIds.has(String(label.cluster))
     );
     const hierarchy =
       scope?.hierarchical_labels && visibleLabels.length > 0

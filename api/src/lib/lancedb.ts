@@ -27,6 +27,33 @@ export async function getTable(tableId: string): Promise<lancedb.Table> {
   const cached = tables.get(tableId);
   if (cached) return cached;
 
+  let localError: unknown = null;
+  const dataDir = process.env.LATENT_SCOPE_DATA;
+  const datasetPrefix = tableId.includes("__") ? tableId.split("__")[0] : null;
+
+  // Local-first for dataset-scoped tables (e.g. {dataset}__{scopeUuid}).
+  if (dataDir && datasetPrefix) {
+    const expandedDir = dataDir.startsWith("~/")
+      ? `${process.env.HOME ?? ""}/${dataDir.slice(2)}`
+      : dataDir;
+    const localDbPath = `${expandedDir}/${datasetPrefix}/lancedb`;
+    try {
+      const localConn = await getLocalDb(localDbPath);
+      const localTable = await localConn.openTable(tableId);
+      tables.set(tableId, localTable);
+      return localTable;
+    } catch (err) {
+      localError = err;
+    }
+  }
+
+  if (!process.env.LANCEDB_URI) {
+    throw localError ?? new Error("LANCEDB_URI must be set");
+  }
+  if (localError) {
+    console.warn(`Local LanceDB open failed for ${tableId}; falling back to cloud`, localError);
+  }
+
   const conn = await getDb();
   const table = await conn.openTable(tableId);
   tables.set(tableId, table);
@@ -260,8 +287,8 @@ export async function ftsSearch(
 
   const results = await q.toArray();
   return results.map((r: Record<string, unknown>) => ({
-    index: (r[indexCol] ?? r.index) as number,
-    _score: r._score as number,
+    index: Number(r[indexCol] ?? r.index ?? 0),
+    _score: Number(r._score ?? 0),
   }));
 }
 
@@ -285,8 +312,8 @@ export async function vectorSearch(
 
   const results = await query.toArray();
   return results.map((r: Record<string, unknown>) => ({
-    index: (r[indexCol] ?? r.index) as number,
-    _distance: r._distance as number,
+    index: Number(r[indexCol] ?? r.index ?? 0),
+    _distance: Number(r._distance ?? 0),
   }));
 }
 

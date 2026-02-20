@@ -69,49 +69,55 @@ export const searchRoutes = new Hono()
       return c.json({ error: "scope_id is required for LanceDB Cloud search" }, 400);
     }
 
-    // Fetch scope metadata once — drives both model resolution and table lookup
-    const scopeMeta = await getScopeMeta(dataset, scope_id);
-    const tableIdRaw = scopeMeta.lancedb_table_id;
-    if (typeof tableIdRaw !== "string" || !tableIdRaw.trim()) {
-      return c.json(
-        { error: `scope ${scope_id} is missing lancedb_table_id; re-run scope export` },
-        500,
-      );
+    try {
+      // Fetch scope metadata once — drives both model resolution and table lookup
+      const scopeMeta = await getScopeMeta(dataset, scope_id);
+      const tableIdRaw = scopeMeta.lancedb_table_id;
+      if (typeof tableIdRaw !== "string" || !tableIdRaw.trim()) {
+        return c.json(
+          { error: `scope ${scope_id} is missing lancedb_table_id; re-run scope export` },
+          500,
+        );
+      }
+      const tableId = tableIdRaw;
+      const { model, apiKey } = getModelConfig(scopeMeta);
+
+      if (!apiKey) {
+        return c.json({ error: "VOYAGE_API_KEY not configured" }, 500);
+      }
+
+      // 1. Embed the query via VoyageAI REST
+      const embedding = await embedQuery(query, {
+        apiKey,
+        model,
+        dimensions,
+      });
+      const results = await vectorSearch(tableId, embedding, {
+        limit: 100,
+        where: "deleted = false",
+      });
+
+      const seen = new Set<number>();
+      const indices: number[] = [];
+      const distances: number[] = [];
+      for (const result of results) {
+        if (seen.has(result.index)) continue;
+        seen.add(result.index);
+        indices.push(result.index);
+        distances.push(result._distance);
+      }
+
+      // Match the response shape the frontend expects (apiService.js:176-184)
+      return c.json({
+        indices,
+        distances,
+        search_embedding: [embedding],
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[NN] ${dataset}/${scope_id} query="${query}":`, message);
+      return c.json({ error: message }, 500);
     }
-    const tableId = tableIdRaw;
-    const { model, apiKey } = getModelConfig(scopeMeta);
-
-    if (!apiKey) {
-      return c.json({ error: "VOYAGE_API_KEY not configured" }, 500);
-    }
-
-    // 1. Embed the query via VoyageAI REST
-    const embedding = await embedQuery(query, {
-      apiKey,
-      model,
-      dimensions,
-    });
-    const results = await vectorSearch(tableId, embedding, {
-      limit: 100,
-      where: "deleted = false",
-    });
-
-    const seen = new Set<number>();
-    const indices: number[] = [];
-    const distances: number[] = [];
-    for (const result of results) {
-      if (seen.has(result.index)) continue;
-      seen.add(result.index);
-      indices.push(result.index);
-      distances.push(result._distance);
-    }
-
-    // Match the response shape the frontend expects (apiService.js:176-184)
-    return c.json({
-      indices,
-      distances,
-      search_embedding: [embedding],
-    });
   })
   .get(
     "/fts",
@@ -133,40 +139,39 @@ export const searchRoutes = new Hono()
         ? Math.min(limit, 1000)
         : 100;
 
-      const scopeMeta = await getScopeMeta(dataset, scope_id);
-      const tableIdRaw = scopeMeta.lancedb_table_id;
-      if (typeof tableIdRaw !== "string" || !tableIdRaw.trim()) {
-        return c.json(
-          { error: `scope ${scope_id} is missing lancedb_table_id; re-run scope export` },
-          500,
-        );
-      }
-
-      const textColumn = getScopeTextColumn(scopeMeta);
-
-      let results;
       try {
-        results = await ftsSearch(tableIdRaw, query, {
+        const scopeMeta = await getScopeMeta(dataset, scope_id);
+        const tableIdRaw = scopeMeta.lancedb_table_id;
+        if (typeof tableIdRaw !== "string" || !tableIdRaw.trim()) {
+          return c.json(
+            { error: `scope ${scope_id} is missing lancedb_table_id; re-run scope export` },
+            500,
+          );
+        }
+
+        const textColumn = getScopeTextColumn(scopeMeta);
+
+        const results = await ftsSearch(tableIdRaw, query, {
           column: textColumn,
           limit: safeLimit,
-          where: "deleted = false",
         });
+
+        const seen = new Set<number>();
+        const indices: number[] = [];
+        const scores: number[] = [];
+        for (const result of results) {
+          if (seen.has(result.index)) continue;
+          seen.add(result.index);
+          indices.push(result.index);
+          scores.push(result._score);
+        }
+
+        return c.json({ indices, scores });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "FTS search failed";
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[FTS] ${dataset}/${scope_id} query="${query}":`, message);
         const status = message.includes("not ready yet") ? 503 : 500;
         return c.json({ error: message }, status);
       }
-
-      const seen = new Set<number>();
-      const indices: number[] = [];
-      const scores: number[] = [];
-      for (const result of results) {
-        if (seen.has(result.index)) continue;
-        seen.add(result.index);
-        indices.push(result.index);
-        scores.push(result._score);
-      }
-
-      return c.json({ indices, scores });
     },
   );

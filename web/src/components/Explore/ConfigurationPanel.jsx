@@ -15,7 +15,6 @@ const ConfigurationPanel = ({
   onClose,
   title = 'Configuration',
   vizConfig,
-  toggleShowHeatMap,
   toggleShowClusterOutlines,
   updatePointSize,
   updatePointOpacity,
@@ -31,7 +30,6 @@ const ConfigurationPanel = ({
   const { themePreference, setThemePreference } = useColorMode();
 
   const {
-    showHeatMap,
     showClusterOutlines,
     pointSize,
     pointOpacity,

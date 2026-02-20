@@ -16,6 +16,17 @@ export const findClustersByQuery = (clusters, query, top = 5) => {
     }));
 };
 
+export const isSameClusterValue = (a, b) => {
+  if (a === b) return true;
+  if (a === null || a === undefined || b === null || b === undefined) return false;
+
+  const aNum = Number(a);
+  const bNum = Number(b);
+  if (Number.isFinite(aNum) && Number.isFinite(bNum) && aNum === bNum) return true;
+
+  return String(a) === String(b);
+};
+
 // check that the given column and value are valid
 // meaning that the column exists and the value is one of the categories
 export const validateColumnAndValue = (column, value, columnFilters) => {

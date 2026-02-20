@@ -10,7 +10,6 @@ import { queryKeys } from '../../query/keys';
 import SubNav from '../../components/SubNav';
 import VisualizationPane from '../../components/Explore/V2/VisualizationPane';
 import TweetFeed from '../../components/Explore/V2/TweetFeed';
-import TopicTree from '../../components/Explore/V2/TopicTree';
 import FilterActions from '../../components/Explore/V2/FilterActions';
 import FeedCarousel from '../../components/Explore/V2/Carousel/FeedCarousel';
 import { HoverProvider } from '../../contexts/HoverContext';
@@ -114,7 +113,6 @@ function ExploreContent() {
     shownIndices,
     filterSlots,
     filterActive,
-    searchFilter,
     applyCluster,
     applyTimeRange,
     clearFilter,
@@ -794,13 +792,7 @@ function ExploreContent() {
   );
 
   const containerRef = useRef(null);
-  const filtersContainerRef = useRef(null);
   const vizRef = useRef(null);
-
-  // Handle zoom to cluster from TopicTree
-  const handleZoomToCluster = useCallback((bounds) => {
-    vizRef.current?.zoomToBounds(bounds, 500);
-  }, []);
 
   // Handle clicking a cluster label on the map: filter + zoom
   const handleLabelClick = useCallback(
@@ -834,48 +826,12 @@ function ExploreContent() {
     [clusterLabels, scopeRows, handleFilterToCluster]
   );
 
-  const [filtersHeight, setFiltersHeight] = useState(250);
-  const FILTERS_PADDING = 2;
-  const tableHeight = useMemo(
-    () => `calc(100% - ${filtersHeight + FILTERS_PADDING}px)`,
-    [filtersHeight]
-  );
-
   const handleScopeChange = useCallback(
     (e) => {
       navigate(`/datasets/${dataset?.id}/explore/${e.target.value}`);
     },
     [dataset, navigate]
   );
-
-  useEffect(() => {
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        const { height } = entry.contentRect;
-        setFiltersHeight(height);
-      }
-    });
-
-    let node = filtersContainerRef?.current;
-    if (node) {
-      resizeObserver.observe(node);
-    } else {
-      setTimeout(() => {
-        node = filtersContainerRef?.current;
-        if (node) {
-          resizeObserver.observe(node);
-        } else {
-          setFiltersHeight(0);
-        }
-      }, 100);
-    }
-
-    return () => {
-      if (node) {
-        resizeObserver.unobserve(node);
-      }
-    };
-  }, []);
 
   // ====================================================================================================
   // Fullscreen related logic
@@ -1258,10 +1214,9 @@ function ExploreContent() {
             )}
 
             <div className="sidebar-surface">
-              {/* Normal mode: TopicTree + TweetFeed */}
+              {/* Normal mode: search controls + TweetFeed */}
               {isNormal && (
                 <div
-                  ref={filtersContainerRef}
                   className="feed-scroll-container"
                   style={{
                     flex: 1,
@@ -1284,15 +1239,8 @@ function ExploreContent() {
 
                   <FilterActions />
 
-                  {clusterLabels && clusterLabels.length > 0 && (
-                    <TopicTree
-                      onZoomToCluster={handleZoomToCluster}
-                      hoveredCluster={hoveredCluster}
-                    />
-                  )}
                   <TweetFeed
                     dataset={dataset}
-                    distanceMap={filterSlots.search?.mode === 'semantic' ? searchFilter.distanceMap : undefined}
                     clusterMap={clusterMap}
                     onHover={undefined}
                     onClick={handleClicked}
