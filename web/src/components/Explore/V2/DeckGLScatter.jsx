@@ -9,6 +9,7 @@ import { mapSelectionKey } from '@/lib/colors';
 import { useClusterColors, resolveClusterColor } from '@/hooks/useClusterColors';
 import { useColorMode } from '@/hooks/useColorMode';
 import { useScope } from '@/contexts/ScopeContext';
+import { applyInteractionRadius, computePointRadii } from './pointSizing';
 import styles from './Scatter.module.css';
 
 // Work around an occasional luma resize race where CanvasContext can receive a
@@ -40,15 +41,13 @@ const patchCanvasContextResizeGuard = (() => {
 patchCanvasContextResizeGuard();
 
 // Color palette and helpers now live in @/lib/clusterColors.js
+const CLUSTER_LABEL_FONT_FAMILY = "'Instrument Serif', Georgia, serif";
+const CLUSTER_LABEL_FONT_WEIGHT = '600';
+const HIERARCHY_LAYER_ZOOM_START_OFFSET = 2.2;
+const HIERARCHY_LAYER_ZOOM_SPAN = 5.5;
+const HIERARCHY_FINE_BIAS = 0.55;
 
 // PropTypes defined after component (see end of file)
-
-function toNumber(value) {
-  if (value === undefined || value === null) return 0;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  const num = Number(String(value).replace(/,/g, ''));
-  return Number.isFinite(num) ? num : 0;
-}
 
 function toIntOrNull(value) {
   if (value === undefined || value === null) return null;
@@ -92,16 +91,6 @@ function buildCurvedPath(sourcePosition, targetPosition, srcIdx, dstIdx, curvatu
     path.push([x, y]);
   }
   return path;
-}
-
-function engagementScoreFromRow(row) {
-  const favorites = toNumber(row?.favorites ?? row?.favorite_count ?? row?.likes ?? row?.like_count);
-  const retweets = toNumber(row?.retweets ?? row?.retweet_count);
-  const replies = toNumber(row?.replies ?? row?.reply_count);
-
-  // Blend interactions so engagement is not dominated by one field and
-  // retweets/replies still matter when favorites is present.
-  return favorites + retweets * 0.7 + replies * 0.1;
 }
 
 function clamp(num, min, max) {
@@ -222,38 +211,77 @@ function truncateTextToWidth(text, sizePx, maxWidthPx, measureTextWidth, { force
   return result === '…' && !fits(result) ? '' : result;
 }
 
-function quantileSorted(sortedValues, q) {
-  if (!sortedValues.length) return 0;
-  const pos = (sortedValues.length - 1) * q;
-  const base = Math.floor(pos);
-  const rest = pos - base;
-  if (sortedValues[base + 1] !== undefined) {
-    return sortedValues[base] + rest * (sortedValues[base + 1] - sortedValues[base]);
-  }
-  return sortedValues[base];
-}
-
-function upperBound(sortedValues, value) {
-  let lo = 0;
-  let hi = sortedValues.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (sortedValues[mid] <= value) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
-
-function calculateBaseRadius(pointCount) {
-  if (!pointCount) return 1.2;
-  const value = 2.3 * Math.pow(5000 / pointCount, 0.25);
-  return clamp(value, 0.8, 2.3);
-}
-
 function calculateBaseAlpha(pointCount) {
   if (!pointCount) return 120;
   const value = 180 * Math.pow(5000 / pointCount, 0.2);
   return clamp(Math.round(value), 40, 180);
+}
+
+function toClusterKey(value) {
+  return String(value);
+}
+
+function buildHierarchyIndex(labels) {
+  const labelIds = new Set(labels.map((label) => toClusterKey(label.cluster)));
+  const childrenByParent = new Map();
+  const layerById = new Map();
+  let maxLayer = 0;
+  for (const label of labels) {
+    const childKey = toClusterKey(label.cluster);
+    const layer = Number(label.layer || 0);
+    layerById.set(childKey, layer);
+    if (layer > maxLayer) maxLayer = layer;
+
+    if (label.parentCluster === null || label.parentCluster === undefined) continue;
+    const parentKey = toClusterKey(label.parentCluster);
+    if (!labelIds.has(parentKey)) continue;
+    const children = childrenByParent.get(parentKey) ?? [];
+    children.push(childKey);
+    childrenByParent.set(parentKey, children);
+  }
+
+  const roots = [];
+  for (const label of labels) {
+    const id = toClusterKey(label.cluster);
+    const parentRaw = label.parentCluster;
+    const parentKey =
+      parentRaw === null || parentRaw === undefined ? null : toClusterKey(parentRaw);
+    if (!parentKey || !labelIds.has(parentKey)) roots.push(id);
+  }
+
+  return {
+    childrenByParent,
+    layerById,
+    roots: roots.length > 0 ? roots : labels.map((label) => toClusterKey(label.cluster)),
+    maxLayer,
+  };
+}
+
+function selectHierarchyLabelCut(index, targetLayer) {
+  const selected = new Set();
+  const visited = new Set();
+
+  const visit = (nodeId) => {
+    if (visited.has(nodeId)) return;
+    visited.add(nodeId);
+
+    const layer = index.layerById.get(nodeId) ?? 0;
+    const children = index.childrenByParent.get(nodeId) ?? [];
+    if (!children.length || layer <= targetLayer) {
+      selected.add(nodeId);
+      return;
+    }
+
+    for (const childId of children) {
+      visit(childId);
+    }
+  };
+
+  for (const rootId of index.roots) {
+    visit(rootId);
+  }
+
+  return selected;
 }
 
 const DeckGLScatter = forwardRef(function DeckGLScatter({
@@ -377,73 +405,8 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
 
   const pointCount = points.length;
 
-    // Compute normalized "importance" from engagement (heavy-tailed, so log-scale + winsorize).
-  // We sample when very large to avoid sorting huge arrays.
   const pointRadii = useMemo(() => {
-    const baseRadius = calculateBaseRadius(pointCount);
-    const minRadius = 0.5;
-    const maxRadius = 12.0;
-
-    const radii = new Float32Array(pointCount);
-    if (!scopeRows || scopeRows.length === 0) {
-      radii.fill(clamp(baseRadius, minRadius, maxRadius));
-      return radii;
-    }
-
-    const rawImportance = new Float32Array(pointCount);
-    let hasAnyEngagement = false;
-    for (let i = 0; i < pointCount; i++) {
-      const row = scopeRows[i] || {};
-      const engagement = engagementScoreFromRow(row);
-      if (engagement > 0) hasAnyEngagement = true;
-      rawImportance[i] = Math.log1p(Math.max(0, engagement));
-    }
-
-    if (!hasAnyEngagement) {
-      radii.fill(clamp(baseRadius, minRadius, maxRadius));
-      return radii;
-    }
-
-    // Collect non-zero log-engagement values to compute quantile anchors.
-    // Sizing uses the actual log-magnitude (not rank) so that a 28-like tweet
-    // is always proportionally bigger than a 1-like tweet regardless of how
-    // many tweets sit between them. Zeros get a fixed floor.
-    const nonZeroValues = [];
-    for (let i = 0; i < pointCount; i++) {
-      if (rawImportance[i] > 0) nonZeroValues.push(rawImportance[i]);
-    }
-    nonZeroValues.sort((a, b) => a - b);
-
-    // Quantile anchors from non-zero distribution (winsorize at p10/p99).
-    const q10nz = nonZeroValues.length > 0 ? quantileSorted(nonZeroValues, 0.10) : 0;
-    const q99nz = nonZeroValues.length > 0 ? quantileSorted(nonZeroValues, 0.99) : 1;
-    const logLow = Math.log1p(q10nz > 0 ? Math.expm1(q10nz) : 0); // already log1p'd
-    const logHigh = q99nz;
-    const logRange = logHigh > logLow ? logHigh - logLow : 1;
-
-    // More spread for smaller datasets (more screen space per point).
-    const sizeBoost = clamp(Math.log10(5000 / Math.max(pointCount, 500)), 0, 0.7) * 1.5;
-    const scale = 2.10 + sizeBoost;
-    const zeroFloor = 2.00;
-    const nonZeroBase = 1.44;
-
-    for (let i = 0; i < pointCount; i++) {
-      const imp = rawImportance[i];
-
-      let importanceFactor;
-      if (imp <= 0) {
-        // Zero engagement → fixed visible floor
-        importanceFactor = zeroFloor;
-      } else {
-        // Normalize log-engagement into [0,1] using non-zero quantile anchors.
-        const t = clamp((imp - logLow) / logRange, 0, 1);
-        importanceFactor = nonZeroBase + scale * Math.pow(t, 0.85);
-      }
-
-      radii[i] = clamp(baseRadius * importanceFactor, minRadius, maxRadius);
-    }
-
-    return radii;
+    return computePointRadii(scopeRows, pointCount);
   }, [scopeRows, pointCount]);
 
   const alphaScale = useMemo(() => {
@@ -619,6 +582,11 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
       .sort((a, b) => b.priority - a.priority);
   }, [labelData]);
 
+  const hierarchyIndex = useMemo(() => {
+    if (!scope?.hierarchical_labels || !visibleLabels.length) return null;
+    return buildHierarchyIndex(visibleLabels);
+  }, [scope?.hierarchical_labels, visibleLabels]);
+
   const placedLabels = useMemo(() => {
     if (!visibleLabels.length) return [];
 
@@ -633,21 +601,34 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     const widthCapPx = Math.min(1200, width * widthCapFraction);
     const maxLinesAtZoom = clamp(Math.round(3 + zoom01 * 7), 3, 12);
 
-    let maxLayer = 0;
-    for (let i = 0; i < visibleLabels.length; i++) {
-      const layer = visibleLabels[i]?.layer || 0;
-      if (layer > maxLayer) maxLayer = layer;
-    }
-    // Zoomed out: prioritize coarser hierarchy layers first.
-    // Zoomed in: progressively remove this preference.
-    const minVisibleLayer = maxLayer > 0
-      ? Math.max(0, Math.floor((1 - zoom01) * maxLayer))
+    const maxLayer = hierarchyIndex?.maxLayer ?? 0;
+    // Label hierarchy progression should not depend on very large map maxZoom
+    // values (e.g. 40), or lower layers become practically unreachable.
+    // Use a local zoom window around the initial framing, with a small bias
+    // toward finer layers so subclusters appear earlier.
+    const hierarchyProgress = clamp(
+      (zoom - initialZoom + HIERARCHY_LAYER_ZOOM_START_OFFSET) / HIERARCHY_LAYER_ZOOM_SPAN,
+      0,
+      1
+    );
+    // Pick one hierarchy "cut" from coarse (max layer) to fine (layer 0).
+    // This keeps parent/child visibility stable as zoom changes.
+    const targetLayer = maxLayer > 0
+      ? Math.max(0, Math.floor((1 - hierarchyProgress) * (maxLayer + 1e-6) - HIERARCHY_FINE_BIAS))
       : 0;
+    const selectedLabelIds =
+      scope?.hierarchical_labels && hierarchyIndex
+        ? selectHierarchyLabelCut(hierarchyIndex, targetLayer)
+        : null;
+    const labelsToProcess = selectedLabelIds
+      ? visibleLabels.filter((label) => selectedLabelIds.has(toClusterKey(label.cluster)))
+      : visibleLabels;
+
     const measureCtx = textMeasureContext;
     const widthCache = textWidthCacheRef.current;
 
-    const fontFamily = 'Newsreader, Georgia, serif';
-    const fontWeight = '600';
+    const fontFamily = CLUSTER_LABEL_FONT_FAMILY;
+    const fontWeight = CLUSTER_LABEL_FONT_WEIGHT;
     const backgroundPadding = [8, 5, 8, 5]; // left, top, right, bottom (px)
     const collisionMargin = 2; // extra spacing between labels (px)
     const widthInflate = 1.12;
@@ -737,18 +718,6 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
       }
       return count;
     };
-
-    // Two-pass ordering:
-    // 1) preferred labels at/above current coarse layer
-    // 2) deferred finer labels as fill, so they still appear when space allows
-    const preferredLabels = [];
-    const deferredLabels = [];
-    for (let i = 0; i < visibleLabels.length; i++) {
-      const d = visibleLabels[i];
-      if ((d?.layer || 0) >= minVisibleLayer) preferredLabels.push(d);
-      else deferredLabels.push(d);
-    }
-    const labelsToProcess = preferredLabels.concat(deferredLabels);
 
     const maxToProcess = 1500;
     const maxSoftLabels = 400;
@@ -880,6 +849,8 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     initialViewState,
     initialZoom,
     textMeasureContext,
+    hierarchyIndex,
+    scope?.hierarchical_labels,
   ]);
 
   const labelCharacterSet = useMemo(() => {
@@ -989,8 +960,8 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     const scale = Math.pow(2, zoom);
     const measureCtx = textMeasureContext;
     const widthCache = textWidthCacheRef.current;
-    const fontFamily = 'Newsreader, Georgia, serif';
-    const fontWeight = '600';
+    const fontFamily = CLUSTER_LABEL_FONT_FAMILY;
+    const fontWeight = CLUSTER_LABEL_FONT_WEIGHT;
     const lineHeight = 1.1;
     const backgroundPadding = [8, 5, 8, 5];
     const widthInflate = 1.12;
@@ -1103,18 +1074,14 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
         getRadius: d => {
           const isHovered = d.index === hoveredPointIndex;
           const isHighlighted = highlightIndexSet.has(d.ls_index);
-          let r = pointRadii[d.index] || 1.2;
-
-          if (featureIsSelected && d.selectionKey === mapSelectionKey.selected && d.activation > 0) {
-            const activationBoost = 1 + Math.pow(clamp(d.activation, 0, 1), 0.65) * 1.35;
-            r = clamp(r * activationBoost, 0.45, 16.0);
-          }
-
-          if (isHighlighted) {
-            r = clamp(r * 1.35 + 0.6, 0.6, 18.0);
-          }
-
-          return isHovered ? clamp(r + 2, 0.6, 18.0) : r;
+          const baseRadius = pointRadii[d.index] || 1.2;
+          return applyInteractionRadius(baseRadius, {
+            isHovered,
+            isHighlighted,
+            featureIsSelected,
+            isFeatureSelectedPoint: d.selectionKey === mapSelectionKey.selected,
+            activation: d.activation,
+          });
         },
         getFillColor: d => {
           const isHovered = d.index === hoveredPointIndex;
@@ -1270,8 +1237,8 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
             return isDarkMode ? [242, 240, 229, alpha] : [40, 39, 38, alpha];
           },
           getAngle: 0,
-          fontFamily: 'Newsreader, Georgia, serif',
-          fontWeight: '600',
+          fontFamily: CLUSTER_LABEL_FONT_FAMILY,
+          fontWeight: CLUSTER_LABEL_FONT_WEIGHT,
           fontSettings: { sdf: true },
           // Disable auto-wrapping: we insert '\n' ourselves so we can measure and avoid overlaps.
           maxWidth: -1,
