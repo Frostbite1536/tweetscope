@@ -1,0 +1,386 @@
+/* ==========================================
+   NewCollection — Creation Flow
+   ========================================== */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.newCollection {
+  padding: var(--space-6);
+  overflow-y: auto;
+  height: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* Back link */
+.backLink {
+  display: inline-block;
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-color-text-subtle);
+  text-decoration: none;
+  margin-bottom: var(--space-4);
+  transition: color var(--transition-fast);
+
+  &:hover {
+    color: var(--text-color-text-main);
+  }
+}
+
+/* Hero */
+.hero {
+  text-align: center;
+  margin-bottom: var(--space-10);
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+.heroTitle {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 2rem;
+  font-weight: 400;
+  color: var(--text-color-text-main);
+  margin: 0 0 var(--space-2);
+  letter-spacing: -0.02em;
+}
+
+.heroSubtitle {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--text-color-text-subtle);
+  margin: 0;
+}
+
+/* Import cards row */
+.importRow {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+
+/* Glass card */
+.glassCard {
+  flex: 1;
+  position: relative;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  padding: var(--space-6);
+  transition: box-shadow var(--transition-normal), border-color var(--transition-normal);
+  overflow: hidden;
+  animation: fadeInUp 0.4s ease-out both;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    background: linear-gradient(135deg, var(--glass-glow), transparent);
+    transition: opacity var(--transition-fast);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  &:hover {
+    box-shadow: var(--glass-shadow-hover);
+
+    &::before {
+      opacity: 1;
+    }
+  }
+
+  &:nth-child(1) {
+    animation-delay: 0.08s;
+  }
+  &:nth-child(2) {
+    animation-delay: 0.18s;
+  }
+}
+
+/* Form */
+.cardForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  position: relative;
+  z-index: 1;
+
+  /* Override react-element-forge Input */
+  :global(input) {
+    background: var(--neutrals-color-neutral-1) !important;
+    color: var(--text-color-text-main) !important;
+    border: 1px solid var(--borders-color-border-1) !important;
+    border-radius: var(--radius-sm);
+
+    &::placeholder {
+      color: var(--text-color-text-subtle) !important;
+    }
+
+    &:focus {
+      border-color: var(--interactions---primary-color-interaction-primary) !important;
+      outline: none;
+    }
+  }
+
+  /* Override react-element-forge Button */
+  :global(button[type="submit"]) {
+    background: var(--interactions---primary-color-interaction-primary);
+    color: var(--text-color-text-reverse);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-4);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+
+    &:hover:not(:disabled) {
+      background: var(--interactions---primary-color-interaction-primary-hover);
+    }
+
+    &:disabled {
+      background: var(--interactions---primary-color-interaction-primary-disabled);
+      cursor: not-allowed;
+    }
+  }
+}
+
+.cardTitle {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-color-text-main);
+  margin: 0 0 var(--space-1);
+}
+
+.cardDescription {
+  font-size: 0.875rem;
+  color: var(--text-color-text-subtle);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.helperNote {
+  font-size: 0.8rem;
+  color: var(--text-color-text-subtle);
+}
+
+/* File drop zone */
+.dropZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  border: 2px dashed var(--borders-color-border-2);
+  border-radius: var(--radius-md);
+  background: var(--neutrals-color-neutral-0);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+
+  &:hover {
+    border-color: var(--interactions---primary-color-interaction-primary);
+  }
+}
+
+.dropZoneIcon {
+  font-size: 1.5rem;
+  opacity: 0.5;
+}
+
+.dropZoneText {
+  font-size: 0.85rem;
+  color: var(--text-color-text-subtle);
+}
+
+.dropZoneFileName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--interactions---primary-color-interaction-primary);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.uploadLimit {
+  font-size: 0.8rem;
+  color: var(--text-color-text-subtle);
+}
+
+/* Advanced options */
+.advancedToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none !important;
+  border: none !important;
+  padding: 0;
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-color-text-subtle);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+  box-shadow: none !important;
+
+  &:hover {
+    color: var(--text-color-text-main);
+  }
+
+  &:focus,
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+.advancedSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease-out;
+}
+
+.advancedOpen {
+  max-height: 300px;
+}
+
+/* Checkbox */
+.checkboxRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--neutrals-color-neutral-0);
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+
+  &:hover {
+    background: var(--neutrals-color-neutral-1);
+  }
+}
+
+.checkboxLabel {
+  font-size: 0.875rem;
+  color: var(--text-color-text-main);
+  line-height: 1.4;
+}
+
+.checkboxHint {
+  font-size: 0.8rem;
+  color: var(--text-color-text-subtle);
+  margin-top: var(--space-1);
+}
+
+/* Warning / error */
+.warningBanner {
+  background: rgba(179, 75, 75, 0.08);
+  color: var(--text-color-text-critical);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(179, 75, 75, 0.15);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.countBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: rgba(123, 175, 90, 0.1);
+  color: var(--text-color-text-success);
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(123, 175, 90, 0.15);
+  margin-top: var(--space-3);
+}
+
+.globalError {
+  composes: warningBanner;
+  animation: fadeInUp 0.3s ease-out both;
+}
+
+/* Job progress */
+.jobWrapper {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  padding: var(--space-4);
+  animation: fadeInUp 0.3s ease-out both;
+
+  :global(.job-progress) {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :global(pre) {
+    background: var(--neutrals-color-neutral-1);
+    color: var(--semantic-color-semantic-success);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3);
+    font-size: 0.8rem;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  :global(button) {
+    font-family: 'Instrument Sans', sans-serif;
+  }
+}
+
+/* ==========================================
+   Responsive
+   ========================================== */
+
+@media (max-width: 720px) {
+  .newCollection {
+    padding: 60px var(--space-4) var(--space-4);
+  }
+
+  .heroTitle {
+    font-size: 1.5rem;
+  }
+
+  .importRow {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .newCollection {
+    padding: 48px var(--space-3) var(--space-3);
+  }
+
+  .heroTitle {
+    font-size: 1.25rem;
+  }
+
+  .glassCard {
+    padding: var(--space-4);
+  }
+}
