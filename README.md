@@ -16,7 +16,7 @@ Each pipeline step writes flat files (Parquet, HDF5, JSON) to a dataset director
 
 ## System architecture
 
-Two servers, one frontend. In local/studio mode the Flask server handles everything. In production the Hono TypeScript API serves read paths from pre-built artifacts on R2/CDN, with vector search via LanceDB Cloud + VoyageAI.
+The Hono TypeScript API serves all frontend requests. In local/studio mode it reads from the local filesystem and spawns Python pipeline jobs as subprocesses. In production it serves pre-built artifacts from R2/CDN, with vector search via LanceDB Cloud + VoyageAI. The legacy Flask server (`ls-serve`) is deprecated and kept only for local parquet/JSON debugging.
 
 <picture>
   <img src="documentation/system-architecture.svg" alt="System architecture: React frontend, typed API clients, Flask studio + Hono production, Python pipeline, flat file storage">
@@ -35,6 +35,18 @@ Mode is set via environment variable. One frontend build adapts to all modes via
 ## Explore UI
 
 The explore interface is a 3-panel layout: topic tree (left), scatter plot (center), feed/carousel (right). The right panel has 5 states managed by `useSidebarState`: collapsed, normal feed, expanded carousel, thread view, and quote view.
+
+<picture>
+  <img src="documentation/screenshot-explore.png" alt="Explore view: scatter plot with topic labels, tweet hover card, and Browse All Topics sidebar with tweet feed">
+</picture>
+
+<picture>
+  <img src="documentation/screenshot-topic-directory.png" alt="Topic Directory: grid of topic cards with sub-cluster pills, selected topic showing filtered tweet feed">
+</picture>
+
+<picture>
+  <img src="documentation/screenshot-carousel.png" alt="Carousel view: topic tree sidebar, multi-column tweet feed with quote embeds, and engagement metrics">
+</picture>
 
 <picture>
   <img src="documentation/explore-ui.svg" alt="Explore UI: ScopeContext + FilterContext feed into VisualizationPane, TopicTree, TweetFeed, FeedCarousel, ThreadView">
@@ -61,28 +73,108 @@ The frontend uses domain-split API clients (`web/src/api/`):
 - `queryClient` — row fetching by indices with pagination
 - `baseClient` — shared HTTP helpers, `apiUrl` from `VITE_API_URL`
 
-## Quick start
+## Getting started
+
+### Prerequisites
+
+- Python 3.11+ and [uv](https://docs.astral.sh/uv/)
+- Node.js 22+ and npm
+- API keys: [VoyageAI](https://dash.voyageai.com/) (embeddings) and [OpenAI](https://platform.openai.com/) (cluster labeling)
+- A Twitter/X archive zip (request yours at https://x.com/settings/download_your_data)
+
+### 1. Clone and install
+
+```bash
+git clone --recurse-submodules <repo-url>
+cd latent-scope
+
+# Python pipeline
+uv pip install -e .
+
+# API + frontend
+cd api && npm install && cd ..
+cd web && npm install && cd ..
+```
+
+### 2. Configure
+
+```bash
+cp .env.example .env
+cp api/.env.example api/.env
+```
+
+Edit `.env` — set your data directory and API keys:
+```
+LATENT_SCOPE_DATA=~/latent-scope-data
+VOYAGE_API_KEY=your-key
+OPENAI_API_KEY=your-key
+LATENT_SCOPE_APP_MODE=studio
+```
+
+Edit `api/.env` — set the same data directory and keys:
+```
+LATENT_SCOPE_DATA=~/latent-scope-data
+LATENT_SCOPE_APP_MODE=studio
+VOYAGE_API_KEY=your-key
+PORT=3000
+```
+
+### 3. Import your Twitter archive
+
+```bash
+# Place your archive in archives/ (gitignored)
+cp ~/Downloads/twitter-archive.zip archives/
+
+# Import and run the full pipeline (embed → UMAP → cluster → label → scope)
+uv run python3 -m latentscope.scripts.twitter_import my-tweets \
+  --source zip --zip_path archives/twitter-archive.zip --run_pipeline
+```
+
+### 4. Explore
+
+```bash
+# Terminal 1: start the API
+cd api && npm run dev
+
+# Terminal 2: start the frontend
+cd web && npm run dev
+```
+
+Open http://localhost:5174 — select your dataset and scope to explore.
+
+For development details, see [DEVELOPMENT.md](DEVELOPMENT.md).
+
+---
+
+## Quick start (dev reference)
 
 ### Local development (studio mode)
 
 ```bash
-# Python backend
-pip install -e .
-ls-init ~/latent-scope-data --openai_key=XXX --voyage_key=YYY
-ls-serve ~/latent-scope-data  # Flask on :5001
+# Python package
+uv pip install -e .
 
-# Frontend (separate terminal)
-cd web && npm install && npm run dev  # Vite on :5174
+# Environment
+cp .env.example .env          # fill in LATENT_SCOPE_DATA, API keys
+cp api/.env.example api/.env  # fill in LANCEDB_URI, VOYAGE_API_KEY
+
+# Hono API (terminal 1)
+cd api && npm install && npm run dev   # tsx watch on :3000
+
+# Frontend (terminal 2)
+cd web && npm install && npm run dev   # Vite on :5174, proxies /api to :3000
 ```
 
 ### Twitter/X archive import
 
 ```bash
 # Native X export zip — runs full pipeline (embed → UMAP → cluster → scope)
-ls-twitter-import visakanv --source zip --zip_path archives/archive.zip --run_pipeline
+uv run python3 -m latentscope.scripts.twitter_import visakanv \
+  --source zip --zip_path archives/archive.zip --run_pipeline
 
 # Community archive by username
-ls-twitter-import visakanv --source community --username visakanv --run_pipeline
+uv run python3 -m latentscope.scripts.twitter_import visakanv \
+  --source community --username visakanv --run_pipeline
 ```
 
 ### Progressive import (large archives)
@@ -92,12 +184,14 @@ For large archives (100k+ tweets), import year by year. Each run ingests only �
 ```bash
 # Step 1: Ingest year by year (no --run_pipeline, ingest only)
 for year in 2018 2019 2020 2021 2022 2023 2024; do
-  ls-twitter-import visakanv-tweets --source zip --zip_path archives/archive.zip \
+  uv run python3 -m latentscope.scripts.twitter_import visakanv-tweets \
+    --source zip --zip_path archives/archive.zip \
     --year $year --import_batch_id "visakanv-$year"
 done
 
 # Step 2: Run pipeline once on the full dataset
-ls-twitter-import visakanv-tweets --source zip --zip_path archives/archive.zip \
+uv run python3 -m latentscope.scripts.twitter_import visakanv-tweets \
+  --source zip --zip_path archives/archive.zip \
   --run_pipeline --import_batch_id "visakanv-final"
 ```
 
@@ -117,7 +211,7 @@ Additional filters can be combined with `--year`:
 ### CLI pipeline (step by step)
 
 ```bash
-ls-ingest-csv "my-dataset" ~/data.csv
+ls-ingest my-dataset ~/data.csv
 ls-embed my-dataset "text" voyage-context-3
 ls-umap my-dataset embedding-001 25 0.1                           # 2D display
 ls-umap my-dataset embedding-001 25 0.1 --purpose cluster --n_components 10  # kD for clustering
@@ -128,8 +222,8 @@ ls-scope my-dataset cluster-001-labels-default "My scope" "Description"
 uv run python3 -m latentscope.scripts.toponymy_labels my-dataset scopes-001 \
     --llm-provider openai --llm-model gpt-5-mini
 
-ls-build-links-graph my-dataset                                    # reply/quote edges
-ls-serve ~/latent-scope-data
+# Reply/quote edge graph
+uv run python3 -m latentscope.scripts.build_links_graph my-dataset
 ```
 
 ### Python interface
@@ -146,7 +240,7 @@ ls.umap("my-dataset", "embedding-001", 25, 0.1)
 ls.cluster("my-dataset", "umap-001", 50, 5)
 ls.scope("my-dataset", "cluster-001-labels-default", "My scope", "Description")
 # Then run toponymy_labels.py for hierarchical labels
-ls.serve()
+# Serve via: cd api && npm run dev
 ```
 
 ### Hosted / production deployment
@@ -181,12 +275,12 @@ To set up from scratch:
 cp ~/Downloads/my-twitter-archive.zip archives/
 
 # Import visakanv: 1k sample from the community archive
-ls-twitter-import visakanv-tweets \
+uv run python3 -m latentscope.scripts.twitter_import visakanv-tweets \
   --source community --username visakanv \
   --top_n 1000 --sort recent --run_pipeline
 
 # Import masky's archive
-ls-twitter-import sheik-tweets \
+uv run python3 -m latentscope.scripts.twitter_import sheik-tweets \
   --source zip --zip_path archives/my-twitter-archive.zip --run_pipeline
 ```
 
@@ -205,7 +299,8 @@ ls-twitter-import sheik-tweets \
 │   ├── src/lib/           #   apiService, DuckDB, twitterArchiveParser, colors
 │   └── src/pages/V2/      #   FullScreenExplore (main page)
 ├── latentscope/           # Python package
-│   ├── server/            #   Flask app, blueprints (datasets, jobs, search, tags, admin)
+│   ├── server/            #   Flask app (deprecated — kept for ls-serve debugging only)
+│   ├── pipeline/          #   Scope runner, catalog registry, LanceDB export stages
 │   ├── scripts/           #   Pipeline CLI (ingest, embed, umap, cluster, label, scope, ...)
 │   ├── models/            #   Embedding + chat model providers
 │   ├── importers/         #   Twitter archive parser
@@ -224,7 +319,7 @@ ls-twitter-import sheik-tweets \
 
 ### 0. Ingest
 
-Converts CSV/Parquet/JSON/XLSX into `input.parquet` + `meta.json`. For Twitter archives, `ls-twitter-import` handles zip extraction, deduplication, and optional full-pipeline execution.
+Converts CSV/Parquet/JSON/XLSX into `input.parquet` + `meta.json`. For Twitter archives, `latentscope.scripts.twitter_import` handles zip extraction, deduplication, and optional full-pipeline execution.
 
 ### 1. Embed
 
@@ -245,7 +340,7 @@ HDBSCAN clustering on the UMAP output. When a clustering UMAP is available, use 
 
 ### 4. Label (Toponymy hierarchical)
 
-The twitter pipeline uses **hierarchical Toponymy labeling** exclusively (enabled by default in `ls-twitter-import --hierarchical-labels`). Multi-layer cluster naming with:
+The twitter pipeline uses **hierarchical Toponymy labeling** exclusively (enabled by default in `twitter_import --hierarchical-labels`). Multi-layer cluster naming with:
 
 - Adaptive exemplar counts by cluster size
 - Keyphrase extraction via VoyageAI embeddings
@@ -261,11 +356,11 @@ A scope is a named combination of embedding + UMAP + clusters + labels. Switchin
 
 ### 5b. Links graph
 
-`ls-build-links-graph` extracts reply and quote edges from the dataset, producing `edges.parquet` and `node_stats.parquet` conforming to the `contracts/links.schema.json` contract. Powers the ThreadView and ConnectionBadges in the UI.
+`latentscope.scripts.build_links_graph` extracts reply and quote edges from the dataset, producing `edges.parquet` and `node_stats.parquet` conforming to the `contracts/links.schema.json` contract. Powers the ThreadView and ConnectionBadges in the UI.
 
 ### 6. Serve + Explore
 
-The Flask studio server (`ls-serve`) or Hono production API serves the artifacts. The React frontend loads scope rows, builds the cluster hierarchy, and renders the interactive scatter + sidebar.
+The Hono TypeScript API serves the artifacts (local filesystem in studio mode, R2/CDN in production). The React frontend loads scope rows, builds the cluster hierarchy, and renders the interactive scatter + sidebar.
 
 ## Data contracts
 
@@ -314,22 +409,34 @@ data/
 
 ## CLI reference
 
+### Registered entry points (`ls-*`)
+
 | Command | Purpose |
 |---------|---------|
 | `ls-init <data_dir>` | Initialise data directory + .env |
-| `ls-serve [data_dir]` | Start Flask studio server (:5001) |
-| `ls-ingest <dataset_id>` | Ingest from input.csv |
-| `ls-ingest-csv <id> <path>` | Ingest from CSV path |
+| `ls-serve [data_dir]` | Start legacy Flask server (:5001, deprecated — use Hono API) |
+| `ls-ingest <dataset_id> [path]` | Ingest CSV/Parquet/JSON/XLSX into dataset |
 | `ls-embed <id> <text_col> <model>` | Generate embeddings |
 | `ls-umap <id> <emb_id> [neighbors] [min_dist]` | UMAP projection |
 | `ls-cluster <id> <umap_id> <samples> <min_samples>` | HDBSCAN clustering |
-| `ls-label <id> <text_col> <cluster_id> <model>` | LLM cluster labeling |
+| `ls-label <id> <text_col> <cluster_id> <model>` | LLM cluster labeling (flat) |
 | `ls-scope <id> <labels_id> <label> <desc>` | Create scope |
-| `ls-twitter-import <id> --source zip\|community` | Twitter archive import |
-| `ls-build-links-graph <id>` | Build reply/quote edge graph |
+| `ls-sae <id>` | Sparse autoencoder features |
+| `ls-export-plot <id>` | Export static scatter plot |
 | `ls-list-models` | List available models |
 | `ls-download-dataset <id>` | Download public dataset |
 | `ls-upload-dataset <id>` | Upload to remote storage |
+
+### Module scripts (`uv run python3 -m ...`)
+
+These are not registered as `ls-*` entry points — invoke via `uv run python3 -m`:
+
+| Module | Purpose |
+|--------|---------|
+| `latentscope.scripts.twitter_import` | Twitter/X archive import + optional full pipeline |
+| `latentscope.scripts.build_links_graph` | Build reply/quote edge graph |
+| `latentscope.scripts.toponymy_labels` | Hierarchical cluster labeling via Toponymy |
+| `latentscope.scripts.export_lance` | Export scope to LanceDB (local + cloud) |
 
 ## Toponymy integration
 
@@ -381,7 +488,7 @@ uv run python3 tools/sync_cdn_r2.py <dataset_id>
 
 | Layer | Technology |
 |-------|-----------|
-| Python pipeline | Flask, Pandas, NumPy, UMAP-learn, HDBSCAN, HuggingFace Transformers |
+| Python pipeline | Pandas, NumPy, UMAP-learn, HDBSCAN, HuggingFace Transformers, VoyageAI, OpenAI |
 | Production API | Hono (TypeScript), LanceDB Cloud, VoyageAI, Zod, hyparquet |
 | Frontend | React 18, Vite, Deck.GL 9, Framer Motion, TanStack Table, D3, SASS |
 | Storage | Parquet (Apache Arrow), HDF5, JSON, LanceDB (vector search + graph), DuckDB WASM (client-side) |
