@@ -35,6 +35,34 @@ export const validateColumnAndValue = (column, value, columnFilters) => {
   return columnFilter.categories.includes(value);
 };
 
+export const NUM_SEARCH_RESULTS = 4;
+const CLUSTERS_GROUP = 'Clusters';
+
+export function buildGroupedOptions(query, searchMode, clusterLabels) {
+  const groups = [];
+  if (query.trim() !== '') {
+    const searchOpt = searchMode === 'keyword'
+      ? { value: query, label: query, isKeywordSearch: true }
+      : { value: query, label: query, isSemanticSearch: true };
+    groups.push({ label: 'Search', options: [searchOpt] });
+  }
+  const clusterOptions = findClustersByQuery(clusterLabels, query, NUM_SEARCH_RESULTS);
+  if (clusterOptions.length > 0) {
+    groups.push({ label: CLUSTERS_GROUP, options: clusterOptions });
+  }
+  return groups;
+}
+
+export function flattenGroups(groups) {
+  const items = [];
+  for (const group of groups) {
+    for (const option of group.options) {
+      items.push({ ...option, group: group.label });
+    }
+  }
+  return items;
+}
+
 export const filterConstants = {
   SEARCH: 'search',
   KEYWORD_SEARCH: 'keyword',
@@ -42,6 +70,16 @@ export const filterConstants = {
   COLUMN: 'column',
   TIME_RANGE: 'timeRange',
   ENGAGEMENT: 'engagement',
+};
+
+// Maps FILTER_SLOT keys → filterConstants values (imported by Container + FilterChips)
+// Needs FILTER_SLOT at call site — kept as a plain object keyed by slot string.
+export const SLOT_TO_FILTER_TYPE = {
+  cluster: filterConstants.CLUSTER,
+  search: filterConstants.SEARCH,
+  column: filterConstants.COLUMN,
+  timeRange: filterConstants.TIME_RANGE,
+  engagement: filterConstants.ENGAGEMENT,
 };
 
 const ENGAGEMENT_PATTERN = /\b(?:min_faves|min_likes):(\d+)\b/gi;

@@ -197,8 +197,10 @@
     left: 0;
     width: 100%;
     z-index: 1000;
-    background: var(--glass-bg-solid, var(--neutrals-color-neutral-0));
-    border: 1px solid var(--borders-color-border-2);
+    background: var(--glass-bg-solid, rgba(255, 252, 240, 0.92));
+    backdrop-filter: blur(var(--glass-blur, 16px)) saturate(150%);
+    -webkit-backdrop-filter: blur(var(--glass-blur, 16px)) saturate(150%);
+    border: 1px solid var(--glass-border-subtle, rgba(40, 39, 38, 0.1));
     border-radius: var(--radius-sm);
     box-shadow: var(--glass-shadow, 0 2px 10px rgba(40, 39, 38, 0.1));
     margin-top: 2px;

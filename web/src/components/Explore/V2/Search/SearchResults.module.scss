@@ -42,6 +42,10 @@
     &:hover {
         background: var(--neutrals-color-neutral-1);
     }
+
+    &.highlighted {
+        background: var(--neutrals-color-neutral-2);
+    }
 }
 
 .optionIcon {

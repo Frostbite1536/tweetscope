@@ -1,267 +1,146 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, X, Type, Sparkles, ArrowDownNarrowWide, ArrowUpNarrowWide } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useCombobox } from 'downshift';
+import { Search, Type, Sparkles } from 'lucide-react';
 
+import FilterChips from './FilterChips';
 import SearchResults from './SearchResults';
-import { useScope } from '../../../../contexts/ScopeContext';
+import SearchResultsMetadata from './SearchResultsMetadata';
+import { useScope } from '@/contexts/ScopeContext';
 import styles from './Container.module.scss';
-import { useFilter, FILTER_SLOT } from '../../../../contexts/FilterContext';
-import { filterConstants, isSameClusterValue, parseEngagementOperators } from './utils';
-import { useColorMode } from '../../../../hooks/useColorMode';
-import { useClusterColors, resolveClusterColorCSS } from '@/hooks/useClusterColors';
+import { useFilter, FILTER_SLOT } from '@/contexts/FilterContext';
+import {
+  isSameClusterValue,
+  parseEngagementOperators,
+  buildGroupedOptions,
+  flattenGroups,
+  SLOT_TO_FILTER_TYPE,
+} from './utils';
 
-const SEARCH_MODES = {
-  KEYWORD: 'keyword',
-  SEMANTIC: 'semantic',
-};
+const SEARCH_MODES = { KEYWORD: 'keyword', SEMANTIC: 'semantic' };
 
-// ---------------------------------------------------------------------------
-// FilterChips — renders active filter slots as removable inline chips
-// ---------------------------------------------------------------------------
-
-const CHIP_META = {
-  [FILTER_SLOT.CLUSTER]: { icon: '●', prefix: '' },
-  keyword: { icon: '⌕', prefix: 'KW: ' },
-  semantic: { icon: '⚡', prefix: 'AI: ' },
-  [FILTER_SLOT.COLUMN]: { icon: '▦', prefix: '' },
-  [FILTER_SLOT.TIME_RANGE]: { icon: '◷', prefix: '' },
-  [FILTER_SLOT.ENGAGEMENT]: { icon: '♥', prefix: '' },
-};
-
-const FilterChips = ({ filterSlots, onClearSlot, onClearAll }) => {
-  const { isDark: isDarkMode } = useColorMode();
-  const { clusterLabels, clusterHierarchy } = useScope();
-  const { colorMap } = useClusterColors(clusterLabels, clusterHierarchy);
-
-  const chips = [];
-
-  if (filterSlots.cluster) {
-    const clusterId = filterSlots.cluster.value;
-    const clusterColor = resolveClusterColorCSS(colorMap, clusterId, isDarkMode);
-    chips.push({
-      key: FILTER_SLOT.CLUSTER,
-      label: filterSlots.cluster.label,
-      meta: CHIP_META[FILTER_SLOT.CLUSTER],
-      style: {
-        '--chip-bg': `color-mix(in srgb, ${clusterColor} 14%, transparent)`,
-        '--chip-border': `color-mix(in srgb, ${clusterColor} 28%, transparent)`,
-        '--chip-color': clusterColor,
-        '--chip-clear-bg': `color-mix(in srgb, ${clusterColor} 22%, transparent)`,
-        '--chip-clear-hover-bg': `color-mix(in srgb, ${clusterColor} 38%, transparent)`,
-      },
-    });
-  }
-
-  if (filterSlots.search) {
-    const mode = filterSlots.search.mode;
-    chips.push({
-      key: FILTER_SLOT.SEARCH,
-      label: filterSlots.search.label,
-      meta: CHIP_META[mode] || CHIP_META.keyword,
-      style: mode === 'semantic' ? {
-        '--chip-bg': 'color-mix(in srgb, var(--semantic-color-semantic-info) 12%, transparent)',
-        '--chip-border': 'color-mix(in srgb, var(--semantic-color-semantic-info) 24%, transparent)',
-        '--chip-color': 'var(--semantic-color-semantic-info)',
-        '--chip-clear-bg': 'color-mix(in srgb, var(--semantic-color-semantic-info) 20%, transparent)',
-        '--chip-clear-hover-bg': 'color-mix(in srgb, var(--semantic-color-semantic-info) 36%, transparent)',
-      } : {},
-    });
-  }
-
-  if (filterSlots.column) {
-    chips.push({
-      key: FILTER_SLOT.COLUMN,
-      label: filterSlots.column.label,
-      meta: CHIP_META[FILTER_SLOT.COLUMN],
-      style: {},
-    });
-  }
-
-  if (filterSlots.timeRange) {
-    chips.push({
-      key: FILTER_SLOT.TIME_RANGE,
-      label: filterSlots.timeRange.label || 'Time range',
-      meta: CHIP_META[FILTER_SLOT.TIME_RANGE],
-      style: {},
-    });
-  }
-
-  if (filterSlots.engagement) {
-    chips.push({
-      key: FILTER_SLOT.ENGAGEMENT,
-      label: filterSlots.engagement.label,
-      meta: CHIP_META[FILTER_SLOT.ENGAGEMENT],
-      style: {
-        '--chip-bg': 'color-mix(in srgb, var(--semantic-color-semantic-critical) 12%, transparent)',
-        '--chip-border': 'color-mix(in srgb, var(--semantic-color-semantic-critical) 24%, transparent)',
-        '--chip-color': 'var(--semantic-color-semantic-critical)',
-        '--chip-clear-bg': 'color-mix(in srgb, var(--semantic-color-semantic-critical) 20%, transparent)',
-        '--chip-clear-hover-bg': 'color-mix(in srgb, var(--semantic-color-semantic-critical) 36%, transparent)',
-      },
-    });
-  }
-
-  if (chips.length === 0) return null;
-
-  return (
-    <div className={styles.chipRow}>
-      {chips.map((chip) => (
-        <span key={chip.key} className={styles.chip} style={chip.style}>
-          <span className={styles.chipIcon}>{chip.meta.icon}</span>
-          <span className={styles.chipLabel} title={chip.label}>
-            {chip.meta.prefix}{chip.label}
-          </span>
-          <button
-            className={styles.chipClear}
-            onClick={() => onClearSlot(chip.key)}
-            aria-label={`Remove ${chip.label} filter`}
-          >
-            <X size={9} />
-          </button>
-        </span>
-      ))}
-      {chips.length > 1 && (
-        <button className={styles.chipClearAll} onClick={onClearAll} type="button">
-          Clear all
-        </button>
-      )}
-    </div>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// Container — main search bar + chips + dropdown
-// ---------------------------------------------------------------------------
+// Ordered list of filter slots for backspace-to-clear (last active gets removed first)
+const CHIP_ORDER = [
+  FILTER_SLOT.CLUSTER, FILTER_SLOT.SEARCH, FILTER_SLOT.COLUMN,
+  FILTER_SLOT.TIME_RANGE, FILTER_SLOT.ENGAGEMENT,
+];
 
 const Container = () => {
-  const [isInputFocused, setIsInputFocused] = useState(false);
   const [searchMode, setSearchMode] = useState(SEARCH_MODES.KEYWORD);
-
   const { clusterLabels } = useScope();
   const {
-    filterQuery,
-    setFilterQuery,
-    filterSlots,
-    filterActive,
-    applyCluster,
-    applySearch,
-    applyKeywordSearch,
-    applyColumn,
-    applyEngagement,
-    clearFilter,
-    clearAllFilters,
+    filterQuery, setFilterQuery,
+    filterSlots, applyCluster, applySearch, applyKeywordSearch,
+    applyEngagement, clearFilter, clearAllFilters,
   } = useFilter();
 
   // Sync search mode from active search slot (e.g. URL hydration)
   useEffect(() => {
-    if (filterSlots.search?.mode === 'semantic') {
-      setSearchMode(SEARCH_MODES.SEMANTIC);
-    } else if (filterSlots.search?.mode === 'keyword') {
-      setSearchMode(SEARCH_MODES.KEYWORD);
-    }
+    if (filterSlots.search?.mode === 'semantic') setSearchMode(SEARCH_MODES.SEMANTIC);
+    else if (filterSlots.search?.mode === 'keyword') setSearchMode(SEARCH_MODES.KEYWORD);
   }, [filterSlots.search?.mode]);
 
-  const handleInputChange = (val) => {
-    setFilterQuery(val);
-    setDropdownIsOpen(true);
-  };
+  // Build items for downshift
+  const groupedOptions = useMemo(
+    () => buildGroupedOptions(filterQuery, searchMode, clusterLabels),
+    [filterQuery, searchMode, clusterLabels],
+  );
+  const flatItems = useMemo(() => flattenGroups(groupedOptions), [groupedOptions]);
 
-  const handleInputFocus = () => setIsInputFocused(true);
-  const handleInputBlur = () => setIsInputFocused(false);
+  // Apply a dropdown selection as a filter
+  const applySelection = useCallback((item) => {
+    if (!item) return;
+    if (item.isKeywordSearch) return applyKeywordSearch(item.value);
+    if (item.isSemanticSearch) return applySearch(item.value);
+    const clusterObj = clusterLabels?.find((c) => isSameClusterValue(c.cluster, item.value))
+      || {
+        cluster: Number.isFinite(Number(item.value)) ? Number(item.value) : item.value,
+        label: item.label || String(item.value),
+      };
+    applyCluster(clusterObj);
+  }, [clusterLabels, applyCluster, applyKeywordSearch, applySearch]);
 
-  // ==== DROPDOWN STATE ====
-
-  const [dropdownIsOpen, setDropdownIsOpen] = useState(false);
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setDropdownIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleSelect = useCallback((selection) => {
-    setDropdownIsOpen(false);
-    const { type, value, column, label } = selection;
-    if (type === filterConstants.CLUSTER) {
-      const clusterObj = clusterLabels?.find((c) => isSameClusterValue(c.cluster, value))
-        || {
-          cluster: Number.isFinite(Number(value)) ? Number(value) : value,
-          label: label || String(value),
-        };
-      applyCluster(clusterObj);
-    } else if (type === filterConstants.KEYWORD_SEARCH) {
-      applyKeywordSearch(value);
-    } else if (type === filterConstants.SEARCH) {
-      applySearch(value);
-    } else if (type === filterConstants.COLUMN) {
-      applyColumn(column, value);
-    }
-  }, [clusterLabels, applyCluster, applyKeywordSearch, applySearch, applyColumn]);
-
-  const handleEnterKey = useCallback(() => {
+  // Enter with no highlighted item → run search / engagement operators
+  const handleEnterKeyRef = useRef(null);
+  handleEnterKeyRef.current = useCallback(() => {
     if (!filterQuery) return;
     const { minFaves, remainingQuery } = parseEngagementOperators(filterQuery);
-
-    if (minFaves) {
-      applyEngagement(minFaves);
-    }
-
+    if (minFaves) applyEngagement(minFaves);
     if (remainingQuery) {
-      if (searchMode === SEARCH_MODES.KEYWORD) {
-        handleSelect({ type: filterConstants.KEYWORD_SEARCH, value: remainingQuery, label: remainingQuery });
-      } else {
-        handleSelect({ type: filterConstants.SEARCH, value: remainingQuery, label: remainingQuery });
-      }
+      (searchMode === SEARCH_MODES.KEYWORD ? applyKeywordSearch : applySearch)(remainingQuery);
     } else if (minFaves) {
       setFilterQuery('');
-      setDropdownIsOpen(false);
     }
-  }, [filterQuery, searchMode, handleSelect, applyEngagement, setFilterQuery]);
+  }, [filterQuery, searchMode, applyKeywordSearch, applySearch, applyEngagement, setFilterQuery]);
 
-  const handleClearSlot = useCallback((slotKey) => {
-    const slotToType = {
-      [FILTER_SLOT.CLUSTER]: filterConstants.CLUSTER,
-      [FILTER_SLOT.SEARCH]: filterConstants.SEARCH,
-      [FILTER_SLOT.COLUMN]: filterConstants.COLUMN,
-      [FILTER_SLOT.TIME_RANGE]: filterConstants.TIME_RANGE,
-      [FILTER_SLOT.ENGAGEMENT]: filterConstants.ENGAGEMENT,
-    };
-    clearFilter(slotToType[slotKey]);
-  }, [clearFilter]);
+  // Backspace on empty input → clear last active chip
+  const clearLastChip = useCallback(() => {
+    if (filterQuery !== '') return;
+    for (let i = CHIP_ORDER.length - 1; i >= 0; i--) {
+      if (filterSlots[CHIP_ORDER[i]]) {
+        clearFilter(SLOT_TO_FILTER_TYPE[CHIP_ORDER[i]]);
+        return;
+      }
+    }
+  }, [filterQuery, filterSlots, clearFilter]);
 
-  const menuIsOpen = dropdownIsOpen || (isInputFocused && filterQuery === '');
+  const clearSlot = useCallback(
+    (slotKey) => clearFilter(SLOT_TO_FILTER_TYPE[slotKey]),
+    [clearFilter],
+  );
+
+  // ==== DOWNSHIFT ====
+
+  const {
+    isOpen, highlightedIndex,
+    getInputProps, getMenuProps, getItemProps,
+    openMenu,
+  } = useCombobox({
+    items: flatItems,
+    inputValue: filterQuery,
+    itemToString: () => '',
+    onInputValueChange: ({ inputValue }) => setFilterQuery(inputValue),
+    onSelectedItemChange: ({ selectedItem }) => applySelection(selectedItem),
+    stateReducer: (state, { type, changes }) => {
+      switch (type) {
+        case useCombobox.stateChangeTypes.InputKeyDownEnter:
+          if (state.highlightedIndex === -1) {
+            handleEnterKeyRef.current();
+            return { ...changes, isOpen: false, highlightedIndex: -1, selectedItem: null };
+          }
+          return { ...changes, isOpen: false, highlightedIndex: -1 };
+        case useCombobox.stateChangeTypes.InputBlur:
+          return { ...changes, selectedItem: null, highlightedIndex: -1 };
+        default:
+          return changes;
+      }
+    },
+  });
+
+  // ==== RENDER ====
 
   return (
-    <div className={styles.searchContainer} ref={containerRef}>
-      {/* Search row: icon + chips + input + mode pill */}
+    <div className={styles.searchContainer}>
       <div className={styles.searchBarRow}>
         <Search size={15} className={styles.searchIcon} />
         <div className={styles.inputWrapper}>
           <FilterChips
             filterSlots={filterSlots}
-            onClearSlot={handleClearSlot}
+            onClearSlot={clearSlot}
             onClearAll={clearAllFilters}
           />
           <input
-            className={styles.searchInput}
-            type="text"
-            value={filterQuery}
-            onChange={(e) => handleInputChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleEnterKey();
-            }}
-            placeholder={searchMode === SEARCH_MODES.KEYWORD
-              ? 'Search by keyword...'
-              : 'Search by meaning...'}
-            onFocus={handleInputFocus}
-            onBlur={handleInputBlur}
+            {...getInputProps({
+              className: styles.searchInput,
+              placeholder: searchMode === SEARCH_MODES.KEYWORD
+                ? 'Search by keyword...'
+                : 'Search by meaning...',
+              onFocus: () => openMenu(),
+              onKeyDown: (e) => {
+                if (e.key === 'Backspace' && filterQuery === '') clearLastChip();
+              },
+            })}
           />
         </div>
-        {/* Inner pill toggle */}
         <div className={styles.modePill}>
           <button
             className={`${styles.modeButton} ${searchMode === SEARCH_MODES.KEYWORD ? styles.modeButtonActive : ''}`}
@@ -282,86 +161,22 @@ const Container = () => {
         </div>
       </div>
 
-      {/* Dropdown results */}
-      {menuIsOpen && (
-        <div className={styles.searchResultsDropdown}>
+      <div
+        className={styles.searchResultsDropdown}
+        style={isOpen ? undefined : { display: 'none' }}
+        {...getMenuProps()}
+      >
+        {isOpen && (
           <SearchResults
+            groupedOptions={groupedOptions}
             query={filterQuery}
-            onSelect={handleSelect}
-            menuIsOpen={menuIsOpen}
-            searchMode={searchMode}
+            highlightedIndex={highlightedIndex}
+            getItemProps={getItemProps}
           />
-        </div>
-      )}
-
-      {/* Simplified metadata */}
-      <SearchResultsMetadata filterSlots={filterSlots} />
-    </div>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// SearchResultsMetadata — simplified count display
-// ---------------------------------------------------------------------------
-
-const SearchResultsMetadata = ({ filterSlots }) => {
-  const { filteredIndices, filterActive, sortKey, setSortKey, sortDirection, setSortDirection } = useFilter();
-
-  const hasSearch = filterSlots.search !== null;
-
-  const sortOptions = hasSearch
-    ? ['recent', 'likes', 'relevance']
-    : ['recent', 'likes'];
-
-  const SORT_LABELS = { recent: 'Recent', likes: 'Likes', relevance: 'Relevance' };
-
-  const cycleSortKey = () => {
-    const idx = sortOptions.indexOf(sortKey);
-    setSortKey(sortOptions[(idx + 1) % sortOptions.length]);
-  };
-
-  const toggleDirection = () => setSortDirection((d) => d === 'desc' ? 'asc' : 'desc');
-
-  const label = filterActive
-    ? (() => {
-        const parts = [];
-        if (filterSlots.cluster) parts.push(filterSlots.cluster.label);
-        if (filterSlots.search) parts.push(filterSlots.search.label);
-        if (filterSlots.column) parts.push(filterSlots.column.label);
-        if (filterSlots.timeRange) parts.push(filterSlots.timeRange.label || 'Time range');
-        if (filterSlots.engagement) parts.push(filterSlots.engagement.label);
-        return parts.join(' + ');
-      })()
-    : null;
-
-  const count = filteredIndices.length;
-
-  return (
-    <div className={styles.metadataRow}>
-      <span className={styles.metadataCount}>
-        {count} {filterActive ? 'results' : 'total'}
-        {label && (
-          <span className={styles.metadataLabel} title={label}> — {label}</span>
         )}
-      </span>
-      <div className={styles.metadataRight}>
-        <button
-          className={styles.sortDirectionButton}
-          onClick={toggleDirection}
-          type="button"
-          title={sortDirection === 'desc' ? 'Descending' : 'Ascending'}
-        >
-          {sortDirection === 'desc' ? <ArrowDownNarrowWide size={13} /> : <ArrowUpNarrowWide size={13} />}
-        </button>
-        <button
-          className={styles.sortCycleButton}
-          onClick={cycleSortKey}
-          type="button"
-          title={`Sort by ${SORT_LABELS[sortKey]} — click to cycle`}
-        >
-          {SORT_LABELS[sortKey]}
-        </button>
       </div>
+
+      <SearchResultsMetadata filterSlots={filterSlots} />
     </div>
   );
 };
