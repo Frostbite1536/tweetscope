@@ -24,12 +24,20 @@ from latentscope.models import get_embedding_model
 from latentscope.util import get_data_dir
 
 
+_NULL_SENTINELS = frozenset({"none", "null", "nan", "<na>", ""})
+
+_STATUS_URL_RE = re.compile(
+    r"https?://(?:www\.)?(?:x\.com|twitter\.com)/(?:i/web/)?(?:[A-Za-z0-9_]+/)?status/(?P<tweet_id>\d+)",
+    re.IGNORECASE,
+)
+
+
 def _normalize_tweet_id(value):
-    """Normalize tweet ID: strip trailing .0 from numeric strings."""
+    """Normalize tweet ID: strip trailing .0, handle null sentinels."""
     if value is None:
         return None
     text = str(value).strip()
-    if not text:
+    if not text or text.lower() in _NULL_SENTINELS:
         return None
     if text.endswith(".0") and text[:-2].isdigit():
         return text[:-2]
@@ -44,17 +52,125 @@ def _prepare_text(text, prefix):
 
 
 # ---------------------------------------------------------------------------
+# Reference text enrichment (quote tweets, cross-user reply parents)
+# ---------------------------------------------------------------------------
+
+def _parse_urls_json(value):
+    """Parse urls_json column into list of URL strings."""
+    if value is None:
+        return []
+    raw = value
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if not raw:
+            return []
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return []
+    else:
+        parsed = raw
+    if not isinstance(parsed, list):
+        return []
+    urls = []
+    for item in parsed:
+        if isinstance(item, str):
+            urls.append(item)
+        elif isinstance(item, dict):
+            url = item.get("expanded_url") or item.get("url") or ""
+            if url:
+                urls.append(str(url))
+    return urls
+
+
+def _extract_status_id(url):
+    """Extract tweet ID from a twitter.com/x.com status URL."""
+    match = _STATUS_URL_RE.search(str(url))
+    if not match:
+        return None
+    return match.group("tweet_id")
+
+
+def build_reference_text_map(df, text_column):
+    """Build a map from row index to enriched text with referenced tweet content.
+
+    For each tweet, finds referenced tweets (via urls_json status URLs) that exist
+    in the dataset, and prepends their text. This gives the embedding model context
+    about what a quote tweet or link-reference is commenting on.
+
+    The original text column in the DataFrame is NOT modified.
+
+    Returns:
+        enriched_text: dict[int, str] — row_index → enriched text (only for rows
+            that have resolvable references; rows without references are absent)
+        stats: dict with enrichment statistics
+    """
+    has_urls = "urls_json" in df.columns
+    if not has_urls:
+        return {}, {"enriched_count": 0, "total_references_resolved": 0}
+
+    # Build normalized ID → (row_index, text) lookup
+    id_to_text = {}
+    for idx in range(len(df)):
+        row = df.iloc[idx]
+        norm_id = _normalize_tweet_id(row.get("id"))
+        if norm_id:
+            id_to_text[norm_id] = str(row.get(text_column) or "")
+
+    enriched_text = {}
+    total_resolved = 0
+
+    for idx in range(len(df)):
+        row = df.iloc[idx]
+        own_id = _normalize_tweet_id(row.get("id"))
+
+        # Collect referenced tweet IDs from URL entities
+        ref_texts = []
+        seen_ref_ids = set()
+        for url in _parse_urls_json(row.get("urls_json")):
+            ref_id = _extract_status_id(url)
+            if not ref_id or ref_id == own_id or ref_id in seen_ref_ids:
+                continue
+            seen_ref_ids.add(ref_id)
+            ref_text = id_to_text.get(ref_id)
+            if ref_text:
+                ref_texts.append(ref_text)
+
+        if ref_texts:
+            # Concatenate: referenced text(s) first, then the tweet's own text
+            own_text = str(row.get(text_column) or "")
+            combined = "\n\n".join(ref_texts) + "\n\n" + own_text
+            enriched_text[idx] = combined
+            total_resolved += len(ref_texts)
+
+    stats = {
+        "enriched_count": len(enriched_text),
+        "total_references_resolved": total_resolved,
+    }
+    return enriched_text, stats
+
+
+# ---------------------------------------------------------------------------
 # Thread grouping for contextual embeddings
 # ---------------------------------------------------------------------------
 
 VALID_CONTEXT_TWEET_TYPES = {"tweet", "note_tweet"}
 
 
-def build_self_thread_groups(df, text_column, prefix=""):
+def build_self_thread_groups(df, text_column, prefix="", enriched_text=None):
     """Build thread groups from parquet data for contextual embedding.
 
     Groups tweets by self-reply threads (user replying to themselves).
     Standalone tweets become single-element groups.
+
+    Args:
+        df: DataFrame with tweet data
+        text_column: name of the text column
+        prefix: optional prefix to prepend to each text
+        enriched_text: optional dict[int, str] mapping row_index → enriched text
+            (from build_reference_text_map). When provided, uses enriched text
+            instead of the raw text column for tweets that have resolvable
+            references (quote tweets, linked tweets).
 
     Returns:
         groups: list of dicts, each with:
@@ -63,6 +179,15 @@ def build_self_thread_groups(df, text_column, prefix=""):
             - context_count: int — number of leading context-only chunks
         thread_stats: dict with summary statistics
     """
+    if enriched_text is None:
+        enriched_text = {}
+
+    def _get_text(idx):
+        """Get text for a row, using enriched version if available."""
+        if idx in enriched_text:
+            return _prepare_text(enriched_text[idx], prefix)
+        return _prepare_text(df.iloc[idx][text_column], prefix)
+
     has_thread_cols = (
         "in_reply_to_status_id" in df.columns
         and "username" in df.columns
@@ -71,7 +196,7 @@ def build_self_thread_groups(df, text_column, prefix=""):
         # No thread columns — treat every row as standalone
         groups = []
         for idx in range(len(df)):
-            text = _prepare_text(df.iloc[idx][text_column], prefix)
+            text = _get_text(idx)
             groups.append({
                 "row_indices": [idx],
                 "texts": [text],
@@ -177,7 +302,7 @@ def build_self_thread_groups(df, text_column, prefix=""):
             member_indices.sort(key=lambda x: x[1])
 
         row_indices = [idx for _, idx in member_indices]
-        texts = [_prepare_text(df.iloc[idx][text_column], prefix) for idx in row_indices]
+        texts = [_get_text(idx) for idx in row_indices]
         context_count = 0
 
         # Check if thread root is a reply to someone else's tweet in dataset
@@ -209,7 +334,7 @@ def build_self_thread_groups(df, text_column, prefix=""):
     for idx in range(len(df)):
         norm_id = _normalize_tweet_id(df.iloc[idx].get("id"))
         if norm_id and norm_id not in assigned:
-            text = _prepare_text(df.iloc[idx][text_column], prefix)
+            text = _get_text(idx)
             groups.append({
                 "row_indices": [idx],
                 "texts": [text],
@@ -693,8 +818,17 @@ def embed(dataset_id, text_column, model_id, prefix, rerun, dimensions, batch_si
 
     # --- CONTEXTUAL PATH: group tweets by thread ---
     if hasattr(model, 'embed_contextual'):
+        # Build reference text enrichment (quote tweets, linked tweets)
+        print("Building reference text enrichment map...")
+        enriched_text, enrich_stats = build_reference_text_map(df, text_column)
+        if enrich_stats["enriched_count"] > 0:
+            print(f"  {enrich_stats['enriched_count']} tweets enriched with "
+                  f"{enrich_stats['total_references_resolved']} resolved references")
+        else:
+            print("  No resolvable tweet references found")
+
         print("Building self-thread groups for contextual embedding...")
-        groups, thread_stats = build_self_thread_groups(df, text_column, prefix)
+        groups, thread_stats = build_self_thread_groups(df, text_column, prefix, enriched_text=enriched_text)
         print(f"  {thread_stats['total_groups']} groups: "
               f"{thread_stats['multi_tweet_thread_count']} threads, "
               f"{thread_stats['standalone_count']} standalone, "
@@ -780,16 +914,27 @@ def embed(dataset_id, text_column, model_id, prefix, rerun, dimensions, batch_si
                 "prefix": prefix,
                 "contextual": True,
                 "thread_stats": thread_stats,
+                "enrichment_stats": enrich_stats,
                 "min_values": min_values.tolist(),
                 "max_values": max_values.tolist(),
             }, f, indent=2)
 
     else:
-        # --- FLAT PATH (existing behavior, unchanged) ---
+        # --- FLAT PATH ---
+        # Build reference text enrichment (quote tweets, linked tweets)
+        print("Building reference text enrichment map...")
+        enriched_text, enrich_stats = build_reference_text_map(df, text_column)
+        if enrich_stats["enriched_count"] > 0:
+            print(f"  {enrich_stats['enriched_count']} tweets enriched with "
+                  f"{enrich_stats['total_references_resolved']} resolved references")
+
         print("Checking for empty inputs")
         sentences = df[text_column].tolist()
         prefixed = []
         for i, s in enumerate(sentences):
+            # Use enriched text if available for this row
+            if i in enriched_text:
+                s = enriched_text[i]
             if s is None or s == "":
                 print(i, s, "text is empty, adding a [space]")
                 s = " "
