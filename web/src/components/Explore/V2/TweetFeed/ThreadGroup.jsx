@@ -17,6 +17,9 @@ ThreadGroup.propTypes = {
   onViewQuotes: PropTypes.func,
   hasMissingAncestors: PropTypes.bool,
   missingAncestorCount: PropTypes.number,
+  globalThreadSize: PropTypes.number,
+  visibleCount: PropTypes.number,
+  borderless: PropTypes.bool,
 };
 
 function ThreadGroup({
@@ -32,6 +35,8 @@ function ThreadGroup({
   onViewQuotes,
   hasMissingAncestors = false,
   missingAncestorCount = 0,
+  globalThreadSize = null,
+  visibleCount = rows.length,
   borderless = false,
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -41,6 +46,16 @@ function ThreadGroup({
 
   const rootRow = rows[0];
   const remainingCount = rows.length - 1;
+  const normalizedGlobalSize = Number.isFinite(globalThreadSize)
+    ? Math.max(1, Math.trunc(globalThreadSize))
+    : null;
+  const stableReplyCount = normalizedGlobalSize && normalizedGlobalSize > 1
+    ? normalizedGlobalSize - 1
+    : null;
+  const groupLabelCount = normalizedGlobalSize || visibleCount || rows.length;
+  const hasLocalReplies = remainingCount > 0;
+  const hasGlobalHiddenReplies = !hasLocalReplies && Boolean(stableReplyCount && stableReplyCount > 0);
+  const canShowRepliesAction = hasLocalReplies || (hasGlobalHiddenReplies && onViewThread);
 
   const handleLoadAncestors = (e) => {
     e.stopPropagation();
@@ -48,8 +63,22 @@ function ThreadGroup({
     if (onViewThread) onViewThread(rootRow.ls_index);
   };
 
+  const handleRepliesAction = () => {
+    if (hasLocalReplies) {
+      setExpanded((prev) => !prev);
+      return;
+    }
+    if (hasGlobalHiddenReplies && onViewThread) {
+      onViewThread(rootRow.ls_index);
+    }
+  };
+
   return (
-    <div className={`${styles.threadGroup} ${borderless ? styles.borderless : ''}`} role="group" aria-label={`Thread of ${rows.length} tweets`}>
+    <div
+      className={`${styles.threadGroup} ${borderless ? styles.borderless : ''}`}
+      role="group"
+      aria-label={`Thread of ${groupLabelCount} tweets`}
+    >
       {/* Missing ancestors banner */}
       {hasMissingAncestors && (
         <button
@@ -122,19 +151,21 @@ function ThreadGroup({
       )}
 
       {/* Expand/collapse bar */}
-      {remainingCount > 0 && (
+      {canShowRepliesAction && (
         <button
           className={`${styles.expandBar} ${expanded ? styles.expandBarExpanded : ''}`}
-          onClick={() => setExpanded(!expanded)}
+          onClick={handleRepliesAction}
           type="button"
-          aria-expanded={expanded}
-          aria-controls={repliesId}
+          aria-expanded={hasLocalReplies ? expanded : undefined}
+          aria-controls={hasLocalReplies ? repliesId : undefined}
         >
           <MessageSquare size={13} />
           <span>
             {expanded
-              ? 'Collapse thread'
-              : `${remainingCount} more tweet${remainingCount === 1 ? '' : 's'} in this thread`}
+              ? 'Hide replies'
+              : (stableReplyCount
+                ? `Show replies (${stableReplyCount} in thread)`
+                : `${remainingCount} more tweet${remainingCount === 1 ? '' : 's'} in this thread`)}
           </span>
           <ChevronDown size={13} className={styles.expandChevron} />
         </button>

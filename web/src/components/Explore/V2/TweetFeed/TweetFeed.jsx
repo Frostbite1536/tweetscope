@@ -81,6 +81,8 @@ function TweetFeed({
                 onViewQuotes={onViewQuotes}
                 hasMissingAncestors={item.hasMissingAncestors}
                 missingAncestorCount={item.missingAncestorCount}
+                globalThreadSize={item.globalThreadSize}
+                visibleCount={item.visibleCount}
               />
             );
           }
