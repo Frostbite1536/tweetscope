@@ -238,7 +238,7 @@ def _upsert_import_rows(
     if merged_df["ls_index"].isna().any():
         raise ValueError("Null ls_index values detected after import merge")
 
-    ingest(dataset_id, merged_df, text_column=text_column)
+    ingest(dataset_id, merged_df, text_column=text_column, profile=result.get("profile"))
 
     manifest_payload = {
         "id": batch_id,
@@ -797,7 +797,7 @@ def run_import(
     zip_path: str | None = None,
     input_path: str | None = None,
     username: str | None = None,
-    include_likes: bool = True,
+    include_likes: bool = False,
     year: int | None = None,
     lang: str | None = None,
     min_favorites: int = 0,
@@ -820,7 +820,7 @@ def run_import(
     toponymy_min_clusters: int = 2,
     toponymy_base_min_cluster_size: int = 10,
     toponymy_context: str | None = None,
-    build_links: bool = False,
+    build_links: bool = True,
     import_batch_id: str | None = None,
     incremental_links: bool = True,
 ) -> dict[str, Any]:
@@ -1015,9 +1015,9 @@ def main() -> None:
     parser.add_argument("--input_path", type=str, help="Path to extracted community JSON")
     parser.add_argument("--username", type=str, help="Community archive username")
     parser.add_argument(
-        "--exclude_likes",
+        "--include_likes",
         action="store_true",
-        help="Exclude likes from imported rows",
+        help="Include likes as a separate dataset (default: off)",
     )
     parser.add_argument("--year", type=int, help="Filter tweets to a specific year")
     parser.add_argument("--lang", type=str, help="Language filter (e.g. en)")
@@ -1087,8 +1087,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--build_links",
-        action="store_true",
-        help="Build reply/quote link graph artifacts after import",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Build reply/quote link graph artifacts after import (default: True)",
     )
     parser.add_argument(
         "--import_batch_id",
@@ -1106,7 +1107,7 @@ def main() -> None:
 
     args = parser.parse_args()
     args_dict = vars(args).copy()
-    args_dict["include_likes"] = not args_dict.pop("exclude_likes", False)
+    args_dict["include_likes"] = args_dict.pop("include_likes", False)
     result = run_import(**args_dict)
     tweet_rows = result["rows"]
     likes_rows = result.get("likes_dataset", {}).get("rows", 0)

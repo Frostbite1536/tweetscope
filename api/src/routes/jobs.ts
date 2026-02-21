@@ -278,8 +278,8 @@ export const jobsRoutes = new Hono()
 
       if (truthyFlag(asString(body.exclude_replies))) argv.push("--exclude_replies");
       if (truthyFlag(asString(body.exclude_retweets))) argv.push("--exclude_retweets");
-      const includeLikes = truthyFlag(asString(body.include_likes), true);
-      if (!includeLikes) argv.push("--exclude_likes");
+      if (falsyFlag(asString(body.build_links))) argv.push("--no-build_links");
+      if (truthyFlag(asString(body.include_likes))) argv.push("--include_likes");
       const runPipeline = truthyFlag(asString(body.run_pipeline), true);
       if (runPipeline) argv.push("--run_pipeline");
       const incrementalLinks = asString(body.incremental_links);

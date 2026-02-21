@@ -113,7 +113,7 @@ def ingest_file(dataset_id: str, file_path: str | None, text_column: str | None 
     ingest(dataset_id, df, text_column=text_column)
 
 
-def ingest(dataset_id: str, df: pd.DataFrame, text_column: str | None = None) -> None:
+def ingest(dataset_id: str, df: pd.DataFrame, text_column: str | None = None, profile: dict | None = None) -> None:
     data_dir = get_data_dir()
     dataset_dir = os.path.join(data_dir, dataset_id)
     os.makedirs(dataset_dir, exist_ok=True)
@@ -152,20 +152,22 @@ def ingest(dataset_id: str, df: pd.DataFrame, text_column: str | None = None) ->
                 out[col] = out[col].astype(str)
 
     out.to_parquet(os.path.join(dataset_dir, "input.parquet"), index=False)
+    meta_dict = {
+        "id": dataset_id,
+        "length": int(len(out)),
+        "columns": out.columns.tolist(),
+        "text_column": text_column,
+        "column_metadata": metadata,
+        "potential_embeddings": potential_embeddings,
+        "ls_version": __version__,
+    }
+    if profile:
+        meta_dict["profile"] = {
+            k: v for k, v in profile.items()
+            if k in ("username", "display_name", "avatar_url", "bio")
+        }
     with open(os.path.join(dataset_dir, "meta.json"), "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "id": dataset_id,
-                "length": int(len(out)),
-                "columns": out.columns.tolist(),
-                "text_column": text_column,
-                "column_metadata": metadata,
-                "potential_embeddings": potential_embeddings,
-                "ls_version": __version__,
-            },
-            f,
-            indent=2,
-        )
+        json.dump(meta_dict, f, indent=2)
 
     for dirname in ("embeddings", "umaps", "clusters", "scopes", "tags"):
         os.makedirs(os.path.join(dataset_dir, dirname), exist_ok=True)
