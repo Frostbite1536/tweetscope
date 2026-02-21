@@ -10,7 +10,7 @@
 .page {
   padding-top: 0;
   height: 100vh;
-  overflow: clip;
+  overflow-y: auto;
 }
 
 .docs-banner {
