@@ -12,6 +12,36 @@ const EMPTY_CLUSTERS = [];
 const EMPTY_MAPPING = { clusterToTopLevel: {}, indicesByTopLevel: {} };
 const EMPTY_ROWS_MAP = {};
 
+function normalizeClusterId(value) {
+  if (value === null || value === undefined) return null;
+  return String(value);
+}
+
+function buildDescendantsMap(roots) {
+  const descendantsByCluster = new Map();
+
+  const walk = (node) => {
+    const nodeId = normalizeClusterId(node?.cluster);
+    if (nodeId === null) return new Set();
+
+    const descendants = new Set([nodeId]);
+    const children = Array.isArray(node?.children) ? node.children : [];
+    children.forEach((child) => {
+      const childDescendants = walk(child);
+      childDescendants.forEach((id) => descendants.add(id));
+    });
+
+    descendantsByCluster.set(nodeId, descendants);
+    return descendants;
+  };
+
+  (Array.isArray(roots) ? roots : []).forEach((root) => {
+    walk(root);
+  });
+
+  return descendantsByCluster;
+}
+
 export default function useCarouselData(focusedClusterIndex, enabled = true) {
   const { clusterHierarchy, scopeRows, dataset, scope, clusterMap } = useScope();
 
@@ -29,6 +59,11 @@ export default function useCarouselData(focusedClusterIndex, enabled = true) {
     if (!clusterHierarchy?.children) return EMPTY_CLUSTERS;
     return clusterHierarchy.children;
   }, [clusterHierarchy]);
+
+  const descendantsByCluster = useMemo(
+    () => buildDescendantsMap(topLevelClusters),
+    [topLevelClusters]
+  );
 
   // Build a mapping: for each scopeRow cluster id → which top-level cluster it belongs to
   const { clusterToTopLevel, indicesByTopLevel } = useMemo(() => {
@@ -210,13 +245,19 @@ export default function useCarouselData(focusedClusterIndex, enabled = true) {
       if (!col?.rows) { map[index] = []; continue; }
       const activeSubCluster = activeSubClusters[index];
       if (activeSubCluster === null || activeSubCluster === undefined) { map[index] = col.rows; continue; }
+      const activeId = normalizeClusterId(activeSubCluster);
+      const allowedIds = activeId === null
+        ? null
+        : descendantsByCluster.get(activeId) ?? new Set([activeId]);
+      if (!allowedIds) { map[index] = col.rows; continue; }
       map[index] = col.rows.filter((row) => {
-        const info = clusterMap[row.ls_index];
-        return info?.cluster === activeSubCluster;
+        const info = clusterMap[row.ls_index] ?? clusterMap[String(row.ls_index)];
+        const rowClusterId = normalizeClusterId(info?.cluster ?? row.cluster);
+        return rowClusterId !== null && allowedIds.has(rowClusterId);
       });
     }
     return map;
-  }, [enabled, columnData, activeSubClusters, clusterMap]);
+  }, [enabled, columnData, activeSubClusters, clusterMap, descendantsByCluster]);
 
   return {
     topLevelClusters,
