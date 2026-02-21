@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Home from './components/Home';
+import Dashboard from './pages/Dashboard';
+import NewCollection from './pages/NewCollection';
 import Explore from './pages/V2/FullScreenExplore';
 import { apiService } from './lib/apiService';
 import { queryKeys } from './query/keys';
@@ -89,10 +90,11 @@ function App() {
             </>
           ) : (
             <>
-              <Route path="/" element={<Navigate to="/import" replace />} />
-              <Route path="/import" element={<Home appConfig={appConfig} />} />
+              <Route path="/" element={<Dashboard appConfig={appConfig} />} />
+              <Route path="/new" element={<NewCollection appConfig={appConfig} />} />
+              <Route path="/import" element={<Navigate to="/new" replace />} />
               <Route path="/datasets/:dataset/explore/:scope" element={<Explore />} />
-              <Route path="*" element={<Navigate to="/import" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </>
           )}
         </Routes>
