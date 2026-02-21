@@ -219,6 +219,8 @@ export function FilterProvider({ children }) {
   const [filteredIndices, setFilteredIndices] = useState([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [sortKey, setSortKey] = useState('likes');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   const [urlParams, setUrlParams] = useSearchParams();
   const urlFilterSignature = useMemo(
@@ -261,6 +263,25 @@ export function FilterProvider({ children }) {
   const columnFilterFn = columnFilter.filter;
   const semanticSearchFilterFn = searchFilter.filter;
   const keywordSearchFilterFn = keywordSearchFilter.filter;
+
+  // Auto-switch sort to relevance when search becomes active, revert when cleared
+  const prevSearchRef = useRef(null);
+  useEffect(() => {
+    const hasSearch = filterSlots.search !== null;
+    const hadSearch = prevSearchRef.current !== null;
+    prevSearchRef.current = filterSlots.search;
+
+    if (hasSearch && !hadSearch) {
+      setSortKey('relevance');
+    } else if (!hasSearch && hadSearch) {
+      setSortKey('likes');
+    }
+  }, [filterSlots.search]);
+
+  // Reset page when sort changes
+  useEffect(() => {
+    setPage(0);
+  }, [sortKey, sortDirection]);
 
   const setFilterQuery = useCallback((query) => {
     dispatch({ type: ACTION.SET_FILTER_QUERY, query });
@@ -578,25 +599,57 @@ export function FilterProvider({ children }) {
 
   const visibleIndexSet = useMemo(() => new Set(visibleFilteredIndices), [visibleFilteredIndices]);
 
+  // Sort indices for feed ordering (scatter dimming uses visibleIndexSet above, unaffected by sort)
+  const sortedIndices = useMemo(() => {
+    if (sortKey === 'recent' && sortDirection === 'desc') return visibleFilteredIndices;
+
+    const sorted = [...visibleFilteredIndices];
+
+    if (sortKey === 'recent') {
+      sorted.reverse();
+    } else if (sortKey === 'likes') {
+      sorted.sort((a, b) => {
+        const diff = getLikesCount(scopeRowsByIndex.get(a)) - getLikesCount(scopeRowsByIndex.get(b));
+        return sortDirection === 'desc' ? -diff : diff;
+      });
+    } else if (sortKey === 'relevance') {
+      const dMap = searchFilter.distanceMap;
+      const sMap = keywordSearchFilter.scoreMap;
+      if (dMap.size > 0) {
+        sorted.sort((a, b) => {
+          const diff = (dMap.get(a) ?? Infinity) - (dMap.get(b) ?? Infinity);
+          return sortDirection === 'desc' ? diff : -diff;
+        });
+      } else if (sMap.size > 0) {
+        sorted.sort((a, b) => {
+          const diff = (sMap.get(b) ?? -Infinity) - (sMap.get(a) ?? -Infinity);
+          return sortDirection === 'desc' ? diff : -diff;
+        });
+      }
+    }
+
+    return sorted;
+  }, [visibleFilteredIndices, sortKey, sortDirection, scopeRowsByIndex, searchFilter.distanceMap, keywordSearchFilter.scoreMap]);
+
   const totalPages = useMemo(
-    () => Math.ceil(visibleFilteredIndices.length / ROWS_PER_PAGE),
-    [visibleFilteredIndices]
+    () => Math.ceil(sortedIndices.length / ROWS_PER_PAGE),
+    [sortedIndices]
   );
 
   const shownIndices = useMemo(() => {
-    return visibleFilteredIndices.slice(0, (page + 1) * ROWS_PER_PAGE);
-  }, [visibleFilteredIndices, page]);
+    return sortedIndices.slice(0, (page + 1) * ROWS_PER_PAGE);
+  }, [sortedIndices, page]);
 
   const pageSlices = useMemo(() => {
     const maxPage = Math.min(page, Math.max(totalPages - 1, 0));
     const slices = [];
     for (let p = 0; p <= maxPage; p++) {
-      const indices = visibleFilteredIndices.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE);
+      const indices = sortedIndices.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE);
       if (indices.length === 0) continue;
       slices.push({ pageIndex: p, indices });
     }
     return slices;
-  }, [visibleFilteredIndices, page, totalPages]);
+  }, [sortedIndices, page, totalPages]);
 
   const rowQueries = useQueries({
     queries: pageSlices.map(({ indices }) => ({
@@ -644,6 +697,12 @@ export function FilterProvider({ children }) {
     setFilterQuery,
     filterActive,
 
+    // Sort
+    sortKey,
+    setSortKey,
+    sortDirection,
+    setSortDirection,
+
     filteredIndices,
     visibleIndexSet,
     shownIndices,
@@ -674,6 +733,10 @@ export function FilterProvider({ children }) {
     filterQuery,
     setFilterQuery,
     filterActive,
+    sortKey,
+    setSortKey,
+    sortDirection,
+    setSortDirection,
     filteredIndices,
     visibleIndexSet,
     shownIndices,

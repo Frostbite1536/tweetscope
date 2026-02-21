@@ -247,3 +247,48 @@
     white-space: nowrap;
     flex-shrink: 0;
 }
+
+.metadataRight {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.sortCycleButton {
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-color-text-subtle);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-xs);
+    transition: color var(--transition-fast), background var(--transition-fast);
+    white-space: nowrap;
+
+    &:hover {
+        color: var(--text-color-text-main);
+        background: var(--neutrals-color-neutral-1);
+    }
+}
+
+.sortDirectionButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-color-text-subtle);
+    cursor: pointer;
+    padding: var(--space-1);
+    border-radius: var(--radius-xs);
+    transition: color var(--transition-fast), background var(--transition-fast);
+
+    &:hover {
+        color: var(--text-color-text-main);
+        background: var(--neutrals-color-neutral-1);
+    }
+}
