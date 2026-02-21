@@ -29,8 +29,8 @@ export const FLEXOKI_CLUSTER_TONES_DARK = [
   [[192, 62, 53], [203, 97, 32], [190, 146, 7], [118, 141, 33], [47, 150, 141], [49, 113, 178], [115, 94, 181], [183, 69, 131]],  // 500
 ];
 
-const FLEXOKI_CLUSTER_UNKNOWN_LIGHT = [145, 130, 100]; // warm stone
-const FLEXOKI_CLUSTER_UNKNOWN_DARK = [185, 170, 140];
+const FLEXOKI_CLUSTER_UNKNOWN_LIGHT = [255, 225, 197]; // warm peach (#FFE1C5)
+const FLEXOKI_CLUSTER_UNKNOWN_DARK = [255, 225, 197]; // warm peach (#FFE1C5)
 
 // Canonical 8-hue palette (original Flexoki mid-tone, now row 3).
 export const CLUSTER_PALETTE = FLEXOKI_CLUSTER_TONES_LIGHT[3];
