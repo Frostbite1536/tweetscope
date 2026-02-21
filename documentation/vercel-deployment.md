@@ -58,11 +58,11 @@ Use these files as source-of-truth when creating Vercel environment variables:
 
 ### Demo frontend (`web-demo`)
 
-- `VITE_API_URL=https://<api-demo-domain>/api`
+- `VITE_API_URL=https://<api-demo-domain>` (no `/api` suffix)
 
 ### Hosted frontend (`web-app`)
 
-- `VITE_API_URL=https://<api-app-domain>/api`
+- `VITE_API_URL=https://<api-app-domain>` (no `/api` suffix)
 
 ## Domain layout (recommended)
 

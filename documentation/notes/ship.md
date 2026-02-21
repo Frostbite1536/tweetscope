@@ -97,8 +97,8 @@ Recommended domains:
 - `api.<domain>` -> `api-app`
 
 Frontend wiring:
-- demo: `VITE_API_URL=https://api-demo.<domain>/api`
-- hosted: `VITE_API_URL=https://api.<domain>/api`
+- demo: `VITE_API_URL=https://api-demo.<domain>` (no `/api` suffix)
+- hosted: `VITE_API_URL=https://api.<domain>` (no `/api` suffix)
 
 ## 5. Shared Infra (Common to Demo + Hosted)
 - LanceDB Cloud: `LANCEDB_URI`, `LANCEDB_API_KEY`
