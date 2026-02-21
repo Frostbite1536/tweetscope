@@ -126,7 +126,7 @@ def run_scope(
     print("exporting to lancedb")
     export_lance(data_dir, dataset_id, resolved_scope_id)
 
-    from latentscope.pipeline.catalog_registry import upsert_scope_meta
+    from latentscope.pipeline.catalog_registry import upsert_dataset_meta, upsert_scope_meta
 
     upsert_scope_meta(
         data_dir,
@@ -134,6 +134,13 @@ def run_scope(
         scope_id=resolved_scope_id,
         scope_meta=scope_meta,
         is_active=True,
+    )
+    # Keep dataset registry in sync with the newest active scope.
+    upsert_dataset_meta(
+        data_dir,
+        dataset_id=dataset_id,
+        meta=scope_meta["dataset"],
+        active_scope_id=resolved_scope_id,
     )
 
     print("wrote scope", resolved_scope_id)
