@@ -33,23 +33,23 @@ function ConnectionBadges({ stats, onViewThread, onViewQuotes, compact = false }
   // Priority 2: Thread indicator from node stats.
   // Show numeric size only for canonical internal roots; members get a
   // non-numeric indicator so the badge doesn't oscillate with feed paging.
-  if (isCanonicalInternalRoot) {
-    badges.push({
-      key: 'thread',
-      type: 'thread',
-      icon: MessageSquare,
-      label: `${threadSize}-tweet thread`,
-      action: onViewThread,
-    });
-  } else if (isThreadMember) {
-    badges.push({
-      key: 'thread-member',
-      type: 'thread',
-      icon: MessageSquare,
-      label: 'In thread',
-      action: onViewThread,
-    });
-  }
+  // if (isCanonicalInternalRoot) {
+  //   badges.push({
+  //     key: 'thread',
+  //     type: 'thread',
+  //     icon: MessageSquare,
+  //     label: `${threadSize}-tweet thread`,
+  //     action: onViewThread,
+  //   });
+  // } else if (isThreadMember) {
+  //   badges.push({
+  //     key: 'thread-member',
+  //     type: 'thread',
+  //     icon: MessageSquare,
+  //     label: 'In thread',
+  //     action: onViewThread,
+  //   });
+  // }
 
   // Priority 3: Quoted by others
   if (stats.quoteInCount > 0) {
