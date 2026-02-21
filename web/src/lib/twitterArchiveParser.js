@@ -51,14 +51,25 @@ function minimizeTweetObject(tweetEntry, fallbackUsername = null) {
   }
 
   const urls = asArray(t?.entities?.urls)
-    .map((url) => url?.expanded_url || url?.url)
-    .filter(Boolean)
-    .map((expandedUrl) => ({ expanded_url: expandedUrl }));
+    .map((url) => ({
+      url: url?.url || null,
+      expanded_url: url?.expanded_url || url?.url || null,
+      display_url: url?.display_url || null,
+      indices: Array.isArray(url?.indices) ? url.indices : null,
+    }))
+    .filter((url) => Boolean(url.expanded_url || url.url));
 
   const media = asArray(t?.extended_entities?.media)
-    .map((m) => m?.media_url_https || m?.media_url)
-    .filter(Boolean)
-    .map((mediaUrl) => ({ media_url_https: mediaUrl }));
+    .map((m) => ({
+      url: m?.url || null,
+      expanded_url: m?.expanded_url || null,
+      display_url: m?.display_url || null,
+      indices: Array.isArray(m?.indices) ? m.indices : null,
+      media_url_https: m?.media_url_https || m?.media_url || null,
+      media_url: m?.media_url || null,
+      type: m?.type || null,
+    }))
+    .filter((m) => Boolean(m.media_url_https || m.expanded_url || m.url));
 
   return {
     tweet: {
@@ -92,9 +103,13 @@ function noteTweetToTweet(noteEntry, fallbackUsername = null) {
   }
 
   const urls = asArray(core.urls)
-    .map((u) => u?.expandedUrl || u?.url)
-    .filter(Boolean)
-    .map((expandedUrl) => ({ expanded_url: expandedUrl }));
+    .map((u) => ({
+      url: u?.url || null,
+      expanded_url: u?.expandedUrl || u?.url || null,
+      display_url: u?.displayUrl || null,
+      indices: null,
+    }))
+    .filter((u) => Boolean(u.expanded_url || u.url));
 
   return {
     tweet: {
@@ -248,7 +263,12 @@ export async function extractTwitterArchiveForImport(file) {
         );
         for (const u of matched.urls) {
           if (!existingUrls.has(u)) {
-            minimized.tweet.entities.urls.push({ expanded_url: u });
+            minimized.tweet.entities.urls.push({
+              url: null,
+              expanded_url: u,
+              display_url: null,
+              indices: null,
+            });
           }
         }
         consumedNoteIds.add(matched.noteId);

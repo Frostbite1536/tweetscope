@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import re
 import zipfile
@@ -74,6 +75,147 @@ def _parse_date_any(value: Any) -> datetime | None:
         return datetime.fromisoformat(text)
     except ValueError:
         return None
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
+def _parse_indices(value: Any) -> tuple[int, int] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        return None
+    try:
+        start = int(value[0])
+        end = int(value[1])
+    except (TypeError, ValueError):
+        return None
+    if start < 0 or end < start:
+        return None
+    return start, end
+
+
+def _extract_urls_and_entities(
+    tweet: dict[str, Any],
+) -> tuple[list[str], list[str], list[dict[str, Any]]]:
+    """Extract URLs/media plus rich entity metadata for deterministic text cleanup."""
+    urls: list[str] = []
+    media_urls: list[str] = []
+    url_entities: list[dict[str, Any]] = []
+
+    for url in tweet.get("entities", {}).get("urls", []) or []:
+        expanded = url.get("expanded_url")
+        short = url.get("url")
+        display = url.get("display_url")
+        indices = _parse_indices(url.get("indices"))
+        if expanded:
+            urls.append(str(expanded))
+        url_entities.append(
+            {
+                "kind": "url",
+                "url": str(short) if short else None,
+                "expanded_url": str(expanded) if expanded else None,
+                "display_url": str(display) if display else None,
+                "indices": [indices[0], indices[1]] if indices else None,
+            }
+        )
+
+    for media in tweet.get("extended_entities", {}).get("media", []) or []:
+        short = media.get("url")
+        expanded = media.get("expanded_url")
+        display = media.get("display_url")
+        media_url = media.get("media_url_https") or media.get("media_url")
+        indices = _parse_indices(media.get("indices"))
+        if media_url:
+            media_urls.append(str(media_url))
+        url_entities.append(
+            {
+                "kind": "media",
+                "url": str(short) if short else None,
+                "expanded_url": str(expanded) if expanded else None,
+                "display_url": str(display) if display else None,
+                "media_url": str(media_url) if media_url else None,
+                "media_type": media.get("type"),
+                "indices": [indices[0], indices[1]] if indices else None,
+            }
+        )
+
+    # Fallback: community archive flat format has top-level `urls` list.
+    if not urls:
+        flat_urls = tweet.get("urls")
+        if isinstance(flat_urls, list):
+            for value in flat_urls:
+                if isinstance(value, str) and value:
+                    urls.append(value)
+                    url_entities.append(
+                        {
+                            "kind": "url",
+                            "url": None,
+                            "expanded_url": value,
+                            "display_url": None,
+                            "indices": None,
+                        }
+                    )
+
+    # Fallback: community archive flat format has top-level `media_urls` list.
+    if not media_urls:
+        flat_media = tweet.get("media_urls")
+        if isinstance(flat_media, list):
+            for value in flat_media:
+                if isinstance(value, str) and value:
+                    media_urls.append(value)
+
+    return (
+        _dedupe_preserve_order(urls),
+        _dedupe_preserve_order(media_urls),
+        url_entities,
+    )
+
+
+def _entity_replacement_value(entity: dict[str, Any]) -> str | None:
+    kind = str(entity.get("kind") or "").lower()
+    if kind == "media":
+        return (
+            entity.get("expanded_url")
+            or entity.get("media_url")
+            or entity.get("display_url")
+        )
+    return entity.get("expanded_url") or entity.get("display_url")
+
+
+def _replace_tco_entities(text: str, entities: list[dict[str, Any]]) -> str:
+    """Replace t.co placeholders with richer URLs (media prefers full expanded URL)."""
+    out = text
+
+    indexed: list[tuple[int, int, str, str]] = []
+    for entity in entities:
+        token = entity.get("url")
+        replacement = _entity_replacement_value(entity)
+        idx = _parse_indices(entity.get("indices"))
+        if not token or not replacement or "t.co/" not in str(token) or not idx:
+            continue
+        indexed.append((idx[0], idx[1], str(token), str(replacement)))
+
+    for start, end, token, replacement in sorted(indexed, key=lambda item: item[0], reverse=True):
+        if end <= len(out) and out[start:end] == token:
+            out = out[:start] + replacement + out[end:]
+
+    # Fallback pass: literal replacement handles index mismatches (e.g., UTF-16 offsets).
+    for entity in entities:
+        token = entity.get("url")
+        replacement = _entity_replacement_value(entity)
+        if not token or not replacement or "t.co/" not in str(token):
+            continue
+        if token in out:
+            out = out.replace(str(token), str(replacement))
+
+    return out
 
 
 def _text_fingerprint(text: str) -> str:
@@ -186,30 +328,10 @@ def _flatten_tweet(
     t = tweet_obj.get("tweet", tweet_obj)
     dt = _parse_date_any(t.get("created_at"))
     created_at_iso = dt.isoformat() if dt else None
-    text = t.get("full_text") or t.get("text") or ""
+    text_raw = str(t.get("full_text") or t.get("text") or "")
+    text = text_raw
 
-    # We rely on content text for t.co parsing in the web client.
-    # Keep auxiliary URL fields as serialized JSON strings.
-    urls = []
-    for url in t.get("entities", {}).get("urls", []) or []:
-        expanded = url.get("expanded_url")
-        if expanded:
-            urls.append(expanded)
-    # Fallback: community archive flat format has top-level `urls` list
-    if not urls:
-        flat_urls = t.get("urls")
-        if isinstance(flat_urls, list):
-            urls = [u for u in flat_urls if isinstance(u, str) and u]
-
-    media_urls = []
-    for media in t.get("extended_entities", {}).get("media", []) or []:
-        media_url = media.get("media_url_https") or media.get("media_url")
-        if media_url:
-            media_urls.append(media_url)
-    if not media_urls:
-        flat_media = t.get("media_urls")
-        if isinstance(flat_media, list):
-            media_urls = [u for u in flat_media if isinstance(u, str) and u]
+    urls, media_urls, url_entities = _extract_urls_and_entities(t)
 
     is_reply = bool(t.get("in_reply_to_status_id_str") or t.get("in_reply_to_status_id"))
     is_retweet = bool(t.get("retweeted_status")) or str(text).startswith("RT @")
@@ -242,13 +364,29 @@ def _flatten_tweet(
                 for u in matched_note.urls:
                     if u not in existing:
                         urls.append(u)
+                        url_entities.append(
+                            {
+                                "kind": "url",
+                                "url": None,
+                                "expanded_url": u,
+                                "display_url": None,
+                                "indices": None,
+                                "source": "note_tweet",
+                            }
+                        )
             if consumed_note_ids is not None:
                 consumed_note_ids.add(matched_note.note_tweet_id)
+
+    # Phase A normalization:
+    # 1) preserve original text, 2) decode HTML entities, 3) replace t.co links.
+    text = html.unescape(str(text))
+    text = _replace_tco_entities(text, url_entities)
 
     return {
         "id": str(t.get("id_str") or t.get("id") or ""),
         "liked_tweet_id": None,
         "text": str(text),
+        "text_raw": text_raw,
         "created_at": created_at_iso or t.get("created_at"),
         "created_at_raw": t.get("created_at"),
         "favorites": _to_int(t.get("favorite_count")),
@@ -267,6 +405,7 @@ def _flatten_tweet(
         "is_like": False,
         "urls_json": json.dumps(urls, ensure_ascii=False) if urls else "[]",
         "media_urls_json": json.dumps(media_urls, ensure_ascii=False) if media_urls else "[]",
+        "url_entities_json": json.dumps(url_entities, ensure_ascii=False) if url_entities else "[]",
         "tweet_type": "tweet",
         "archive_source": source,
         "note_tweet_id": note_tweet_id,
@@ -289,16 +428,29 @@ def _flatten_note_tweet(
     created_at_iso = dt.isoformat() if dt else None
 
     urls = []
+    url_entities = []
     for url in core.get("urls", []) or []:
         expanded = url.get("expandedUrl")
         if expanded:
             urls.append(expanded)
+            url_entities.append(
+                {
+                    "kind": "url",
+                    "url": str(url.get("url")) if url.get("url") else None,
+                    "expanded_url": str(expanded),
+                    "display_url": str(url.get("displayUrl")) if url.get("displayUrl") else None,
+                    "indices": None,
+                }
+            )
 
     note_id = str(note.get("noteTweetId") or "")
+    text_raw = str(text)
+    text_norm = html.unescape(text_raw)
     return {
         "id": note_id,
         "liked_tweet_id": None,
-        "text": str(text),
+        "text": text_norm,
+        "text_raw": text_raw,
         "created_at": created_at_iso or note.get("createdAt"),
         "created_at_raw": note.get("createdAt"),
         "favorites": 0,
@@ -317,6 +469,7 @@ def _flatten_note_tweet(
         "is_like": False,
         "urls_json": json.dumps(urls, ensure_ascii=False) if urls else "[]",
         "media_urls_json": "[]",
+        "url_entities_json": json.dumps(url_entities, ensure_ascii=False) if url_entities else "[]",
         "tweet_type": "note_tweet",
         "archive_source": source,
         "note_tweet_id": note_id,
@@ -339,15 +492,29 @@ def _flatten_like(
     text = str(full_text).strip()
     if not text:
         text = str(expanded_url or f"Liked tweet {tweet_id}")
+    text_raw = text
 
     urls = []
+    url_entities = []
     if expanded_url:
         urls.append(expanded_url)
+        url_entities.append(
+            {
+                "kind": "url",
+                "url": None,
+                "expanded_url": str(expanded_url),
+                "display_url": None,
+                "indices": None,
+            }
+        )
+
+    text = html.unescape(text)
 
     return {
         "id": str(tweet_id),
         "liked_tweet_id": str(tweet_id),
         "text": text,
+        "text_raw": text_raw,
         "created_at": like.get("createdAt") or like.get("created_at"),
         "created_at_raw": like.get("createdAt") or like.get("created_at"),
         "favorites": 0,
@@ -366,6 +533,7 @@ def _flatten_like(
         "is_like": True,
         "urls_json": json.dumps(urls, ensure_ascii=False) if urls else "[]",
         "media_urls_json": "[]",
+        "url_entities_json": json.dumps(url_entities, ensure_ascii=False) if url_entities else "[]",
         "tweet_type": "like",
         "archive_source": source,
         "note_tweet_id": None,
@@ -607,6 +775,13 @@ def fetch_community_archive(username: str) -> dict[str, Any]:
 def load_community_archive_raw(raw_data: dict[str, Any], username: str) -> ImportResult:
     """Load and normalize raw community archive JSON payload."""
     profile = _extract_profile_from_community_raw(raw_data, username)
+    notes_raw = raw_data.get("note-tweet", [])
+    if not isinstance(notes_raw, list):
+        notes_raw = []
+
+    note_by_id, note_by_fp = _build_note_tweet_lookup(notes_raw)
+    consumed_note_ids: set[str] = set()
+
     normalized: list[dict[str, Any]] = []
     for tweet_obj in raw_data.get("tweets", []):
         normalized.append(
@@ -615,8 +790,26 @@ def load_community_archive_raw(raw_data: dict[str, Any], username: str) -> Impor
                 username=profile.get("username"),
                 display_name=profile.get("display_name"),
                 source="community_archive",
+                note_tweets_by_id=note_by_id,
+                note_tweets_by_fp=note_by_fp,
+                consumed_note_ids=consumed_note_ids,
             )
         )
+
+    # Keep unmatched note tweets as standalone rows (same behavior as native zip path).
+    for nt in notes_raw:
+        note = nt.get("noteTweet", nt) if isinstance(nt, dict) else {}
+        note_id = str(note.get("noteTweetId") or "")
+        if note_id and note_id in consumed_note_ids:
+            continue
+        row = _flatten_note_tweet(
+            nt,
+            username=profile.get("username"),
+            display_name=profile.get("display_name"),
+            source="community_archive",
+        )
+        if row:
+            normalized.append(row)
 
     for like_obj in _collect_deduped_community_likes(raw_data):
         row = _flatten_like(
@@ -663,7 +856,37 @@ def _dedup_note_tweet_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             # Upgrade the regular tweet's text with the note version
             target_idx = fp_to_idx[note_fp]
             other_rows[target_idx]["text"] = note_row["text"]
+            other_rows[target_idx]["text_raw"] = note_row.get("text_raw", note_row["text"])
             other_rows[target_idx]["note_tweet_id"] = note_row.get("id")
+
+            # Merge note URLs/entities so replacement metadata remains available.
+            try:
+                target_urls = json.loads(other_rows[target_idx].get("urls_json", "[]"))
+            except Exception:
+                target_urls = []
+            try:
+                note_urls = json.loads(note_row.get("urls_json", "[]"))
+            except Exception:
+                note_urls = []
+            if isinstance(target_urls, list) and isinstance(note_urls, list):
+                merged_urls = _dedupe_preserve_order(
+                    [u for u in target_urls if isinstance(u, str) and u]
+                    + [u for u in note_urls if isinstance(u, str) and u]
+                )
+                other_rows[target_idx]["urls_json"] = json.dumps(merged_urls, ensure_ascii=False)
+
+            try:
+                target_entities = json.loads(other_rows[target_idx].get("url_entities_json", "[]"))
+            except Exception:
+                target_entities = []
+            try:
+                note_entities = json.loads(note_row.get("url_entities_json", "[]"))
+            except Exception:
+                note_entities = []
+            if isinstance(target_entities, list) and isinstance(note_entities, list):
+                merged_entities = [*target_entities, *note_entities]
+                other_rows[target_idx]["url_entities_json"] = json.dumps(merged_entities, ensure_ascii=False)
+
             consumed.add(id(note_row))
 
     # Keep unmatched note tweets as standalone rows
