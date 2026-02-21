@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronsRight, ChevronsLeft, GalleryHorizontalEnd, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { ChevronsRight, GalleryHorizontalEnd, LayoutGrid, PanelRightClose, PanelRightOpen } from 'lucide-react';
 
 import './Explore.css';
 import { apiService, queryApi } from '../../lib/apiService';
@@ -12,6 +12,7 @@ import VisualizationPane from '../../components/Explore/V2/VisualizationPane';
 import TweetFeed from '../../components/Explore/V2/TweetFeed';
 import FilterActions from '../../components/Explore/V2/FilterActions';
 import FeedCarousel from '../../components/Explore/V2/Carousel/FeedCarousel';
+import TopicDirectory from '../../components/Explore/V2/TopicDirectory/TopicDirectory';
 import { HoverProvider } from '../../contexts/HoverContext';
 import ThreadView from '../../components/Explore/V2/ThreadView/ThreadView';
 import QuoteView from '../../components/Explore/V2/ThreadView/QuoteView';
@@ -21,6 +22,7 @@ import { FilterProvider, useFilter } from '../../contexts/FilterContext';
 import useDebounce from '../../hooks/useDebounce';
 import useSidebarState, { SIDEBAR_MODES } from '../../hooks/useSidebarState';
 import useCarouselData from '../../hooks/useCarouselData';
+import useTopicDirectoryData from '../../hooks/useTopicDirectoryData';
 import useTimelineData from '../../hooks/useTimelineData';
 import useNodeStats from '../../hooks/useNodeStats';
 
@@ -140,6 +142,11 @@ function ExploreContent() {
   // Carousel data hook — only enabled in expanded mode
   const carouselEnabled = sidebarMode === SIDEBAR_MODES.EXPANDED;
   const carouselData = useCarouselData(focusedClusterIndex, carouselEnabled);
+
+  // Topic directory data hook — also for expanded mode
+  const [selectedTopicIndex, setSelectedTopicIndex] = useState(null);
+  const [expandedView, setExpandedView] = useState('directory'); // 'directory' | 'carousel'
+  const topicDirData = useTopicDirectoryData(selectedTopicIndex, carouselEnabled);
 
   // Keep visualization-specific state
   const [hoveredIndex, setHoveredIndex] = useState(null);
@@ -1117,6 +1124,7 @@ function ExploreContent() {
   const handleToggleExpand = useCallback(() => {
     const graphViewState = vizRef.current?.getViewState?.();
     toggleExpand(graphViewState);
+    setSelectedTopicIndex(null); // Reset topic selection when leaving expanded mode
   }, [toggleExpand]);
 
   const handleToggleCollapse = useCallback(() => {
@@ -1257,6 +1265,7 @@ function ExploreContent() {
         scope={scope}
         scopes={scopes}
         onScopeChange={handleScopeChange}
+        onBack={isExpanded ? handleToggleExpand : undefined}
       />
       <HoverProvider hoveredIndex={hoveredIndex}>
       <div className="page-container">
@@ -1440,33 +1449,69 @@ function ExploreContent() {
                 />
               )}
 
-              {/* Expanded mode: FeedCarousel */}
+              {/* Expanded mode: Directory or Carousel */}
               {isExpanded && (
-                <div className="carousel-enter" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
-                <button
-                  className="carousel-back-button"
-                  onClick={handleToggleExpand}
-                >
-                  <ChevronsLeft size={14} />
-                  <span>Back to Map</span>
-                </button>
-                <FeedCarousel
-                  topLevelClusters={carouselData.topLevelClusters}
-                  columnData={carouselData.columnData}
-                  columnRowsMap={carouselData.columnRowsMap}
-                  loadMore={carouselData.loadMore}
-                  activeSubClusters={carouselData.activeSubClusters}
-                  setSubClusterFilter={carouselData.setSubClusterFilter}
-                  dataset={dataset}
-                  clusterMap={clusterMap}
-                  focusedClusterIndex={focusedClusterIndex}
-                  onFocusedIndexChange={setFocusedClusterIndex}
-                  onHover={undefined}
-                  onClick={undefined}
-                  nodeStats={nodeStats}
-                  onViewThread={handleViewThread}
-                  onViewQuotes={handleViewQuotes}
-                />
+                <div className="carousel-enter" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                  {expandedView === 'directory' ? (
+                    <TopicDirectory
+                      topLevelClusters={topicDirData.topLevelClusters}
+                      feedData={topicDirData.feedData}
+                      loadMore={topicDirData.loadMore}
+                      activeSubCluster={topicDirData.activeSubCluster}
+                      setSubClusterFilter={topicDirData.setSubClusterFilter}
+                      selectedClusterIndex={selectedTopicIndex}
+                      onSelectCluster={setSelectedTopicIndex}
+                      onBack={handleToggleExpand}
+                      dataset={dataset}
+                      clusterMap={clusterMap}
+                      nodeStats={nodeStats}
+                      onHover={undefined}
+                      onClick={undefined}
+                      onViewThread={handleViewThread}
+                      onViewQuotes={handleViewQuotes}
+                      expandedView={expandedView}
+                      onToggleView={setExpandedView}
+                    />
+                  ) : (
+                    <>
+                      <div className="carousel-top-bar">
+                        <div className="carousel-top-bar-right">
+                          <div className="expanded-view-toggle">
+                            <button
+                              className={`expanded-view-toggle-btn ${expandedView === 'directory' ? 'active' : ''}`}
+                              onClick={() => setExpandedView('directory')}
+                              title="Topic directory"
+                            >
+                              <LayoutGrid size={14} />
+                            </button>
+                            <button
+                              className={`expanded-view-toggle-btn ${expandedView === 'carousel' ? 'active' : ''}`}
+                              onClick={() => setExpandedView('carousel')}
+                              title="Feed carousel"
+                            >
+                              <GalleryHorizontalEnd size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <FeedCarousel
+                        topLevelClusters={carouselData.topLevelClusters}
+                        columnData={carouselData.columnData}
+                        columnRowsMap={carouselData.columnRowsMap}
+                        loadMore={carouselData.loadMore}
+                        activeSubClusters={carouselData.activeSubClusters}
+                        setSubClusterFilter={carouselData.setSubClusterFilter}
+                        dataset={dataset}
+                        clusterMap={clusterMap}
+                        focusedClusterIndex={focusedClusterIndex}
+                        onFocusedIndexChange={setFocusedClusterIndex}
+                        onHover={undefined}
+                        onClick={undefined}
+                        nodeStats={nodeStats}
+                        onViewQuotes={handleViewQuotes}
+                      />
+                    </>
+                  )}
                 </div>
               )}
             </div>
