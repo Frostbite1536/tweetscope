@@ -1,12 +1,18 @@
 import styles from './SubClusterPills.module.scss';
 
+function normalizeClusterId(value) {
+  if (value === null || value === undefined) return null;
+  return String(value);
+}
+
 export default function SubClusterPills({ subClusters, activeSubCluster, onSelect }) {
   if (!subClusters || subClusters.length === 0) return null;
+  const activeClusterId = normalizeClusterId(activeSubCluster);
 
   return (
     <div className={styles.pillBar}>
       <button
-        className={`${styles.pill} ${activeSubCluster === null || activeSubCluster === undefined ? styles.active : ''}`}
+        className={`${styles.pill} ${activeClusterId === null ? styles.active : ''}`}
         onClick={() => onSelect(null)}
       >
         All
@@ -14,7 +20,7 @@ export default function SubClusterPills({ subClusters, activeSubCluster, onSelec
       {subClusters.map((sub) => (
         <button
           key={sub.cluster}
-          className={`${styles.pill} ${activeSubCluster === sub.cluster ? styles.active : ''}`}
+          className={`${styles.pill} ${activeClusterId === normalizeClusterId(sub.cluster) ? styles.active : ''}`}
           onClick={() => onSelect(sub.cluster)}
           title={sub.label}
         >
