@@ -27,9 +27,7 @@ import useNodeStats from '../../hooks/useNodeStats';
 import { filterConstants } from '../../components/Explore/V2/Search/utils';
 
 const EDGE_FETCH_MAX = 2500;
-const SIDEBAR_CARD_FOCUS_MIN_ZOOM = 8.75;
-const SIDEBAR_CARD_FOCUS_MAX_ZOOM = 13.5;
-const SIDEBAR_CARD_FOCUS_ZOOM_STEP = 1.1;
+const SIDEBAR_CARD_FOCUS_ZOOM = 13;
 
 const HOVER_METADATA_COLUMNS = [
   'id',
@@ -658,11 +656,8 @@ function ExploreContent() {
 
     const currentZoom = Number(vizRef.current?.getViewState?.()?.zoom);
     const zoom = Number.isFinite(currentZoom)
-      ? Math.min(
-        SIDEBAR_CARD_FOCUS_MAX_ZOOM,
-        Math.max(currentZoom + SIDEBAR_CARD_FOCUS_ZOOM_STEP, SIDEBAR_CARD_FOCUS_MIN_ZOOM)
-      )
-      : SIDEBAR_CARD_FOCUS_MIN_ZOOM;
+      ? Math.max(currentZoom, SIDEBAR_CARD_FOCUS_ZOOM)
+      : SIDEBAR_CARD_FOCUS_ZOOM;
 
     vizRef.current?.zoomToPoint?.(x, y, zoom, 420);
   }, [deletedIndices, scopeRowByLsIndex, clusterMap, dataset]);
