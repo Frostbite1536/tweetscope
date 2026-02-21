@@ -28,6 +28,7 @@ if os.path.exists(_local_toponymy) and _local_toponymy not in _sys_paths_normali
     print(f"Using local toponymy from: {_local_toponymy}")
 
 from latentscope.util import get_data_dir
+from latentscope.util.text_enrichment import get_enriched_texts
 from latentscope.__version__ import __version__
 
 
@@ -101,11 +102,18 @@ def run_toponymy_labeling(
     umap_id = scope_meta["umap_id"]
     text_column = scope_meta.get("dataset", {}).get("text_column", "text")
 
-    # Load texts from input
+    # Load texts from input (with reference enrichment)
     print("Loading texts...")
     input_df = pd.read_parquet(os.path.join(dataset_path, "input.parquet"))
-    texts = input_df[text_column].tolist()
-    print(f"  Loaded {len(texts)} texts")
+    print(f"  Loaded {len(input_df)} rows")
+
+    print("Enriching texts with referenced tweet context...")
+    texts, enrich_stats = get_enriched_texts(input_df, text_column)
+    if enrich_stats["enriched_count"] > 0:
+        print(f"  {enrich_stats['enriched_count']} texts enriched with "
+              f"{enrich_stats['total_references_resolved']} resolved references")
+    else:
+        print("  No resolvable tweet references found")
 
     # Load embeddings
     print(f"Loading embeddings from {embedding_id}...")
@@ -241,7 +249,8 @@ def run_toponymy_labeling(
         llm_model=llm_model,
         min_clusters=min_clusters,
         base_min_cluster_size=base_min_cluster_size,
-        audit_info=audit_info
+        audit_info=audit_info,
+        enrichment_stats=enrich_stats,
     )
 
     print(f"\nSaved hierarchical labels to: clusters/{output_id}.parquet")
@@ -486,6 +495,7 @@ def save_hierarchical_labels(
     min_clusters=None,
     base_min_cluster_size=None,
     audit_info=None,
+    enrichment_stats=None,
 ):
     """Save hierarchical labels to parquet and JSON files."""
     clusters_dir = os.path.join(dataset_path, "clusters")
@@ -517,6 +527,8 @@ def save_hierarchical_labels(
     }
     if audit_info:
         meta["audit"] = audit_info
+    if enrichment_stats:
+        meta["enrichment_stats"] = enrichment_stats
 
     json_path = os.path.join(clusters_dir, f"{output_id}.json")
     with open(json_path, "w") as f:
