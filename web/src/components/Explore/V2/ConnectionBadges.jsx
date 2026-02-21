@@ -17,7 +17,7 @@ function ConnectionBadges({ stats, onViewThread, onViewQuotes, compact = false }
     rootId === tweetId
   );
   const isThreadMember = threadSize >= 2 && (isCanonicalInternalRoot || threadDepth > 0);
-  const hasDirectReplies = Number(stats.replyChildCount) > 0;
+  const hasDirectReplies = Number(stats.replyChildCount) > 1;
 
   // Priority 1: Reply indicator (other tweets reply to this tweet)
   if (hasDirectReplies) {
@@ -25,7 +25,7 @@ function ConnectionBadges({ stats, onViewThread, onViewQuotes, compact = false }
       key: 'reply',
       type: 'thread',
       icon: CornerDownRight,
-      label: 'Reply',
+      label: `${stats.replyChildCount} ${stats.replyChildCount === 1 ? 'reply' : 'replies'}`,
       action: onViewThread,
     });
   }
