@@ -519,6 +519,9 @@ function ExploreContent() {
   }, [sidebarMode, hoveredIndex, scopeRowByLsIndex]);
 
   const edgeQueryIndices = useMemo(() => {
+    if (threadTargetIndex !== null && threadTargetIndex !== undefined && !deletedIndices.has(threadTargetIndex)) {
+      return [threadTargetIndex];
+    }
     if (pinnedIndex !== null && pinnedIndex !== undefined && !deletedIndices.has(pinnedIndex)) {
       return [pinnedIndex];
     }
@@ -526,7 +529,7 @@ function ExploreContent() {
       return [hoveredIndex];
     }
     return [];
-  }, [pinnedIndex, hoveredIndex, deletedIndices]);
+  }, [threadTargetIndex, pinnedIndex, hoveredIndex, deletedIndices]);
 
   const graphHighlightIndices = useMemo(() => {
     const indices = new Set();
@@ -597,8 +600,6 @@ function ExploreContent() {
   useEffect(() => {
     if (
       sidebarMode === SIDEBAR_MODES.EXPANDED ||
-      sidebarMode === SIDEBAR_MODES.THREAD ||
-      sidebarMode === SIDEBAR_MODES.QUOTES ||
       !linksAvailable
     ) {
       debouncedFetchLinksEdges.cancel?.();
@@ -1029,6 +1030,24 @@ function ExploreContent() {
     setThreadLinksLoading(false);
   }, [isThread]);
 
+  // Merge thread-internal reply edges with per-node edges (deduped)
+  const mergedLinksEdges = useMemo(() => {
+    if (!isThread) return linksEdges;
+    if (threadLinksEdges.length === 0) return linksEdges;
+    if (linksEdges.length === 0) return threadLinksEdges;
+    const seen = new Set();
+    const merged = [];
+    for (const edge of threadLinksEdges) {
+      const key = `${edge.edge_kind}:${edge.src_ls_index}:${edge.dst_ls_index}`;
+      if (!seen.has(key)) { seen.add(key); merged.push(edge); }
+    }
+    for (const edge of linksEdges) {
+      const key = `${edge.edge_kind}:${edge.src_ls_index}:${edge.dst_ls_index}`;
+      if (!seen.has(key)) { seen.add(key); merged.push(edge); }
+    }
+    return merged;
+  }, [isThread, threadLinksEdges, linksEdges]);
+
   // ====================================================================================================
   // Draggable State (only active in normal mode)
   // ====================================================================================================
@@ -1282,7 +1301,7 @@ function ExploreContent() {
                 hoverAnnotations={hoverAnnotations}
                 hoveredCluster={hoveredCluster}
                 textColumn={dataset?.text_column}
-                linksEdges={isThread ? threadLinksEdges : linksEdges}
+                linksEdges={mergedLinksEdges}
                 linksAvailable={linksAvailable}
                 linksMeta={linksMeta}
                 linksLoading={isThread ? threadLinksLoading : linksLoading}
