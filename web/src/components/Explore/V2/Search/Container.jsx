@@ -5,7 +5,7 @@ import SearchResults from './SearchResults';
 import { useScope } from '../../../../contexts/ScopeContext';
 import styles from './Container.module.scss';
 import { useFilter, FILTER_SLOT } from '../../../../contexts/FilterContext';
-import { filterConstants, isSameClusterValue } from './utils';
+import { filterConstants, isSameClusterValue, parseEngagementOperators } from './utils';
 import { useColorMode } from '../../../../hooks/useColorMode';
 import { useClusterColors, resolveClusterColorCSS } from '@/hooks/useClusterColors';
 
@@ -24,6 +24,7 @@ const CHIP_META = {
   semantic: { icon: '⚡', prefix: 'AI: ' },
   [FILTER_SLOT.COLUMN]: { icon: '▦', prefix: '' },
   [FILTER_SLOT.TIME_RANGE]: { icon: '◷', prefix: '' },
+  [FILTER_SLOT.ENGAGEMENT]: { icon: '♥', prefix: '' },
 };
 
 const FilterChips = ({ filterSlots, onClearSlot, onClearAll }) => {
@@ -84,6 +85,21 @@ const FilterChips = ({ filterSlots, onClearSlot, onClearAll }) => {
     });
   }
 
+  if (filterSlots.engagement) {
+    chips.push({
+      key: FILTER_SLOT.ENGAGEMENT,
+      label: filterSlots.engagement.label,
+      meta: CHIP_META[FILTER_SLOT.ENGAGEMENT],
+      style: {
+        '--chip-bg': 'color-mix(in srgb, var(--semantic-color-semantic-critical) 12%, transparent)',
+        '--chip-border': 'color-mix(in srgb, var(--semantic-color-semantic-critical) 24%, transparent)',
+        '--chip-color': 'var(--semantic-color-semantic-critical)',
+        '--chip-clear-bg': 'color-mix(in srgb, var(--semantic-color-semantic-critical) 20%, transparent)',
+        '--chip-clear-hover-bg': 'color-mix(in srgb, var(--semantic-color-semantic-critical) 36%, transparent)',
+      },
+    });
+  }
+
   if (chips.length === 0) return null;
 
   return (
@@ -130,6 +146,7 @@ const Container = () => {
     applySearch,
     applyKeywordSearch,
     applyColumn,
+    applyEngagement,
     clearFilter,
     clearAllFilters,
   } = useFilter();
@@ -187,12 +204,23 @@ const Container = () => {
 
   const handleEnterKey = useCallback(() => {
     if (!filterQuery) return;
-    if (searchMode === SEARCH_MODES.KEYWORD) {
-      handleSelect({ type: filterConstants.KEYWORD_SEARCH, value: filterQuery, label: filterQuery });
-    } else {
-      handleSelect({ type: filterConstants.SEARCH, value: filterQuery, label: filterQuery });
+    const { minFaves, remainingQuery } = parseEngagementOperators(filterQuery);
+
+    if (minFaves) {
+      applyEngagement(minFaves);
     }
-  }, [filterQuery, searchMode, handleSelect]);
+
+    if (remainingQuery) {
+      if (searchMode === SEARCH_MODES.KEYWORD) {
+        handleSelect({ type: filterConstants.KEYWORD_SEARCH, value: remainingQuery, label: remainingQuery });
+      } else {
+        handleSelect({ type: filterConstants.SEARCH, value: remainingQuery, label: remainingQuery });
+      }
+    } else if (minFaves) {
+      setFilterQuery('');
+      setDropdownIsOpen(false);
+    }
+  }, [filterQuery, searchMode, handleSelect, applyEngagement, setFilterQuery]);
 
   const handleClearSlot = useCallback((slotKey) => {
     const slotToType = {
@@ -200,6 +228,7 @@ const Container = () => {
       [FILTER_SLOT.SEARCH]: filterConstants.SEARCH,
       [FILTER_SLOT.COLUMN]: filterConstants.COLUMN,
       [FILTER_SLOT.TIME_RANGE]: filterConstants.TIME_RANGE,
+      [FILTER_SLOT.ENGAGEMENT]: filterConstants.ENGAGEMENT,
     };
     clearFilter(slotToType[slotKey]);
   }, [clearFilter]);
@@ -285,6 +314,7 @@ const SearchResultsMetadata = ({ filterSlots }) => {
         if (filterSlots.search) parts.push(filterSlots.search.label);
         if (filterSlots.column) parts.push(filterSlots.column.label);
         if (filterSlots.timeRange) parts.push(filterSlots.timeRange.label || 'Time range');
+        if (filterSlots.engagement) parts.push(filterSlots.engagement.label);
         return parts.join(' + ');
       })()
     : null;

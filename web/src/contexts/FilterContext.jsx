@@ -14,11 +14,12 @@ import {
   isSameClusterValue,
   validateColumnAndValue,
 } from '../components/Explore/V2/Search/utils';
+import { getLikesCount } from '../lib/engagement';
 
 const FilterContext = createContext(null);
 const ROWS_PER_PAGE = 20;
-const FILTER_URL_KEYS = ['cluster', 'search', 'keyword', 'column', 'value', 'feature'];
-const HYDRATED_URL_KEYS = ['cluster', 'search', 'keyword', 'column', 'value'];
+const FILTER_URL_KEYS = ['cluster', 'search', 'keyword', 'column', 'value', 'feature', 'min_faves'];
+const HYDRATED_URL_KEYS = ['cluster', 'search', 'keyword', 'column', 'value', 'min_faves'];
 
 function uniqueOrderedIndices(values) {
   const seen = new Set();
@@ -54,6 +55,7 @@ const ACTION = {
   APPLY_KEYWORD_SEARCH: 'APPLY_KEYWORD_SEARCH',
   APPLY_COLUMN: 'APPLY_COLUMN',
   APPLY_TIME_RANGE: 'APPLY_TIME_RANGE',
+  APPLY_ENGAGEMENT: 'APPLY_ENGAGEMENT',
   SET_FILTER_QUERY: 'SET_FILTER_QUERY',
   CLEAR_SLOT: 'CLEAR_SLOT',
   CLEAR_ALL: 'CLEAR_ALL',
@@ -65,6 +67,7 @@ const SLOT = {
   SEARCH: 'search',
   COLUMN: 'column',
   TIME_RANGE: 'timeRange',
+  ENGAGEMENT: 'engagement',
 };
 
 const emptySlots = {
@@ -72,6 +75,7 @@ const emptySlots = {
   [SLOT.SEARCH]: null,
   [SLOT.COLUMN]: null,
   [SLOT.TIME_RANGE]: null,
+  [SLOT.ENGAGEMENT]: null,
 };
 
 const initialFilterState = {
@@ -141,6 +145,17 @@ function filterReducer(state, action) {
       };
     }
 
+    case ACTION.APPLY_ENGAGEMENT: {
+      const { minFaves } = action;
+      return {
+        ...state,
+        filterSlots: {
+          ...state.filterSlots,
+          [SLOT.ENGAGEMENT]: { minFaves, label: `♥ ≥ ${minFaves}` },
+        },
+      };
+    }
+
     case ACTION.SET_FILTER_QUERY:
       return { ...state, filterQuery: action.query };
 
@@ -195,6 +210,9 @@ export function FilterProvider({ children }) {
     if (filterSlots.timeRange) {
       return { type: filterConstants.TIME_RANGE, ...filterSlots.timeRange };
     }
+    if (filterSlots.engagement) {
+      return { type: filterConstants.ENGAGEMENT, ...filterSlots.engagement };
+    }
     return null;
   }, [filterSlots]);
 
@@ -226,6 +244,14 @@ export function FilterProvider({ children }) {
         .filter((index) => !deletedIndices.has(index))
     );
   }, [scopeRows, deletedIndices]);
+
+  const scopeRowsByIndex = useMemo(() => {
+    const map = new Map();
+    for (const row of scopeRows) {
+      map.set(row.ls_index, row);
+    }
+    return map;
+  }, [scopeRows]);
 
   const columnFilter = useColumnFilter(userId, datasetId, scope);
   const clusterFilter = useClusterFilter({ scopeRows, clusterLabels });
@@ -265,6 +291,10 @@ export function FilterProvider({ children }) {
     dispatch({ type: ACTION.APPLY_TIME_RANGE, start, end, timestampsByLsIndex, label });
   }, []);
 
+  const applyEngagement = useCallback((minFaves) => {
+    dispatch({ type: ACTION.APPLY_ENGAGEMENT, minFaves });
+  }, []);
+
   // Map filter type constants to slot keys for clearFilter backward compat
   const typeToSlot = useMemo(() => ({
     [filterConstants.CLUSTER]: SLOT.CLUSTER,
@@ -272,6 +302,7 @@ export function FilterProvider({ children }) {
     [filterConstants.KEYWORD_SEARCH]: SLOT.SEARCH,
     [filterConstants.COLUMN]: SLOT.COLUMN,
     [filterConstants.TIME_RANGE]: SLOT.TIME_RANGE,
+    [filterConstants.ENGAGEMENT]: SLOT.ENGAGEMENT,
   }), []);
 
   const clearFilter = useCallback((filterType) => {
@@ -313,7 +344,8 @@ export function FilterProvider({ children }) {
       urlParams.has('cluster') ||
       urlParams.has('keyword') ||
       urlParams.has('search') ||
-      (urlParams.has('column') && urlParams.has('value'))
+      (urlParams.has('column') && urlParams.has('value')) ||
+      urlParams.has('min_faves')
     );
   }, [urlParams]);
 
@@ -326,6 +358,7 @@ export function FilterProvider({ children }) {
       parts.push(`${key}:${filterSlots.search.value}`);
     }
     if (filterSlots.column) parts.push(`column:${filterSlots.column.column}:${filterSlots.column.value}`);
+    if (filterSlots.engagement) parts.push(`engagement:${filterSlots.engagement.minFaves}`);
     return parts.join('|') || 'none';
   }, [filterSlots]);
 
@@ -375,10 +408,18 @@ export function FilterProvider({ children }) {
       }
     }
 
+    if (urlParams.has('min_faves')) {
+      const raw = parseInt(urlParams.get('min_faves'), 10);
+      if (raw > 0 && filterSlots.engagement?.minFaves !== raw) {
+        expectedParts.push(`engagement:${raw}`);
+        applyEngagement(raw);
+      }
+    }
+
     if (expectedParts.length > 0) {
       urlWriteSkipRef.current = expectedParts.join('|');
     }
-  }, [scopeLoaded, hasFilterInUrl, urlParams, urlFilterSignature, clusterLabels, columnFilter, filterSlots, applyCluster, applyKeywordSearch, applySearch, applyColumn]);
+  }, [scopeLoaded, hasFilterInUrl, urlParams, urlFilterSignature, clusterLabels, columnFilter, filterSlots, applyCluster, applyKeywordSearch, applySearch, applyColumn, applyEngagement]);
 
   // Write filterSlots → URL params
   useEffect(() => {
@@ -410,6 +451,9 @@ export function FilterProvider({ children }) {
     if (filterSlots.column) {
       nextParams.set('column', String(filterSlots.column.column));
       nextParams.set('value', String(filterSlots.column.value));
+    }
+    if (filterSlots.engagement) {
+      nextParams.set('min_faves', String(filterSlots.engagement.minFaves));
     }
     // timeRange is not serialized to URL
 
@@ -482,6 +526,17 @@ export function FilterProvider({ children }) {
         }
       }
 
+      // Engagement slot (client-side, like timeRange)
+      if (filterSlots.engagement) {
+        const { minFaves } = filterSlots.engagement;
+        if (minFaves > 0) {
+          indices = indices.filter((lsIndex) => {
+            const row = scopeRowsByIndex.get(lsIndex);
+            return row ? getLikesCount(row) >= minFaves : false;
+          });
+        }
+      }
+
       return indices;
     };
 
@@ -510,6 +565,7 @@ export function FilterProvider({ children }) {
     semanticSearchFilterFn,
     keywordSearchFilterFn,
     columnFilterFn,
+    scopeRowsByIndex,
   ]);
 
   // ---------------------------------------------------------------------------
@@ -577,6 +633,7 @@ export function FilterProvider({ children }) {
     applyKeywordSearch,
     applyColumn,
     applyTimeRange,
+    applyEngagement,
     clearFilter,
     clearAllFilters,
 
@@ -609,6 +666,7 @@ export function FilterProvider({ children }) {
     applyKeywordSearch,
     applyColumn,
     applyTimeRange,
+    applyEngagement,
     clearFilter,
     clearAllFilters,
     filterSlots,

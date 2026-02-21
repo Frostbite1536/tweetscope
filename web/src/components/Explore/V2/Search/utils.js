@@ -41,4 +41,17 @@ export const filterConstants = {
   CLUSTER: 'cluster',
   COLUMN: 'column',
   TIME_RANGE: 'timeRange',
+  ENGAGEMENT: 'engagement',
 };
+
+const ENGAGEMENT_PATTERN = /\b(?:min_faves|min_likes):(\d+)\b/gi;
+
+export function parseEngagementOperators(query) {
+  let minFaves = null;
+  const remaining = query.replace(ENGAGEMENT_PATTERN, (_, n) => {
+    const parsed = parseInt(n, 10);
+    if (parsed > 0) minFaves = parsed;
+    return '';
+  }).replace(/\s{2,}/g, ' ').trim();
+  return { minFaves, remainingQuery: remaining };
+}
