@@ -322,7 +322,6 @@ export async function vectorSearch(
 // ---------------------------------------------------------------------------
 
 let catalogDb: lancedb.Connection | null = null;
-const catalogTables = new Map<string, lancedb.Table>();
 
 /**
  * Open the catalog LanceDB connection.
@@ -364,11 +363,9 @@ export async function getCatalogDb(): Promise<lancedb.Connection> {
 export async function getCatalogTable(
   tableName: string,
 ): Promise<lancedb.Table> {
-  const cached = catalogTables.get(tableName);
-  if (cached) return cached;
-
+  // Always re-open catalog tables so we see rows written by external processes
+  // (e.g. Python pipeline writing new scopes/datasets).
   const conn = await getCatalogDb();
   const table = await conn.openTable(tableName);
-  catalogTables.set(tableName, table);
   return table;
 }
