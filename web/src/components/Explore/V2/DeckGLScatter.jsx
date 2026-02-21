@@ -375,12 +375,31 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
       const centerY = (minY + maxY) / 2;
       const rangeX = maxX - minX;
       const rangeY = maxY - minY;
-      // Calculate zoom to fit bounds in viewport with padding
-      const fitZoom = Math.log2(Math.min(width, height) * 0.8 / Math.max(rangeX, rangeY));
+      // Account for sidebar: fit bounds in unoccluded visible area
+      const visibleWidth = Math.max(320, width - contentPaddingRight);
+      const fitZoom = Math.log2(Math.min(visibleWidth, height) * 0.8 / Math.max(rangeX, rangeY));
+      const clampedZoom = Math.min(Math.max(fitZoom, minZoom), maxZoom);
+      // Shift target so bounds center in the visible area (left of sidebar)
+      const scale = Math.pow(2, clampedZoom);
+      const targetOffsetX = contentPaddingRight > 0 ? contentPaddingRight / (2 * scale) : 0;
 
       setControlledViewState({
-        target: [centerX, centerY, 0],
-        zoom: Math.min(Math.max(fitZoom, minZoom), maxZoom),
+        target: [centerX + targetOffsetX, centerY, 0],
+        zoom: clampedZoom,
+        minZoom,
+        maxZoom,
+        transitionDuration,
+        transitionInterpolator: new LinearInterpolator(['target', 'zoom']),
+      });
+    },
+    zoomToPoint: (x, y, zoom, transitionDuration = 420) => {
+      const clampedZoom = Math.min(Math.max(zoom, minZoom), maxZoom);
+      const scale = Math.pow(2, clampedZoom);
+      const targetOffsetX = contentPaddingRight > 0 ? contentPaddingRight / (2 * scale) : 0;
+
+      setControlledViewState({
+        target: [x + targetOffsetX, y, 0],
+        zoom: clampedZoom,
         minZoom,
         maxZoom,
         transitionDuration,
@@ -401,7 +420,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
       }
       setControlledViewState(nextViewState);
     },
-  }), [width, height, minZoom, maxZoom, controlledViewState, currentViewState]);
+  }), [width, height, contentPaddingRight, minZoom, maxZoom, controlledViewState, currentViewState]);
 
   const pointCount = points.length;
 

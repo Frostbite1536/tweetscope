@@ -371,6 +371,7 @@ function ExploreContent() {
   const hoverRecordCacheRef = useRef(new Map());
   const latestLinksRequestRef = useRef(0);
   const hoverDismissTimerRef = useRef(null);
+  const hoverIntentTimerRef = useRef(null);
   const hoverCardHoveredRef = useRef(false);
   const hoverFocusViewportRef = useRef({
     width: window.innerWidth,
@@ -655,25 +656,15 @@ function ExploreContent() {
     const y = Number(row.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 
-    const viewState = vizRef.current?.getViewState?.();
-    const currentZoom = Number(viewState?.zoom);
+    const currentZoom = Number(vizRef.current?.getViewState?.()?.zoom);
     const zoom = Number.isFinite(currentZoom)
       ? Math.min(
         SIDEBAR_CARD_FOCUS_MAX_ZOOM,
         Math.max(currentZoom + SIDEBAR_CARD_FOCUS_ZOOM_STEP, SIDEBAR_CARD_FOCUS_MIN_ZOOM)
       )
       : SIDEBAR_CARD_FOCUS_MIN_ZOOM;
-    const scale = Math.pow(2, zoom);
-    const targetOffsetX = paddingRight > 0 ? paddingRight / (2 * scale) : 0;
 
-    vizRef.current?.setViewState?.(
-      {
-        ...(viewState || {}),
-        target: [x + targetOffsetX, y, 0],
-        zoom,
-      },
-      420
-    );
+    vizRef.current?.zoomToPoint?.(x, y, zoom, 420);
   }, [deletedIndices, scopeRowByLsIndex, clusterMap, dataset]);
 
   // Thread view handlers
@@ -742,6 +733,10 @@ function ExploreContent() {
   }, []);
 
   const clearHoverState = useCallback(() => {
+    if (hoverIntentTimerRef.current) {
+      clearTimeout(hoverIntentTimerRef.current);
+      hoverIntentTimerRef.current = null;
+    }
     setHoverAnchor(null);
     setHoveredIndex(null);
     setHoveredCluster(null);
@@ -771,29 +766,47 @@ function ExploreContent() {
         Number.isFinite(payload.x) &&
         Number.isFinite(payload.y);
 
-      // When hovering a new point, cancel any pending dismiss
+      // When hovering a new point, use hover-intent delay so fast mouse
+      // movement across the canvas doesn't flash hovercards for every point
+      // the cursor crosses.  The point highlight in DeckGLScatter is still
+      // instant — only the popover waits for the user to dwell (~100ms).
       if (nonDeletedIndex !== null) {
         if (hoverDismissTimerRef.current) {
           clearTimeout(hoverDismissTimerRef.current);
           hoverDismissTimerRef.current = null;
         }
-        if (hasPointCoords) {
-          // Keep the anchor stable while staying on the same point to avoid card jitter.
-          if (latestHoverAnchorIndexRef.current !== nonDeletedIndex) {
+
+        // Cancel any pending intent for a different point.
+        if (hoverIntentTimerRef.current) {
+          clearTimeout(hoverIntentTimerRef.current);
+          hoverIntentTimerRef.current = null;
+        }
+
+        // If the user is already hovering this exact point, skip the delay.
+        if (latestHoverAnchorIndexRef.current === nonDeletedIndex) return;
+
+        hoverIntentTimerRef.current = setTimeout(() => {
+          hoverIntentTimerRef.current = null;
+          if (hasPointCoords) {
             setHoverAnchor({ x: payload.x, y: payload.y });
             latestHoverAnchorIndexRef.current = nonDeletedIndex;
           }
-        }
-        setHoveredIndex((prev) => (prev === nonDeletedIndex ? prev : nonDeletedIndex));
-        const nextCluster = nonDeletedIndex >= 0 ? clusterMap[nonDeletedIndex] : null;
-        setHoveredCluster((prev) => {
-          if ((prev?.cluster ?? null) === (nextCluster?.cluster ?? null)) {
-            return prev;
-          }
-          return nextCluster;
-        });
+          setHoveredIndex((prev) => (prev === nonDeletedIndex ? prev : nonDeletedIndex));
+          const nextCluster = nonDeletedIndex >= 0 ? clusterMap[nonDeletedIndex] : null;
+          setHoveredCluster((prev) => {
+            if ((prev?.cluster ?? null) === (nextCluster?.cluster ?? null)) {
+              return prev;
+            }
+            return nextCluster;
+          });
+        }, 100);
       } else {
-        // Mouse left a point — delay dismissal so user can reach the hover card
+        // Mouse left a point — cancel any pending intent
+        if (hoverIntentTimerRef.current) {
+          clearTimeout(hoverIntentTimerRef.current);
+          hoverIntentTimerRef.current = null;
+        }
+        // Delay dismissal so user can reach the hover card
         if (hoverDismissTimerRef.current) {
           clearTimeout(hoverDismissTimerRef.current);
         }
