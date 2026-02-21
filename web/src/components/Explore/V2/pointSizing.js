@@ -26,7 +26,7 @@ function isDevBuild() {
 }
 
 function getZeroFloor(nonZeroBase) {
-  return Math.max(1.05, nonZeroBase - 0.18);
+  return nonZeroBase * 0.8;
 }
 
 function assertFloorInvariant(zeroFloor, nonZeroBase) {
@@ -39,8 +39,8 @@ function assertFloorInvariant(zeroFloor, nonZeroBase) {
 }
 
 export function computePointRadii(scopeRows, pointCount) {
-  const minRadius = 0.5;
-  const maxRadius = 12.0;
+  const minRadius = 0.25;
+  const maxRadius = 20.0;
   const baseRadius = calculateBaseRadius(pointCount);
   const radii = new Float32Array(pointCount);
 
@@ -70,14 +70,14 @@ export function computePointRadii(scopeRows, pointCount) {
   nonZeroValues.sort((a, b) => a - b);
 
   const q10nz = nonZeroValues.length > 0 ? quantileSorted(nonZeroValues, 0.10) : 0;
-  const q99nz = nonZeroValues.length > 0 ? quantileSorted(nonZeroValues, 0.99) : 1;
+  const maxNz = nonZeroValues.length > 0 ? nonZeroValues[nonZeroValues.length - 1] : 1;
   const logLow = Math.log1p(q10nz > 0 ? Math.expm1(q10nz) : 0);
-  const logHigh = q99nz;
+  const logHigh = maxNz;
   const logRange = logHigh > logLow ? logHigh - logLow : 1;
 
-  const sizeBoost = clamp(Math.log10(5000 / Math.max(pointCount, 500)), 0, 0.7) * 1.5;
-  const scale = 2.10 + sizeBoost;
-  const nonZeroBase = 1.44;
+  const sizeBoost = clamp(Math.log10(5000 / Math.max(pointCount, 500)), 0, 1.0) * 1.5;
+  const scale = 5.5 + sizeBoost;
+  const nonZeroBase = 0.75;
   const zeroFloor = getZeroFloor(nonZeroBase);
   assertFloorInvariant(zeroFloor, nonZeroBase);
 
@@ -88,7 +88,7 @@ export function computePointRadii(scopeRows, pointCount) {
       importanceFactor = zeroFloor;
     } else {
       const t = clamp((imp - logLow) / logRange, 0, 1);
-      importanceFactor = nonZeroBase + scale * Math.pow(t, 0.85);
+      importanceFactor = nonZeroBase + scale * Math.pow(t, 1.4);
     }
     radii[i] = clamp(baseRadius * importanceFactor, minRadius, maxRadius);
   }

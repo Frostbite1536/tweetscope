@@ -428,6 +428,16 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     return computePointRadii(scopeRows, pointCount);
   }, [scopeRows, pointCount]);
 
+  // Dataset-adaptive reference for zoom-dependent shrinking.
+  // Using the actual max ensures the shrink curve adapts to any engagement range.
+  const maxPointRadius = useMemo(() => {
+    let max = 1;
+    for (let i = 0; i < pointRadii.length; i++) {
+      if (pointRadii[i] > max) max = pointRadii[i];
+    }
+    return max;
+  }, [pointRadii]);
+
   const alphaScale = useMemo(() => {
     const base = calculateBaseAlpha(pointCount) * pointOpacity;
     const baseAlpha = clamp(Math.round(base), 10, 255);
@@ -1097,7 +1107,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
         radiusUnits: 'pixels',
         radiusScale: pointScale,
         radiusMinPixels: 0,
-        radiusMaxPixels: 20,
+        radiusMaxPixels: 28,
         lineWidthUnits: 'pixels',
         lineWidthScale: 1,
         lineWidthMinPixels: 0,
@@ -1106,13 +1116,33 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
           const isHovered = d.index === hoveredPointIndex;
           const isHighlighted = highlightIndexSet.has(d.ls_index);
           const baseRadius = pointRadii[d.index] || 1.2;
-          return applyInteractionRadius(baseRadius, {
+          let pixelRadius = applyInteractionRadius(baseRadius, {
             isHovered,
             isHighlighted,
             featureIsSelected,
             isFeatureSelectedPoint: d.selectionKey === mapSelectionKey.selected,
             activation: d.activation,
           });
+
+          // Zoom-dependent sizing: when zoomed out, shrink small points MORE
+          // than big ones so high-engagement nodes stand out in the overview.
+          const activeZoom = (controlledViewState || currentViewState)?.zoom ?? initialZoom;
+          const zoomDelta = activeZoom - initialZoom; // negative when zoomed out
+
+          if (zoomDelta < 0) {
+            const shrinkAmount = Math.min(1.5, Math.abs(zoomDelta) * 0.3);
+            const sizeNorm = Math.min(pixelRadius / maxPointRadius, 1); // 0=tiny, 1=big
+            const shrinkFactor = 1 - shrinkAmount * (1 - sizeNorm * 0.5);
+            pixelRadius *= shrinkFactor;
+          } else if (zoomDelta > 0) {
+            // When zoomed in, boost small points so they're easier to click/hover.
+            const growAmount = Math.min(1, Math.max(0, zoomDelta - 1) * 0.15);
+            const sizeNorm = Math.min(pixelRadius / maxPointRadius, 1);
+            const boostPx = growAmount * (1 - sizeNorm) * 1.5;
+            pixelRadius += boostPx;
+          }
+
+          return Math.max(0.3, pixelRadius);
         },
         getFillColor: d => {
           const isHovered = d.index === hoveredPointIndex;
@@ -1155,7 +1185,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
           return highlightIndexSet.has(d.ls_index) ? 1.4 : 0;
         },
         updateTriggers: {
-          getRadius: [hoveredPointIndex, pointRadii, featureIsSelected, highlightIndexSet],
+          getRadius: [hoveredPointIndex, pointRadii, featureIsSelected, highlightIndexSet, controlledViewState, currentViewState, initialZoom, maxPointRadius],
           getFillColor: [hoveredPointIndex, featureIsSelected, alphaScale, highlightIndexSet, colorMap],
           getLineColor: [hoveredPointIndex, highlightIndexSet, isDarkMode],
           getLineWidth: [hoveredPointIndex, highlightIndexSet],
@@ -1318,11 +1348,15 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     isDarkMode,
     featureIsSelected,
     pointRadii,
+    maxPointRadius,
     alphaScale,
     highlightIndexSet,
     onLabelClick,
     showClusterOutlines,
     activeClusterId,
+    controlledViewState,
+    currentViewState,
+    initialZoom,
   ]);
 
   // OrthographicView for 2D scatter plot
