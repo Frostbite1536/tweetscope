@@ -18,6 +18,29 @@
   box-shadow: var(--glass-shadow);
 }
 
+.backIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-right: 1px solid var(--glass-border-subtle);
+  border-radius: 0;
+  margin-right: var(--space-1);
+  padding-right: var(--space-1);
+  cursor: pointer;
+  color: var(--text-color-text-subtle);
+  transition: color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.backIcon:hover {
+  color: var(--text-color-text-main);
+}
+
 .scopeBadge {
   display: inline-flex;
   align-items: baseline;
@@ -35,22 +58,48 @@
   text-overflow: ellipsis;
 }
 
+.scopeSelectWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .scopeSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   font-family: 'Instrument Sans', system-ui, sans-serif;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 500;
   color: var(--text-color-text-main);
-  background: var(--neutrals-color-neutral-1);
-  border: 1px solid var(--borders-color-border-2);
-  border-radius: var(--radius-sm);
-  padding: 4px 8px;
+  line-height: 1;
+  background: var(--glass-bg-solid);
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-full);
+  padding: 7px 26px 7px 10px;
   max-width: min(25vw, 200px);
   cursor: pointer;
   outline: none;
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .scopeSelect:focus {
   border-color: var(--interactions---primary-color-interaction-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactions---primary-color-interaction-primary) 16%, transparent);
+}
+
+.scopeSelect:hover {
+  background: var(--interactions---secondary-color-interaction-secondary-hover);
+}
+
+.scopeSelectIcon {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-color-text-subtle);
+  opacity: 0.65;
+  pointer-events: none;
 }
 
 .actionButton {
@@ -66,6 +115,15 @@
   border-radius: var(--radius-full);
   padding: 6px 10px;
   transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.homeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
 }
 
 .actionButton:hover {
@@ -93,7 +151,7 @@
     display: none;
   }
 
-  .scopeSelect {
+  .scopeSelectWrap {
     display: none;
   }
 }
