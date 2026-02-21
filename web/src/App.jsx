@@ -48,7 +48,7 @@ function App() {
             can_jobs: false,
             can_export: false,
             can_settings: false,
-            twitter_import: true,
+            twitter_import: false,
             generic_file_ingest: false,
           },
           limits: {

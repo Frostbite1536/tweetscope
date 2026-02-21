@@ -9,9 +9,10 @@ import styles from './Dashboard.module.scss';
 function Dashboard({ appConfig = null }) {
   const [datasets, setDatasets] = useState([]);
   const [scopes, setScopes] = useState({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    catalogClient.fetchDatasets().then(setDatasets);
+    catalogClient.fetchDatasets().then(setDatasets).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -74,22 +75,20 @@ function Dashboard({ appConfig = null }) {
       <div className={styles.collectionsSection}>
         <div className={styles.sectionHeader}>
           <h3 className={styles.sectionTitle}>Your Collections</h3>
-          {canCreate && (
-            <Link to="/new" className={styles.newCollectionButton}>
-              + New Collection
-            </Link>
-          )}
+          <Link to="/new" className={styles.newCollectionButton}>
+            {canCreate ? '+ New Collection' : 'Coming Soon'}
+          </Link>
         </div>
 
         <div className={styles.collectionsList}>
-          {collections.length === 0 ? (
+          {loading ? (
+            <div className={styles.emptyState}>Loading collections...</div>
+          ) : collections.length === 0 ? (
             <div className={styles.emptyState}>
               No collections yet.{' '}
-              {canCreate ? (
-                <Link to="/new" className={styles.emptyLink}>Build your first knowledge map</Link>
-              ) : (
-                'No data available.'
-              )}
+              <Link to="/new" className={styles.emptyLink}>
+                {canCreate ? 'Build your first knowledge map' : 'Join the waitlist'}
+              </Link>
             </div>
           ) : (
             collections.map((collection) => (

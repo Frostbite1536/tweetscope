@@ -9,7 +9,35 @@ import { extractTwitterArchiveForImport } from '../lib/twitterArchiveParser';
 
 import styles from './NewCollection.module.scss';
 
+const substackUrl = (import.meta.env.VITE_SUBSTACK_URL || '').replace(/\/+$/, '');
+
 const readonly = import.meta.env.MODE === 'read_only';
+
+function WaitlistCard() {
+  return (
+    <div className={styles.waitlistCard}>
+      <h3 className={styles.waitlistTitle}>Coming Soon</h3>
+      <p className={styles.waitlistDescription}>
+        The ability to explore your own Twitter profile is coming soon.
+        {substackUrl ? ' Subscribe to get notified when it\u2019s ready.' : ''}
+      </p>
+
+      {substackUrl && (
+        <div className={styles.waitlistEmbed}>
+          <iframe
+            src={`${substackUrl}/embed`}
+            width="100%"
+            height="150"
+            className={styles.substackIframe}
+            frameBorder="0"
+            scrolling="no"
+            title="Subscribe for updates"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function NewCollection({ appConfig = null }) {
   const features = appConfig?.features || {};
@@ -177,16 +205,7 @@ function NewCollection({ appConfig = null }) {
     datasets.some((d) => d.id === `${twitterArchiveDatasetName}-likes`);
   const communityNameTaken = datasets.some((d) => d.id === communityDatasetName);
 
-  if (readonly || !canTwitterImport) {
-    return (
-      <div className={styles.newCollection}>
-        <div className={styles.hero}>
-          <h1 className={styles.heroTitle}>Not Available</h1>
-          <p className={styles.heroSubtitle}>Collection creation is not enabled.</p>
-        </div>
-      </div>
-    );
-  }
+  const isDisabled = readonly || !canTwitterImport;
 
   return (
     <div className={styles.newCollection}>
@@ -201,7 +220,9 @@ function NewCollection({ appConfig = null }) {
         </p>
       </div>
 
-      <div className={styles.importRow}>
+      {isDisabled && <WaitlistCard />}
+
+      <div className={isDisabled ? styles.disabledOverlay : styles.importRow} inert={isDisabled ? '' : undefined}>
         {/* Native Archive Import */}
         <div className={styles.glassCard}>
           <form onSubmit={submitTwitterArchiveImport} className={styles.cardForm}>

@@ -354,6 +354,64 @@
 }
 
 /* ==========================================
+   Disabled overlay — grayed-out import cards
+   ========================================== */
+
+.disabledOverlay {
+  composes: importRow;
+  opacity: 0.35;
+  user-select: none;
+  filter: grayscale(0.3);
+}
+
+/* ==========================================
+   Waitlist card — "Coming Soon" email signup
+   ========================================== */
+
+.waitlistCard {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  padding: var(--space-8) var(--space-6);
+  margin-bottom: var(--space-6);
+  text-align: center;
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+.waitlistTitle {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--text-color-text-main);
+  margin: 0 0 var(--space-2);
+  letter-spacing: -0.02em;
+}
+
+.waitlistDescription {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.95rem;
+  color: var(--text-color-text-subtle);
+  margin: 0 0 var(--space-5);
+  line-height: 1.6;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.waitlistEmbed {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.substackIframe {
+  border: none;
+  border-radius: var(--radius-sm);
+}
+
+/* ==========================================
    Responsive
    ========================================== */
 
@@ -366,9 +424,11 @@
     font-size: 1.5rem;
   }
 
-  .importRow {
+  .importRow,
+  .disabledOverlay {
     flex-direction: column;
   }
+
 }
 
 @media (max-width: 480px) {
