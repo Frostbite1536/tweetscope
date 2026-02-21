@@ -150,6 +150,9 @@ const VisualizationPane = forwardRef(function VisualizationPane({
     zoomToBounds: (bounds, duration) => {
       scatterRef.current?.zoomToBounds(bounds, duration);
     },
+    zoomToPoint: (x, y, zoom, duration) => {
+      scatterRef.current?.zoomToPoint?.(x, y, zoom, duration);
+    },
     getViewState: () => scatterRef.current?.getViewState?.(),
     setViewState: (viewState, duration) => {
       scatterRef.current?.setViewState?.(viewState, duration);
@@ -215,6 +218,20 @@ const VisualizationPane = forwardRef(function VisualizationPane({
     showTimeline: false,
   });
 
+  // Disable edges by default for large datasets (>10k points) — they add
+  // visual noise and hurt performance.  Runs once when scopeRows loads.
+  const edgeDefaultsAppliedRef = useRef(false);
+  useEffect(() => {
+    if (edgeDefaultsAppliedRef.current || !scopeRows?.length) return;
+    edgeDefaultsAppliedRef.current = true;
+    if (scopeRows.length > 10_000) {
+      setVizConfig(prev => ({
+        ...prev,
+        showReplyEdges: false,
+        showQuoteEdges: false,
+      }));
+    }
+  }, [scopeRows]);
 
   const toggleShowClusterOutlines = useCallback(() => {
     setVizConfig((prev) => ({ ...prev, showClusterOutlines: !prev.showClusterOutlines }));
