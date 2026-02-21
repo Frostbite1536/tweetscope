@@ -45,6 +45,9 @@ const appMode: AppMode =
     ? rawMode
     : "single_profile";
 const readOnly = parseBool(process.env.LATENT_SCOPE_READ_ONLY ?? process.env.READ_ONLY) || appMode === "single_profile";
+const disableNewCollection = parseBool(
+  process.env.DISABLE_NEW_COLLECTION ?? process.env.LATENT_SCOPE_DISABLE_NEW_COLLECTION
+);
 const publicDataset =
   process.env.PUBLIC_DATASET ??
   process.env.LATENT_SCOPE_PUBLIC_DATASET ??
@@ -65,7 +68,7 @@ const features = {
   can_jobs: appMode === "studio" && !readOnly,
   can_export: appMode === "studio" && !readOnly,
   can_settings: appMode === "studio" && !readOnly,
-  twitter_import: (appMode === "hosted" || appMode === "studio") && !readOnly,
+  twitter_import: !disableNewCollection && (appMode === "hosted" || appMode === "studio") && !readOnly,
   generic_file_ingest: appMode === "studio" && !readOnly,
 };
 

@@ -198,6 +198,15 @@ export const jobsRoutes = new Hono()
     }
   })
   .post("/import_twitter", async (c) => {
+    const disableRaw = (
+      process.env.DISABLE_NEW_COLLECTION ??
+      process.env.LATENT_SCOPE_DISABLE_NEW_COLLECTION ??
+      ""
+    ).trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(disableRaw)) {
+      return c.json({ error: "Collection creation is currently disabled." }, 403);
+    }
+
     const jobId = randomUUID();
     let cleanupPaths: string[] = [];
     try {
