@@ -22,26 +22,10 @@ except ImportError as e:
 from collections import defaultdict, deque
 from latentscope.models import get_embedding_model
 from latentscope.util import get_data_dir
-
-
-_NULL_SENTINELS = frozenset({"none", "null", "nan", "<na>", ""})
-
-_STATUS_URL_RE = re.compile(
-    r"https?://(?:www\.)?(?:x\.com|twitter\.com)/(?:i/web/)?(?:[A-Za-z0-9_]+/)?status/(?P<tweet_id>\d+)",
-    re.IGNORECASE,
+from latentscope.util.text_enrichment import (
+    normalize_tweet_id,
+    build_reference_text_map,
 )
-
-
-def _normalize_tweet_id(value):
-    """Normalize tweet ID: strip trailing .0, handle null sentinels."""
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text or text.lower() in _NULL_SENTINELS:
-        return None
-    if text.endswith(".0") and text[:-2].isdigit():
-        return text[:-2]
-    return text
 
 
 def _prepare_text(text, prefix):
@@ -49,105 +33,6 @@ def _prepare_text(text, prefix):
     if text is None or text == "":
         text = " "
     return prefix + str(text)
-
-
-# ---------------------------------------------------------------------------
-# Reference text enrichment (quote tweets, cross-user reply parents)
-# ---------------------------------------------------------------------------
-
-def _parse_urls_json(value):
-    """Parse urls_json column into list of URL strings."""
-    if value is None:
-        return []
-    raw = value
-    if isinstance(raw, str):
-        raw = raw.strip()
-        if not raw:
-            return []
-        try:
-            parsed = json.loads(raw)
-        except (json.JSONDecodeError, ValueError):
-            return []
-    else:
-        parsed = raw
-    if not isinstance(parsed, list):
-        return []
-    urls = []
-    for item in parsed:
-        if isinstance(item, str):
-            urls.append(item)
-        elif isinstance(item, dict):
-            url = item.get("expanded_url") or item.get("url") or ""
-            if url:
-                urls.append(str(url))
-    return urls
-
-
-def _extract_status_id(url):
-    """Extract tweet ID from a twitter.com/x.com status URL."""
-    match = _STATUS_URL_RE.search(str(url))
-    if not match:
-        return None
-    return match.group("tweet_id")
-
-
-def build_reference_text_map(df, text_column):
-    """Build a map from row index to enriched text with referenced tweet content.
-
-    For each tweet, finds referenced tweets (via urls_json status URLs) that exist
-    in the dataset, and prepends their text. This gives the embedding model context
-    about what a quote tweet or link-reference is commenting on.
-
-    The original text column in the DataFrame is NOT modified.
-
-    Returns:
-        enriched_text: dict[int, str] — row_index → enriched text (only for rows
-            that have resolvable references; rows without references are absent)
-        stats: dict with enrichment statistics
-    """
-    has_urls = "urls_json" in df.columns
-    if not has_urls:
-        return {}, {"enriched_count": 0, "total_references_resolved": 0}
-
-    # Build normalized ID → (row_index, text) lookup
-    id_to_text = {}
-    for idx in range(len(df)):
-        row = df.iloc[idx]
-        norm_id = _normalize_tweet_id(row.get("id"))
-        if norm_id:
-            id_to_text[norm_id] = str(row.get(text_column) or "")
-
-    enriched_text = {}
-    total_resolved = 0
-
-    for idx in range(len(df)):
-        row = df.iloc[idx]
-        own_id = _normalize_tweet_id(row.get("id"))
-
-        # Collect referenced tweet IDs from URL entities
-        ref_texts = []
-        seen_ref_ids = set()
-        for url in _parse_urls_json(row.get("urls_json")):
-            ref_id = _extract_status_id(url)
-            if not ref_id or ref_id == own_id or ref_id in seen_ref_ids:
-                continue
-            seen_ref_ids.add(ref_id)
-            ref_text = id_to_text.get(ref_id)
-            if ref_text:
-                ref_texts.append(ref_text)
-
-        if ref_texts:
-            # Concatenate: referenced text(s) first, then the tweet's own text
-            own_text = str(row.get(text_column) or "")
-            combined = "\n\n".join(ref_texts) + "\n\n" + own_text
-            enriched_text[idx] = combined
-            total_resolved += len(ref_texts)
-
-    stats = {
-        "enriched_count": len(enriched_text),
-        "total_references_resolved": total_resolved,
-    }
-    return enriched_text, stats
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +104,7 @@ def build_self_thread_groups(df, text_column, prefix="", enriched_text=None):
     norm_id_to_idx = {}
     for idx in range(len(df)):
         row = df.iloc[idx]
-        norm_id = _normalize_tweet_id(row.get("id"))
+        norm_id = normalize_tweet_id(row.get("id"))
         if norm_id:
             norm_id_to_idx[norm_id] = idx
 
@@ -229,7 +114,7 @@ def build_self_thread_groups(df, text_column, prefix="", enriched_text=None):
     for idx in range(len(df)):
         row = df.iloc[idx]
         parent_raw = row.get("in_reply_to_status_id")
-        parent_norm = _normalize_tweet_id(parent_raw)
+        parent_norm = normalize_tweet_id(parent_raw)
         if not parent_norm:
             continue
         if parent_norm not in norm_id_to_idx:
@@ -239,7 +124,7 @@ def build_self_thread_groups(df, text_column, prefix="", enriched_text=None):
         parent_idx = norm_id_to_idx[parent_norm]
         parent_username = str(df.iloc[parent_idx].get("username", "")).strip().lower()
         if child_username and child_username == parent_username:
-            child_norm = _normalize_tweet_id(row.get("id"))
+            child_norm = normalize_tweet_id(row.get("id"))
             if child_norm:
                 self_reply_parent[child_norm] = parent_norm
 
@@ -309,7 +194,7 @@ def build_self_thread_groups(df, text_column, prefix="", enriched_text=None):
         root_idx = norm_id_to_idx.get(root_norm_id)
         if root_idx is not None:
             root_row = df.iloc[root_idx]
-            root_parent_norm = _normalize_tweet_id(root_row.get("in_reply_to_status_id"))
+            root_parent_norm = normalize_tweet_id(root_row.get("in_reply_to_status_id"))
             if root_parent_norm and root_parent_norm not in self_reply_parent.get(root_norm_id, ""):
                 # Root is a reply to someone else
                 if root_parent_norm in norm_id_to_idx:
@@ -332,7 +217,7 @@ def build_self_thread_groups(df, text_column, prefix="", enriched_text=None):
 
     # 7. Add standalone tweets (not in any thread)
     for idx in range(len(df)):
-        norm_id = _normalize_tweet_id(df.iloc[idx].get("id"))
+        norm_id = normalize_tweet_id(df.iloc[idx].get("id"))
         if norm_id and norm_id not in assigned:
             text = _get_text(idx)
             groups.append({
