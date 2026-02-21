@@ -6,6 +6,17 @@ function ConnectionBadges({ stats, onViewThread, onViewQuotes, compact = false }
   if (!stats) return null;
 
   const badges = [];
+  const threadSize = Number.isFinite(Number(stats.threadSize)) ? Number(stats.threadSize) : 1;
+  const threadDepth = Number.isFinite(Number(stats.threadDepth)) ? Number(stats.threadDepth) : 0;
+  const rootId = stats.threadRootId == null ? null : String(stats.threadRootId);
+  const tweetId = stats.tweetId == null ? null : String(stats.tweetId);
+  const isCanonicalInternalRoot = Boolean(
+    rootId &&
+    tweetId &&
+    threadDepth === 0 &&
+    rootId === tweetId
+  );
+  const isThreadMember = threadSize >= 2 && (isCanonicalInternalRoot || threadDepth > 0);
   const hasDirectReplies = Number(stats.replyChildCount) > 0;
 
   // Priority 1: Reply indicator (other tweets reply to this tweet)
@@ -19,13 +30,23 @@ function ConnectionBadges({ stats, onViewThread, onViewQuotes, compact = false }
     });
   }
 
-  // Priority 2: Thread root with multiple tweets
-  if (stats.threadSize > 2 && stats.threadDepth === 0) {
+  // Priority 2: Thread indicator from node stats.
+  // Show numeric size only for canonical internal roots; members get a
+  // non-numeric indicator so the badge doesn't oscillate with feed paging.
+  if (isCanonicalInternalRoot) {
     badges.push({
       key: 'thread',
       type: 'thread',
       icon: MessageSquare,
-      label: `${stats.threadSize}-tweet thread`,
+      label: `${threadSize}-tweet thread`,
+      action: onViewThread,
+    });
+  } else if (isThreadMember) {
+    badges.push({
+      key: 'thread-member',
+      type: 'thread',
+      icon: MessageSquare,
+      label: 'In thread',
       action: onViewThread,
     });
   }
