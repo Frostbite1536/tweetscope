@@ -1,5 +1,5 @@
 import { client } from '../api/client';
-import type { JsonRecord, ScopeData, ScopeRow, NearestNeighborsRawResponse, KeywordSearchRawResponse, NodeStatsResponse, ScopeRef, SearchEmbeddingInput } from '../api/types';
+import type { JsonRecord, ScopeData, ScopeRow, ScopePoint, NearestNeighborsRawResponse, KeywordSearchRawResponse, NodeStatsResponse, ScopeRef, SearchEmbeddingInput } from '../api/types';
 
 export { client };
 
@@ -86,6 +86,22 @@ export const catalogClient = {
 };
 
 export const viewClient = {
+  fetchScopePoints: async (
+    datasetId: string,
+    scopeId: string,
+    options: RequestOptions = {}
+  ): Promise<ScopePoint[]> => {
+    const { signal } = options;
+    const res = await client.api.datasets[':dataset'].views[':view'].points.$get({
+      param: { dataset: datasetId, view: scopeId },
+    }, { init: { signal } });
+    if (!res.ok) {
+      const err: Error & { status?: number } = new Error(`Failed to fetch scope points (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    return (await res.json()) as ScopePoint[];
+  },
   fetchScopeRows: async (
     datasetId: string,
     scopeId: string,

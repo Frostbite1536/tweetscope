@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { apiUrl, catalogClient } from '../lib/apiService';
+import ScopeThumbnail from '../components/ScopeThumbnail';
 
 import styles from './Dashboard.module.scss';
 
@@ -116,9 +117,11 @@ function ScopeGrid({ datasetId, scopeList, typeLabel }) {
             key={i}
           >
             <span className={styles.scopeLabel}>{label}</span>
-            <img
+            <ScopeThumbnail
+              datasetId={datasetId}
+              scopeId={scope.id}
               className={styles.scopeImage}
-              src={
+              fallbackSrc={
                 scope.ignore_hulls
                   ? `${apiUrl}/files/${datasetId}/umaps/${scope.umap_id}.png`
                   : `${apiUrl}/files/${datasetId}/clusters/${scope.cluster_id}.png`

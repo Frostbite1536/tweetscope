@@ -73,12 +73,24 @@ export interface ClusterLabel extends JsonRecord {
 export interface ScopeRow extends JsonRecord {
   ls_index: number;
   cluster: string | number;
+  x?: number;
+  y?: number;
   label?: string;
   deleted?: boolean;
   favorites?: unknown;
   favorite_count?: unknown;
   like_count?: unknown;
   likes?: unknown;
+}
+
+export interface ScopePoint extends JsonRecord {
+  id?: string;
+  ls_index: number;
+  x: number;
+  y: number;
+  cluster: string | number;
+  label?: string;
+  deleted?: boolean;
 }
 
 export interface ScopeData extends JsonRecord {

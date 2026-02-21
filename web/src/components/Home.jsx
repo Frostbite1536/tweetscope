@@ -6,6 +6,7 @@ import JobProgress from './Job/Progress';
 import { Button, Input } from 'react-element-forge';
 import { apiUrl, jobsApiUrl, catalogClient } from '../lib/apiService';
 import { extractTwitterArchiveForImport } from '../lib/twitterArchiveParser';
+import ScopeThumbnail from './ScopeThumbnail';
 const readonly = import.meta.env.MODE == 'read_only';
 
 import styles from './Home.module.scss';
@@ -371,19 +372,17 @@ function Home({ appConfig = null }) {
                         key={i}
                       >
                         <span className={styles.scopeLabel}>{scope.label || scope.id}</span>
-                        {scope.ignore_hulls ? (
-                          <img
-                            className={styles.scopeImage}
-                            src={`${apiUrl}/files/${dataset.id}/umaps/${scope.umap_id}.png`}
-                            alt={scope.label || scope.id}
-                          />
-                        ) : (
-                          <img
-                            className={styles.scopeImage}
-                            src={`${apiUrl}/files/${dataset.id}/clusters/${scope.cluster_id}.png`}
-                            alt={scope.label || scope.id}
-                          />
-                        )}
+                        <ScopeThumbnail
+                          datasetId={dataset.id}
+                          scopeId={scope.id}
+                          className={styles.scopeImage}
+                          fallbackSrc={
+                            scope.ignore_hulls
+                              ? `${apiUrl}/files/${dataset.id}/umaps/${scope.umap_id}.png`
+                              : `${apiUrl}/files/${dataset.id}/clusters/${scope.cluster_id}.png`
+                          }
+                          alt={scope.label || scope.id}
+                        />
                         {scope.description ? (
                           <span className={styles.scopeDescription}>{scope.description}</span>
                         ) : null}
