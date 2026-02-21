@@ -6,6 +6,8 @@ import { useClusterColors, resolveClusterColorCSS, resolveClusterColorRGBA } fro
 import { useScope } from '../../../../contexts/ScopeContext';
 import { useHoveredIndex } from '../../../../contexts/HoverContext';
 import { urlResolver } from '../../../../lib/urlResolver';
+import { parseJsonArray, classifyUrls } from '../../../../lib/tweetUrls';
+import { linkifyText } from '../../../../lib/linkifyText';
 import TwitterEmbed from './TwitterEmbed';
 import ConnectionBadges from '../ConnectionBadges';
 import styles from './TweetCard.module.scss';
@@ -120,6 +122,15 @@ function TweetCard({
 
   const text = row[textColumn] || '';
   const tcoLinks = useMemo(() => extractTcoLinks(text), [text]);
+  const linkifiedText = useMemo(() => linkifyText(text, styles.inlineLink), [text]);
+
+  // Parse media/URL columns from parquet (instant, no network)
+  const parquetMedia = useMemo(() => {
+    const mediaUrls = parseJsonArray(row.media_urls_json);
+    const { quotedTweets } = classifyUrls(row.urls_json);
+    const hasParquetData = mediaUrls.length > 0 || quotedTweets.length > 0;
+    return { mediaUrls, quotedTweets, hasParquetData };
+  }, [row.media_urls_json, row.urls_json]);
 
   // IntersectionObserver - only resolve URLs when card is visible
   useEffect(() => {
@@ -140,9 +151,9 @@ function TweetCard({
     return () => observer.disconnect();
   }, []);
 
-  // Resolve t.co links only when visible and not already resolved
+  // Resolve t.co links only when visible, not already resolved, and parquet has no data
   useEffect(() => {
-    if (!isVisible || hasResolved || tcoLinks.length === 0) return;
+    if (!isVisible || hasResolved || tcoLinks.length === 0 || parquetMedia.hasParquetData) return;
 
     setHasResolved(true);
 
@@ -168,7 +179,19 @@ function TweetCard({
           setQuotedTweets([]);
         }
       });
-  }, [isVisible, hasResolved, tcoLinks]);
+  }, [isVisible, hasResolved, tcoLinks, parquetMedia.hasParquetData]);
+
+  // Unified media: prefer parquet columns, fall back to async-resolved data
+  const displayMedia = useMemo(() => {
+    const mediaUrls = parquetMedia.mediaUrls.length > 0
+      ? parquetMedia.mediaUrls
+      : resolvedMedia.map((m) => m.media_url);
+    const quotes = parquetMedia.quotedTweets.length > 0
+      ? parquetMedia.quotedTweets
+      : quotedTweets.map((q) => ({ tweetId: String(q.media_url), tweetUrl: q.final }));
+    return { mediaUrls, quotes };
+  }, [parquetMedia, resolvedMedia, quotedTweets]);
+
   const clusterNumber = clusterInfo?.cluster ?? 0;
   const clusterLabel = clusterInfo?.label || `Cluster ${clusterNumber}`;
   const avatarColor = resolveClusterColorCSS(colorMap, clusterNumber, isDarkMode);
@@ -285,7 +308,7 @@ function TweetCard({
           <div
             className={`${styles.tweetBody} ${!expanded && needsTruncation ? styles.tweetBodyTruncated : ''}`}
           >
-            {text}
+            {linkifiedText}
           </div>
 
           {/* Show more button */}
@@ -295,20 +318,20 @@ function TweetCard({
             </span>
           )}
 
-          {/* Media preview - lazy loaded when visible */}
-          {resolvedMedia.length > 0 && (
+          {/* Media preview — parquet-first, async fallback */}
+          {displayMedia.mediaUrls.length > 0 && (
             <div className={styles.mediaContainer}>
-              {resolvedMedia.map((media, idx) => (
+              {displayMedia.mediaUrls.map((url, idx) => (
                 <a
                   key={idx}
-                  href={media.final}
+                  href={url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={styles.mediaLink}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <img
-                    src={media.media_url}
+                    src={url}
                     alt="Tweet media"
                     className={styles.mediaImage}
                     loading="lazy"
@@ -318,14 +341,14 @@ function TweetCard({
             </div>
           )}
 
-          {/* Quoted tweets - use official Twitter embeds */}
-          {quotedTweets.length > 0 && (
+          {/* Quoted tweets — parquet-first, async fallback */}
+          {displayMedia.quotes.length > 0 && (
             <div className={styles.quotedTweetsContainer}>
-              {quotedTweets.map((quote, idx) => (
+              {displayMedia.quotes.map((quote, idx) => (
                 <div key={idx} onClick={(e) => e.stopPropagation()}>
                   <TwitterEmbed
-                    tweetId={String(quote.media_url)}
-                    tweetUrl={quote.final}
+                    tweetId={quote.tweetId}
+                    tweetUrl={quote.tweetUrl}
                     theme={colorMode}
                     hideConversation={true}
                     compact={true}

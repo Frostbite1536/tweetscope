@@ -137,6 +137,18 @@
   letter-spacing: -0.005em;
 }
 
+.inlineLink {
+  color: var(--text-color-text-subtle);
+  text-decoration: none;
+  word-break: break-all;
+  transition: color var(--transition-fast);
+
+  &:hover {
+    color: var(--semantic-color-semantic-info);
+    text-decoration: underline;
+  }
+}
+
 .tweetBodyTruncated {
   display: -webkit-box;
   -webkit-line-clamp: 4;
