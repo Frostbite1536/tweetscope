@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { Heart, Repeat2, ExternalLink, Twitter, CornerLeftUp } from 'lucide-react';
+import { Heart, Repeat2, Link, Twitter, CornerLeftUp } from 'lucide-react';
 import { useColorMode } from '../../../../hooks/useColorMode';
 import { useClusterColors, resolveClusterColorCSS, resolveClusterColorRGBA } from '@/hooks/useClusterColors';
 import { useScope } from '../../../../contexts/ScopeContext';
@@ -374,9 +374,9 @@ function TweetCard({
               />
             )}
 
-            {/* Twitter link */}
+            {/* Twitter link + embed — secondary actions, right-aligned */}
             {tweetUrl && (
-              <>
+              <span className={`${styles.metricsActions} ${showFullEmbed ? styles.metricsActionsVisible : ''}`}>
                 <a
                   href={tweetUrl}
                   target="_blank"
@@ -385,18 +385,16 @@ function TweetCard({
                   onClick={(e) => e.stopPropagation()}
                   title="View on X/Twitter"
                 >
-                  <ExternalLink size={14} />
-                  <span>View</span>
+                  <Link size={14} />
                 </a>
                 <button
                   className={`${styles.embedButton} ${showFullEmbed ? styles.embedButtonActive : ''}`}
                   onClick={handleShowEmbed}
                   title={showFullEmbed ? 'Hide embed' : 'Show official X embed'}
                 >
-                  <Twitter size={14} />
-                  <span>{showFullEmbed ? 'Hide' : 'Embed'}</span>
+                  <span>{showFullEmbed ? 'Hide Embed' : 'View as Embed'}</span>
                 </button>
-              </>
+              </span>
             )}
 
           </div>

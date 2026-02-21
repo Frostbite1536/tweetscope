@@ -259,22 +259,34 @@
   flex-shrink: 0;
 }
 
-.twitterLink {
+.metricsActions {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  font-family: 'Instrument Sans', system-ui, sans-serif;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.tweetCard:hover .metricsActions,
+.metricsActionsVisible {
+  opacity: 1;
+}
+
+.twitterLink {
+  display: inline-flex;
+  align-items: center;
   font-size: 13px;
-  font-weight: 500;
-  color: #1d9bf0;
+  color: var(--text-color-text-subtle);
   text-decoration: none;
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  background: rgba(29, 155, 240, 0.08);
-  transition: background var(--transition-fast);
+  opacity: 0.5;
+  padding: var(--space-1);
+  border-radius: var(--radius-xs);
+  transition: opacity var(--transition-fast), background var(--transition-fast);
 
   &:hover {
-    background: rgba(29, 155, 240, 0.15);
+    opacity: 1;
+    background: var(--neutrals-color-neutral-1);
   }
 }
 
@@ -283,27 +295,29 @@
   align-items: center;
   gap: var(--space-1);
   font-family: 'Instrument Sans', system-ui, sans-serif;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-color-text-subtle);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  background: var(--glass-bg);
+  opacity: 0.5;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-xs);
+  background: transparent;
   border: none;
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: opacity var(--transition-fast), background var(--transition-fast);
 
   &:hover {
-    background: rgba(29, 155, 240, 0.1);
-    color: #1d9bf0;
+    opacity: 1;
+    background: var(--neutrals-color-neutral-1);
   }
 }
 
 .embedButtonActive {
-  background: rgba(29, 155, 240, 0.12);
-  color: #1d9bf0;
+  opacity: 1;
+  color: var(--semantic-color-semantic-info);
+  background: color-mix(in srgb, var(--semantic-color-semantic-info) 10%, transparent);
 
   &:hover {
-    background: rgba(29, 155, 240, 0.18);
+    background: color-mix(in srgb, var(--semantic-color-semantic-info) 16%, transparent);
   }
 }
