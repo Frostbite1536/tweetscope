@@ -765,9 +765,10 @@ def fetch_community_archive(username: str) -> dict[str, Any]:
         with urlopen(url) as response:
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as err:
-        if err.code == 404:
+        if err.code in (400, 404):
             raise ValueError(
-                f"Community archive user '{username}' not found"
+                f"Community archive for '{username}' not found. "
+                "Check that this user has a public archive at community.archive.org."
             ) from err
         raise
 

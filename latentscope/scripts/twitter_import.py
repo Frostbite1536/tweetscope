@@ -156,6 +156,7 @@ def _upsert_import_rows(
     data_dir: str,
     import_batch_id: str | None = None,
     manifest_extra: dict[str, Any] | None = None,
+    profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     dataset_dir = os.path.join(data_dir, dataset_id)
     input_path = os.path.join(dataset_dir, "input.parquet")
@@ -238,7 +239,7 @@ def _upsert_import_rows(
     if merged_df["ls_index"].isna().any():
         raise ValueError("Null ls_index values detected after import merge")
 
-    ingest(dataset_id, merged_df, text_column=text_column, profile=result.get("profile"))
+    ingest(dataset_id, merged_df, text_column=text_column, profile=profile)
 
     manifest_payload = {
         "id": batch_id,
@@ -926,6 +927,7 @@ def run_import(
             data_dir=data_dir,
             import_batch_id=import_batch_id,
             manifest_extra=manifest_base,
+            profile=imported.profile,
         )
 
         summary.update({
@@ -975,6 +977,7 @@ def run_import(
             data_dir=data_dir,
             import_batch_id=import_batch_id,
             manifest_extra={**manifest_base, "dataset_type": "likes", "parent_dataset_id": dataset_id},
+            profile=imported.profile,
         )
 
         likes_summary: dict[str, Any] = {
