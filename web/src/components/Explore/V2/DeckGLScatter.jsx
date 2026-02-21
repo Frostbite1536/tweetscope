@@ -2,6 +2,7 @@ import { useRef, useCallback, useState, useEffect, useMemo, forwardRef, useImper
 import DeckGL from '@deck.gl/react';
 import { ScatterplotLayer, TextLayer, PolygonLayer, PathLayer } from '@deck.gl/layers';
 import { OrthographicView, LinearInterpolator } from '@deck.gl/core';
+import { PathStyleExtension } from '@deck.gl/extensions';
 import { CanvasContext } from '@luma.gl/core';
 import PropTypes from 'prop-types';
 
@@ -77,12 +78,13 @@ function buildCurvedPath(sourcePosition, targetPosition, srcIdx, dstIdx, curvatu
   const nx = -dy / length;
   const ny = dx / length;
   const sign = edgeBendSign(srcIdx, dstIdx);
-  const bend = clamp(length * curvature, 0.01, 0.18) * sign;
+  const bend = Math.min(length * curvature, 0.18) * sign;
   const cx = (x0 + x1) * 0.5 + nx * bend;
   const cy = (y0 + y1) * 0.5 + ny * bend;
 
   const path = [];
-  const segmentCount = Math.max(3, steps);
+  // Adaptive segments: fewer for nearly-straight short edges, up to `steps` for long curves
+  const segmentCount = Math.max(3, Math.min(steps, Math.ceil(length * 80)));
   for (let i = 0; i <= segmentCount; i++) {
     const t = i / segmentCount;
     const mt = 1 - t;
@@ -536,17 +538,17 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
       };
 
       if (row.edgeType === 'reply') {
-        const alphaBase = isDarkMode ? 120 : 90;
+        const alphaBase = isDarkMode ? 80 : 55;
         const alpha = Math.round(alphaBase * clamp(1.04 - length * 0.22, 0.45, 1));
         row.path = buildCurvedPath(sourcePosition, targetPosition, srcIdx, dstIdx, 0.09, 6);
         row.color = isDarkMode ? [214, 206, 188, alpha] : [86, 72, 60, alpha];
         row.width = clamp(1.0 - length * 0.05, 0.72, 1.0);
         reply.push(row);
       } else if (row.edgeType === 'quote') {
-        const alphaBase = isDarkMode ? 130 : 112;
+        const alphaBase = isDarkMode ? 90 : 65;
         const alpha = Math.round(alphaBase * clamp(1.0 - length * 0.18, 0.5, 1));
         row.path = buildCurvedPath(sourcePosition, targetPosition, srcIdx, dstIdx, 0.16, 10);
-        row.color = isDarkMode ? [124, 186, 230, alpha] : [24, 97, 174, alpha];
+        row.color = isDarkMode ? [214, 206, 188, alpha] : [86, 72, 60, alpha];
         row.width = clamp(1.08 - length * 0.04, 0.8, 1.08);
         quote.push(row);
       }
@@ -1094,7 +1096,56 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
   const layers = useMemo(() => {
     const layerList = [];
 
-    // 1. Scatterplot Layer for points
+    // 1. Link edges (rendered first = below scatter points, so nodes occlude endpoints)
+    if (showReplyEdges && replyEdgeData.length > 0) {
+      layerList.push(
+        new PathLayer({
+          id: 'reply-edges-layer',
+          data: replyEdgeData,
+          pickable: false,
+          getPath: (d) => d.path,
+          getColor: (d) => d.color,
+          getWidth: (d) => d.width,
+          widthUnits: 'pixels',
+          widthScale: edgeWidthScale,
+          widthMinPixels: 0.5,
+          widthMaxPixels: 2.8,
+          rounded: true,
+          capRounded: true,
+          jointRounded: true,
+          visible: showReplyEdges,
+          updateTriggers: {
+            getWidth: [edgeWidthScale],
+          },
+        })
+      );
+    }
+
+    if (showQuoteEdges && quoteEdgeData.length > 0) {
+      layerList.push(
+        new PathLayer({
+          id: 'quote-edges-layer',
+          data: quoteEdgeData,
+          pickable: false,
+          getPath: (d) => d.path,
+          getColor: (d) => d.color,
+          getWidth: (d) => d.width,
+          widthUnits: 'pixels',
+          widthScale: edgeWidthScale,
+          widthMinPixels: 0.6,
+          widthMaxPixels: 3.4,
+          rounded: true,
+          capRounded: true,
+          jointRounded: true,
+          visible: showQuoteEdges,
+          updateTriggers: {
+            getWidth: [edgeWidthScale],
+          },
+        })
+      );
+    }
+
+    // 2. Scatterplot Layer for points (above edges so nodes occlude edge endpoints)
     layerList.push(
       new ScatterplotLayer({
         id: 'scatter-layer',
@@ -1193,7 +1244,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
       })
     );
 
-    // 2. Polygon Layer for cluster hulls — per-cluster colored strokes
+    // 3. Polygon Layer for cluster hulls — per-cluster colored strokes
     if (showClusterOutlines && activeHullData.length > 0) {
       layerList.push(
         new PolygonLayer({
@@ -1211,55 +1262,6 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
           lineWidthMaxPixels: 2,
           updateTriggers: {
             getLineColor: [isDarkMode, colorMap],
-          },
-        })
-      );
-    }
-
-    // 3. Link edges (render above points/hulls so they are clearly visible)
-    if (showReplyEdges && replyEdgeData.length > 0) {
-      layerList.push(
-        new PathLayer({
-          id: 'reply-edges-layer',
-          data: replyEdgeData,
-          pickable: false,
-          getPath: (d) => d.path,
-          getColor: (d) => d.color,
-          getWidth: (d) => d.width,
-          widthUnits: 'pixels',
-          widthScale: edgeWidthScale,
-          widthMinPixels: 0.5,
-          widthMaxPixels: 2.8,
-          rounded: true,
-          capRounded: true,
-          jointRounded: true,
-          visible: showReplyEdges,
-          updateTriggers: {
-            getWidth: [edgeWidthScale],
-          },
-        })
-      );
-    }
-
-    if (showQuoteEdges && quoteEdgeData.length > 0) {
-      layerList.push(
-        new PathLayer({
-          id: 'quote-edges-layer',
-          data: quoteEdgeData,
-          pickable: false,
-          getPath: (d) => d.path,
-          getColor: (d) => d.color,
-          getWidth: (d) => d.width,
-          widthUnits: 'pixels',
-          widthScale: edgeWidthScale,
-          widthMinPixels: 0.6,
-          widthMaxPixels: 3.4,
-          rounded: true,
-          capRounded: true,
-          jointRounded: true,
-          visible: showQuoteEdges,
-          updateTriggers: {
-            getWidth: [edgeWidthScale],
           },
         })
       );
