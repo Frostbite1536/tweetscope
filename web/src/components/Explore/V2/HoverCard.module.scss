@@ -55,23 +55,31 @@
 }
 
 .pinned {
-  border-color: rgba(36, 131, 123, 0.45);
+  padding-top: 10px;
 }
 
-.pinnedTag {
+.unpinButton {
   position: absolute;
-  top: 8px;
-  right: 10px;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-weight: 700;
-  color: #1C6C66;
-  background: rgba(36, 131, 123, 0.12);
-  border: 1px solid rgba(36, 131, 123, 0.26);
-  border-radius: 999px;
-  padding: 2px 8px;
-  line-height: 1.2;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-color-text-subtle, #878580);
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+
+  &:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--text-color-text-subtle) 12%, transparent);
+  }
 }
 
 /* 1. Text preview — dominant element */

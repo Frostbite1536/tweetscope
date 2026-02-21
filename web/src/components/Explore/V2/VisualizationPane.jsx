@@ -8,7 +8,7 @@ import ConnectionBadges from './ConnectionBadges';
 import { useScope } from '../../../contexts/ScopeContext';
 import { useFilter } from '../../../contexts/FilterContext';
 
-import { Heart, Repeat2 } from 'lucide-react';
+import { Heart, Repeat2, X } from 'lucide-react';
 import { mapSelectionKey } from '../../../lib/colors';
 import {
   getLikesRawValue,
@@ -540,7 +540,16 @@ const VisualizationPane = forwardRef(function VisualizationPane({
             onMouseEnter={onHoverCardMouseEnter}
             onMouseLeave={onHoverCardMouseLeave}
           >
-            {hoverPinned && <span className={hoverStyles.pinnedTag}>Pinned</span>}
+            {hoverPinned && (
+              <button
+                className={hoverStyles.unpinButton}
+                onClick={() => onUnpinHover && onUnpinHover()}
+                title="Unpin"
+                type="button"
+              >
+                <X size={14} />
+              </button>
+            )}
 
             {/* 1. Text — first and largest */}
             <p className={`${hoverStyles.textPreview} ${hoverPinned ? hoverStyles.expanded : ''}`}>
@@ -667,12 +676,6 @@ const VisualizationPane = forwardRef(function VisualizationPane({
                   disabled={!hoveredCluster}
                 >
                   Filter Cluster
-                </button>
-                <button
-                  className={hoverStyles.actionButton}
-                  onClick={() => onUnpinHover && onUnpinHover()}
-                >
-                  Unpin
                 </button>
               </div>
             )}
