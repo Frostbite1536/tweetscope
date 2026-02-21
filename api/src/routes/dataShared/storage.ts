@@ -9,7 +9,8 @@ import {
   resolveScopeLanceTableId as registryResolveTableId,
 } from "../../lib/catalogRepo.js";
 
-const scopeCache = new Map<string, JsonRecord>();
+// No cache — scope metadata must always reflect the latest on-disk/catalog state
+// (scopes can be re-materialized by the Python pipeline at any time).
 
 export async function loadJsonFile(relativePath: string): Promise<JsonRecord> {
   const safePath = ensureSafeRelativePath(relativePath);
@@ -38,15 +39,9 @@ export async function resolveLanceTableId(dataset: string, scopeId: string): Pro
 }
 
 export async function getScopeMeta(dataset: string, scopeId: string): Promise<JsonRecord> {
-  const cacheKey = `${dataset}/${scopeId}`;
-  const cached = scopeCache.get(cacheKey);
-  if (cached) return cached;
-
   const registryMeta = await registryGetScope(dataset, scopeId);
   if (registryMeta) {
-    const record = registryMeta as unknown as JsonRecord;
-    scopeCache.set(cacheKey, record);
-    return record;
+    return registryMeta as unknown as JsonRecord;
   }
 
   throw new Error(`Scope ${scopeId} not found in registry for dataset ${dataset}`);
