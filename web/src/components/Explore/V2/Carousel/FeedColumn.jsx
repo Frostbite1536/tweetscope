@@ -152,8 +152,12 @@ function FeedColumn({
             </button>
           )}
 
-          {!loading && tweets.length === 0 && (
+          {!loading && tweets.length === 0 && !hasMore && (
             <div className={styles.emptyState}>No tweets in this cluster</div>
+          )}
+
+          {!loading && tweets.length === 0 && hasMore && (
+            <div className={styles.emptyState}>Loading tweets...</div>
           )}
         </div>
       </div>
