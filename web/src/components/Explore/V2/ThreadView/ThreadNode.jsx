@@ -14,6 +14,9 @@ function ThreadNode({
   node,
   isCurrent = false,
   isMuted = false,
+  isFirstInThread = false,
+  isLastInThread = false,
+  showConnector = false,
   dataset,
   clusterMap,
   nodeStats,
@@ -35,7 +38,14 @@ function ThreadNode({
 
   return (
     <div
-      className={`${styles.threadNode} ${isCurrent ? styles.current : ''} ${isMuted ? styles.muted : ''}`}
+      className={[
+        styles.threadNode,
+        isCurrent && styles.current,
+        isMuted && styles.muted,
+        showConnector && styles.hasConnector,
+        isFirstInThread && styles.firstInThread,
+        isLastInThread && styles.lastInThread,
+      ].filter(Boolean).join(' ')}
     >
       {hasRow ? (
         <div className={styles.internalTweet}>

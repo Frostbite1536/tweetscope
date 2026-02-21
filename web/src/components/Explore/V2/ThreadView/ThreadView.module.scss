@@ -64,19 +64,6 @@
   flex-direction: column;
   gap: 0;
   position: relative;
-
-  /* Continuous thread line through avatar centers — mirrors ThreadGroup */
-  &::before {
-    content: '';
-    position: absolute;
-    left: 40px; // padding-left(20px) + half-avatar(20px)
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: color-mix(in srgb, var(--semantic-color-semantic-info) 18%, transparent);
-    border-radius: 1px;
-    pointer-events: none;
-  }
 }
 
 /* ── Sections ── */
@@ -91,9 +78,35 @@
 /* ── Thread node ── */
 .threadNode {
   position: relative;
-  z-index: 1; // paint above the thread line so avatars cover it
+  z-index: 1;
   padding: var(--space-1) 0;
   transition: opacity var(--transition-fast);
+}
+
+/* Per-node thread connector: segments that form a continuous line through
+   avatar centers. Avatar center Y from node top:
+   space-1 (4px) + tweetCard space-4 (16px) + half avatar (20px) = 40px */
+.hasConnector::before {
+  content: '';
+  position: absolute;
+  left: 40px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--semantic-color-semantic-info) 18%, transparent);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* First node: line starts at avatar center */
+.firstInThread::before {
+  top: 40px;
+}
+
+/* Last node: line ends at avatar center */
+.lastInThread::before {
+  bottom: calc(100% - 40px);
 }
 
 .current {

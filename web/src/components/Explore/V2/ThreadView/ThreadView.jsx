@@ -170,16 +170,22 @@ export default function ThreadView({
           </div>
         )}
 
-        {!loading && !error && (
+        {!loading && !error && (() => {
+          const nodeCount = parentChain.length + (currentTweet ? 1 : 0) + descendants.length;
+          const showConnector = nodeCount > 1;
+          return (
           <div className={styles.threadContent}>
             {/* Parent chain (ancestors — muted) */}
             {parentChain.length > 0 && (
               <div className={styles.parentSection}>
-                {parentChain.map((node) => (
+                {parentChain.map((node, i) => (
                   <ThreadNode
                     key={node.tweet_id}
                     node={node}
                     isMuted
+                    isFirstInThread={i === 0}
+                    isLastInThread={false}
+                    showConnector={showConnector}
                     dataset={dataset}
                     clusterMap={clusterMap}
                     nodeStats={nodeStats}
@@ -197,6 +203,9 @@ export default function ThreadView({
                 <ThreadNode
                   node={currentTweet}
                   isCurrent
+                  isFirstInThread={parentChain.length === 0}
+                  isLastInThread={descendants.length === 0}
+                  showConnector={showConnector}
                   dataset={dataset}
                   clusterMap={clusterMap}
                   nodeStats={nodeStats}
@@ -210,10 +219,13 @@ export default function ThreadView({
             {/* Descendants (replies) */}
             {descendants.length > 0 && (
               <div className={styles.descendantsSection}>
-                {descendants.map((node) => (
+                {descendants.map((node, i) => (
                   <ThreadNode
                     key={node.tweet_id}
                     node={node}
+                    isFirstInThread={false}
+                    isLastInThread={i === descendants.length - 1}
+                    showConnector={showConnector}
                     dataset={dataset}
                     clusterMap={clusterMap}
                     nodeStats={nodeStats}
@@ -232,7 +244,8 @@ export default function ThreadView({
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
