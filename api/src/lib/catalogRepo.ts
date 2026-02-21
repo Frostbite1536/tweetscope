@@ -131,7 +131,7 @@ export async function listDatasets(
 
   let query = table
     .query()
-    .select(["dataset_id", "visibility", "active_scope_id", "row_count"]);
+    .select(["dataset_id", "visibility", "active_scope_id", "row_count", "meta_json"]);
 
   if (where) {
     query = query.where(where);
@@ -139,17 +139,26 @@ export async function listDatasets(
   const limit = fullScanLimit(await table.countRows());
 
   const rows = (await query.limit(limit).toArray()) as Array<
-    Pick<DatasetRow, "dataset_id" | "visibility" | "active_scope_id" | "row_count">
+    Pick<DatasetRow, "dataset_id" | "visibility" | "active_scope_id" | "row_count" | "meta_json">
   >;
 
-  return rows.map((row) => ({
-    id: row.dataset_id,
-    visibility: row.visibility,
-    active_scope_id: row.active_scope_id || null,
-    row_count: normalizeCount(row.row_count),
-    // keep legacy frontend key until all callers switch to row_count
-    length: normalizeCount(row.row_count),
-  }));
+  return rows.map((row) => {
+    const meta = row.meta_json ? parseMeta<Record<string, unknown>>(row.meta_json) : {};
+    const profile = meta.profile as Record<string, string> | undefined;
+    return {
+      id: row.dataset_id,
+      visibility: row.visibility,
+      active_scope_id: row.active_scope_id || null,
+      row_count: normalizeCount(row.row_count),
+      // keep legacy frontend key until all callers switch to row_count
+      length: normalizeCount(row.row_count),
+      profile: profile ? {
+        username: profile.username ?? undefined,
+        display_name: profile.display_name ?? undefined,
+        avatar_url: profile.avatar_url ?? undefined,
+      } : undefined,
+    };
+  });
 }
 
 /**
