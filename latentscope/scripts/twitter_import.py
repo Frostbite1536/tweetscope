@@ -558,6 +558,7 @@ def _try_enable_hierarchical_scope(
     toponymy_min_clusters: int,
     toponymy_base_min_cluster_size: int,
     toponymy_context: str | None,
+    max_concurrent_requests: int = 25,
 ) -> dict[str, Any]:
     """
     Ensure the given scope uses hierarchical labels.
@@ -601,6 +602,7 @@ def _try_enable_hierarchical_scope(
         min_clusters=toponymy_min_clusters,
         base_min_cluster_size=toponymy_base_min_cluster_size,
         context=toponymy_context,
+        max_concurrent_requests=max_concurrent_requests,
     )
 
     scope(
@@ -657,6 +659,7 @@ def _run_pipeline_for_dataset(
     toponymy_min_clusters: int,
     toponymy_base_min_cluster_size: int,
     toponymy_context: str | None,
+    max_concurrent_requests: int = 25,
     do_build_links: bool,
     incremental_links: bool,
     changed_tweet_ids: list[str] | None = None,
@@ -756,6 +759,7 @@ def _run_pipeline_for_dataset(
             toponymy_min_clusters=toponymy_min_clusters,
             toponymy_base_min_cluster_size=toponymy_base_min_cluster_size,
             toponymy_context=toponymy_context,
+            max_concurrent_requests=max_concurrent_requests,
         )
         cluster_labels_id = hier.get("cluster_labels_id", "default")
         hierarchical_enabled = bool(hier.get("hierarchical_labels"))
@@ -821,6 +825,7 @@ def run_import(
     toponymy_min_clusters: int = 2,
     toponymy_base_min_cluster_size: int = 10,
     toponymy_context: str | None = None,
+    max_concurrent_requests: int = 25,
     build_links: bool = True,
     import_batch_id: str | None = None,
     incremental_links: bool = True,
@@ -903,6 +908,7 @@ def run_import(
         toponymy_min_clusters=toponymy_min_clusters,
         toponymy_base_min_cluster_size=toponymy_base_min_cluster_size,
         toponymy_context=toponymy_context,
+        max_concurrent_requests=max_concurrent_requests,
     )
 
     summary: dict[str, Any] = {
@@ -1087,6 +1093,12 @@ def main() -> None:
         type=str,
         default=None,
         help="Optional Toponymy context string for topic naming",
+    )
+    parser.add_argument(
+        "--max-concurrent-requests",
+        type=int,
+        default=25,
+        help="Max concurrent LLM requests for async toponymy labeling (default: 25)",
     )
     parser.add_argument(
         "--build_links",

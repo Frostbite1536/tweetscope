@@ -53,6 +53,8 @@ def main():
                         help='Force synchronous LLM wrapper (default: async for OpenAI/Anthropic)')
     parser.add_argument('--adaptive-exemplars', action=argparse.BooleanOptionalAction, default=True,
                         help='Enable adaptive exemplar/keyphrase counts by cluster size (default: enabled)')
+    parser.add_argument('--max-concurrent-requests', type=int, default=25,
+                        help='Max concurrent LLM requests for async wrappers (default: 25)')
 
     args = parser.parse_args()
     run_toponymy_labeling(**vars(args))
@@ -69,6 +71,7 @@ def run_toponymy_labeling(
     context: str = None,
     sync_llm: bool = False,
     adaptive_exemplars: bool = True,
+    max_concurrent_requests: int = 25,
 ):
     """
     Generate hierarchical cluster labels using Toponymy.
@@ -158,8 +161,9 @@ def run_toponymy_labeling(
     # Configure LLM wrapper
     print(f"Configuring LLM: {llm_provider}/{llm_model}")
     use_async_llm = (not sync_llm) and (llm_provider in {"openai", "anthropic"})
-    print(f"  LLM mode: {'async' if use_async_llm else 'sync'}")
-    llm = get_llm_wrapper(llm_provider, llm_model, async_mode=use_async_llm)
+    print(f"  LLM mode: {'async' if use_async_llm else 'sync'} (max_concurrent={max_concurrent_requests})")
+    llm = get_llm_wrapper(llm_provider, llm_model, async_mode=use_async_llm,
+                          max_concurrent_requests=max_concurrent_requests)
 
     # Configure clusterer
     print(f"Configuring ToponymyClusterer (min_clusters={min_clusters}, base_min_cluster_size={base_min_cluster_size})")
@@ -247,6 +251,7 @@ def run_toponymy_labeling(
         scope_meta,
         llm_provider=llm_provider,
         llm_model=llm_model,
+        max_concurrent_requests=max_concurrent_requests,
         min_clusters=min_clusters,
         base_min_cluster_size=base_min_cluster_size,
         audit_info=audit_info,
@@ -259,13 +264,15 @@ def run_toponymy_labeling(
     return output_id
 
 
-def get_llm_wrapper(provider: str, model: str, async_mode: bool = False):
+def get_llm_wrapper(provider: str, model: str, async_mode: bool = False,
+                    max_concurrent_requests: int = 25):
     """Get the appropriate LLM wrapper based on provider.
 
     Args:
         provider: LLM provider name (openai, anthropic, cohere, google)
         model: Model name for the provider
         async_mode: If True, return an async wrapper when available. Defaults to False.
+        max_concurrent_requests: Max concurrent requests for async wrappers. Defaults to 25.
     """
     # Google uses GOOGLE_API_KEY not GOOGLE_API_KEY
     env_key = "GOOGLE_API_KEY" if provider == "google" else f"{provider.upper()}_API_KEY"
@@ -277,13 +284,15 @@ def get_llm_wrapper(provider: str, model: str, async_mode: bool = False):
     if provider == "openai":
         if async_mode:
             from toponymy.llm_wrappers import AsyncOpenAINamer
-            return AsyncOpenAINamer(api_key=api_key, model=model)
+            return AsyncOpenAINamer(api_key=api_key, model=model,
+                                    max_concurrent_requests=max_concurrent_requests)
         from toponymy.llm_wrappers import OpenAINamer
         return OpenAINamer(api_key=api_key, model=model)
     elif provider == "anthropic":
         if async_mode:
             from toponymy.llm_wrappers import AsyncAnthropicNamer
-            return AsyncAnthropicNamer(api_key=api_key, model=model)
+            return AsyncAnthropicNamer(api_key=api_key, model=model,
+                                       max_concurrent_requests=max_concurrent_requests)
         from toponymy.llm_wrappers import AnthropicNamer
         return AnthropicNamer(api_key=api_key, model=model)
     elif provider == "cohere":
@@ -492,6 +501,7 @@ def save_hierarchical_labels(
     scope_meta,
     llm_provider=None,
     llm_model=None,
+    max_concurrent_requests=None,
     min_clusters=None,
     base_min_cluster_size=None,
     audit_info=None,
@@ -519,6 +529,7 @@ def save_hierarchical_labels(
         "cluster_id": scope_meta.get("cluster_id"),
         "llm_provider": llm_provider,
         "llm_model": llm_model,
+        "max_concurrent_requests": max_concurrent_requests,
         "min_clusters": min_clusters,
         "base_min_cluster_size": base_min_cluster_size,
         "num_layers": len(topic_model.topic_names_),
