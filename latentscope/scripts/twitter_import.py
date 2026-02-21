@@ -808,7 +808,7 @@ def run_import(
     sort: str = "recent",
     text_column: str = "text",
     run_pipeline: bool = False,
-    embedding_model: str = "voyageai-voyage-4-lite",
+    embedding_model: str = "voyage-context-3",
     umap_neighbors: int = 25,
     umap_min_dist: float = 0.1,
     cluster_samples: int = 5,
@@ -1039,7 +1039,7 @@ def main() -> None:
     parser.add_argument(
         "--embedding_model",
         type=str,
-        default="voyageai-voyage-4-lite",
+        default="voyage-context-3",
         help="Embedding model id for --run_pipeline",
     )
     parser.add_argument("--umap_neighbors", type=int, default=25)

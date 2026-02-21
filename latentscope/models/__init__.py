@@ -20,21 +20,33 @@ def get_embedding_model_list():
 def get_embedding_model_dict(id):
     embed_model_list = get_embedding_model_list()
     embed_model_dict = {model['id']: model for model in embed_model_list}
-    model = embed_model_dict[id]
-    if not model:
-        raise ValueError(f"Model {id} not found")
-    return model
+    model = embed_model_dict.get(id)
+    if model:
+        return model
+
+    # Convenience alias: allow raw provider model name (e.g. "voyage-context-3")
+    for candidate in embed_model_list:
+        if candidate.get("name") == id:
+            return candidate
+
+    raise ValueError(f"Model {id} not found")
 
 def get_embedding_model(id):
     """Returns a ModelProvider instance for the given model id."""
     model = get_embedding_model_dict(id)
 
     if model['provider'] == "openai":
-        return OpenAIEmbedProvider(model['name'], model['params'])
+        provider = OpenAIEmbedProvider(model['name'], model['params'])
+        provider.model_id = model['id']
+        return provider
     if model['provider'] == "voyageai":
-        return VoyageAIEmbedProvider(model['name'], model['params'])
+        provider = VoyageAIEmbedProvider(model['name'], model['params'])
+        provider.model_id = model['id']
+        return provider
     if model['provider'] == "voyageai-context":
-        return VoyageContextEmbedProvider(model['name'], model['params'])
+        provider = VoyageContextEmbedProvider(model['name'], model['params'])
+        provider.model_id = model['id']
+        return provider
     raise ValueError(f"Unsupported embedding provider: {model['provider']}")
 
 
@@ -71,4 +83,3 @@ def get_chat_model(id):
     if model['provider'] == "ollama":
         return OpenAIChatProvider(model['name'], model['params'], base_url=model['url'])
     raise ValueError(f"Unsupported chat provider: {model['provider']}")
-

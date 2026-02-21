@@ -7,6 +7,7 @@ import time
 import math
 import argparse
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
 try:
     # Check if the runtime environment is a Jupyter notebook
@@ -18,7 +19,7 @@ except ImportError as e:
     # Fallback to the standard console version if import fails
     from tqdm import tqdm
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from latentscope.models import get_embedding_model
 from latentscope.util import get_data_dir
 
@@ -292,6 +293,120 @@ def batch_thread_groups(groups, tokenizer, params):
     return batches
 
 
+def _param_with_env_override(params, param_key, env_key, default, cast):
+    raw_env = os.getenv(env_key)
+    if raw_env not in (None, ""):
+        try:
+            return cast(raw_env)
+        except (TypeError, ValueError):
+            print(f"Warning: invalid env override {env_key}={raw_env}, falling back")
+    raw_param = params.get(param_key, default)
+    try:
+        return cast(raw_param)
+    except (TypeError, ValueError):
+        return default
+
+
+def _contextual_batch_token_count(batch_groups):
+    total = 0
+    for group in batch_groups:
+        total += max(1, int(group.get("_total_tokens", 0) or 0))
+    return total
+
+
+class SlidingWindowRateLimiter:
+    """Shared 60-second window limiter for request and token budgets."""
+
+    def __init__(self, requests_per_minute=0, tokens_per_minute=0, headroom=0.9):
+        factor = max(0.1, min(1.0, float(headroom)))
+        self.requests_per_minute = int(max(0, requests_per_minute) * factor)
+        self.tokens_per_minute = int(max(0, tokens_per_minute) * factor)
+        self.request_times = deque()
+        self.token_events = deque()
+        self.token_sum = 0
+        self._warned_oversized = False
+
+    def _evict(self, now):
+        cutoff = now - 60.0
+        while self.request_times and self.request_times[0] <= cutoff:
+            self.request_times.popleft()
+        while self.token_events and self.token_events[0][0] <= cutoff:
+            _, tok = self.token_events.popleft()
+            self.token_sum -= tok
+
+    def acquire(self, token_cost):
+        token_cost = max(1, int(token_cost or 1))
+        if self.tokens_per_minute > 0 and token_cost > self.tokens_per_minute:
+            if not self._warned_oversized:
+                print(
+                    f"Warning: single request token estimate {token_cost} exceeds "
+                    f"effective TPM window {self.tokens_per_minute}; allowing request."
+                )
+                self._warned_oversized = True
+            token_cost = self.tokens_per_minute
+
+        while True:
+            now = time.monotonic()
+            self._evict(now)
+
+            req_ok = (
+                self.requests_per_minute <= 0
+                or len(self.request_times) < self.requests_per_minute
+            )
+            tok_ok = (
+                self.tokens_per_minute <= 0
+                or (self.token_sum + token_cost) <= self.tokens_per_minute
+            )
+
+            if req_ok and tok_ok:
+                if self.requests_per_minute > 0:
+                    self.request_times.append(now)
+                if self.tokens_per_minute > 0:
+                    self.token_events.append((now, token_cost))
+                    self.token_sum += token_cost
+                return
+
+            waits = []
+            if self.requests_per_minute > 0 and not req_ok and self.request_times:
+                waits.append((self.request_times[0] + 60.0) - now)
+            if self.tokens_per_minute > 0 and not tok_ok and self.token_events:
+                overflow = (self.token_sum + token_cost) - self.tokens_per_minute
+                running = 0
+                for ts, tok in self.token_events:
+                    running += tok
+                    if running >= overflow:
+                        waits.append((ts + 60.0) - now)
+                        break
+            sleep_s = max(0.01, min(1.0, max(waits) if waits else 0.05))
+            time.sleep(sleep_s)
+
+
+def _scatter_contextual_batch_embeddings(batch_groups, batch_results, all_embeddings, filled):
+    if len(batch_groups) != len(batch_results):
+        raise ValueError(
+            f"Contextual batch result count mismatch: "
+            f"{len(batch_results)} != {len(batch_groups)}"
+        )
+    for group, group_embeddings in zip(batch_groups, batch_results):
+        cc = int(group["context_count"])
+        real_embeddings = group_embeddings[cc:]
+        if len(real_embeddings) != len(group["row_indices"]):
+            raise ValueError(
+                f"Contextual scatter mismatch for group: "
+                f"{len(real_embeddings)} embeddings vs {len(group['row_indices'])} rows"
+            )
+        for emb, row_idx in zip(real_embeddings, group["row_indices"]):
+            all_embeddings[row_idx] = emb
+            filled[row_idx] = True
+
+
+def _write_partial_contextual_checkpoint(path, all_embeddings, filled):
+    import h5py
+    with h5py.File(path, "w") as f:
+        f.create_dataset("embeddings", data=all_embeddings)
+        f.create_dataset("filled", data=filled)
+
+
 def _save_contextual_progress(progress_path, batch_idx, config_hash):
     """Save checkpoint for contextual embedding progress."""
     with open(progress_path, 'w') as f:
@@ -321,6 +436,138 @@ def _compute_config_hash(model_id, text_column, n_rows, n_groups):
     import hashlib
     key = f"{model_id}|{text_column}|{n_rows}|{n_groups}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def _embed_contextual_batches_parallel(
+    *,
+    batches,
+    model,
+    dimensions,
+    starting_batch,
+    all_embeddings,
+    filled,
+    progress_path,
+    config_hash,
+    partial_path,
+):
+    total_batches = len(batches)
+    if starting_batch >= total_batches:
+        return
+
+    max_parallel = _param_with_env_override(
+        model.params,
+        "max_parallel_requests",
+        "LS_EMBED_MAX_PARALLEL_REQUESTS",
+        1,
+        int,
+    )
+    checkpoint_every = _param_with_env_override(
+        model.params,
+        "checkpoint_every_batches",
+        "LS_EMBED_CHECKPOINT_EVERY_BATCHES",
+        8,
+        int,
+    )
+    target_rpm = _param_with_env_override(
+        model.params,
+        "target_rpm",
+        "LS_EMBED_TARGET_RPM",
+        0,
+        int,
+    )
+    target_tpm = _param_with_env_override(
+        model.params,
+        "target_tpm",
+        "LS_EMBED_TARGET_TPM",
+        0,
+        int,
+    )
+    headroom = _param_with_env_override(
+        model.params,
+        "rate_limit_headroom",
+        "LS_EMBED_RATE_LIMIT_HEADROOM",
+        0.9,
+        float,
+    )
+    max_parallel = max(1, max_parallel)
+    checkpoint_every = max(1, checkpoint_every)
+
+    limiter = SlidingWindowRateLimiter(
+        requests_per_minute=target_rpm,
+        tokens_per_minute=target_tpm,
+        headroom=headroom,
+    )
+    batch_token_estimates = [_contextual_batch_token_count(b) for b in batches]
+
+    if target_rpm > 0 or target_tpm > 0:
+        print(
+            "  Contextual parallelism:",
+            f"workers={max_parallel}, rpm={target_rpm}, tpm={target_tpm}, headroom={headroom}",
+        )
+    else:
+        print(f"  Contextual parallelism: workers={max_parallel}, no explicit rpm/tpm caps")
+
+    completed = [i < starting_batch for i in range(total_batches)]
+    contiguous_completed = starting_batch
+    completed_since_checkpoint = 0
+    remaining = total_batches - starting_batch
+
+    def _submit(executor, batch_idx):
+        limiter.acquire(batch_token_estimates[batch_idx])
+        api_inputs = [g["texts"] for g in batches[batch_idx]]
+        return executor.submit(model.embed_contextual, api_inputs, dimensions=dimensions)
+
+    with ThreadPoolExecutor(max_workers=max_parallel) as executor:
+        inflight = {}
+        next_batch_idx = starting_batch
+
+        with tqdm(total=remaining) as progress:
+            while next_batch_idx < total_batches and len(inflight) < max_parallel:
+                fut = _submit(executor, next_batch_idx)
+                inflight[fut] = next_batch_idx
+                next_batch_idx += 1
+
+            while inflight:
+                done, _ = wait(list(inflight.keys()), return_when=FIRST_COMPLETED)
+                for fut in done:
+                    batch_idx = inflight.pop(fut)
+                    results = fut.result()
+                    _scatter_contextual_batch_embeddings(
+                        batches[batch_idx],
+                        results,
+                        all_embeddings,
+                        filled,
+                    )
+                    completed[batch_idx] = True
+                    completed_since_checkpoint += 1
+                    progress.update(1)
+
+                    while (
+                        contiguous_completed < total_batches
+                        and completed[contiguous_completed]
+                    ):
+                        contiguous_completed += 1
+
+                    if (
+                        completed_since_checkpoint >= checkpoint_every
+                        or contiguous_completed == total_batches
+                    ):
+                        _save_contextual_progress(
+                            progress_path,
+                            contiguous_completed,
+                            config_hash,
+                        )
+                        _write_partial_contextual_checkpoint(
+                            partial_path,
+                            all_embeddings,
+                            filled,
+                        )
+                        completed_since_checkpoint = 0
+
+                while next_batch_idx < total_batches and len(inflight) < max_parallel:
+                    fut = _submit(executor, next_batch_idx)
+                    inflight[fut] = next_batch_idx
+                    next_batch_idx += 1
 
 
 def chunked_iterable(iterable, size):
@@ -382,7 +629,7 @@ def main():
     parser = argparse.ArgumentParser(description='Embed a dataset')
     parser.add_argument('dataset_id', type=str, help='Dataset id (directory name in data/)')
     parser.add_argument('text_column', type=str, help='Output file', default='text')
-    parser.add_argument('model_id', type=str, help='ID of embedding model to use', default="voyageai-voyage-4-lite")
+    parser.add_argument('model_id', type=str, help='ID of embedding model to use', default="voyage-context-3")
     parser.add_argument('--prefix', type=str, help='Prefix to prepend to text before embedding', default="")
     parser.add_argument('--dimensions', type=int, help='Truncate embeddings to dimensions a la Matroyshka embeddings')
     parser.add_argument('--rerun', type=str, help='Rerun the given embedding from last completed batch')
@@ -423,6 +670,9 @@ def embed(dataset_id, text_column, model_id, prefix, rerun, dimensions, batch_si
     print("RUNNING:", embedding_id)
     print("MODEL ID", model_id)
     model = get_embedding_model(model_id)
+    resolved_model_id = getattr(model, "model_id", model_id)
+    if resolved_model_id != model_id:
+        print(f"Resolved model alias '{model_id}' -> '{resolved_model_id}'")
     print("MODEL", model)
     print("loading", model.name)
     model.load_model()
@@ -460,7 +710,7 @@ def embed(dataset_id, text_column, model_id, prefix, rerun, dimensions, batch_si
 
         # Resume support for contextual path
         dim = dimensions or model.params.get("default_output_dimension", 1024)
-        config_hash = _compute_config_hash(model_id, text_column, len(df), len(groups))
+        config_hash = _compute_config_hash(resolved_model_id, text_column, len(df), len(groups))
         progress_path = os.path.join(embedding_dir, f"{embedding_id}-progress.json")
         partial_path = os.path.join(embedding_dir, f"{embedding_id}-partial.h5")
 
@@ -480,31 +730,28 @@ def embed(dataset_id, text_column, model_id, prefix, rerun, dimensions, batch_si
             filled = np.zeros(len(df), dtype=bool)
 
         print(f"Embedding {len(df)} rows in {total_batches} contextual batches...")
-        for batch_idx, batch_groups in enumerate(tqdm(batches, total=total_batches)):
-            if batch_idx < starting_batch:
-                continue
+        try:
+            _embed_contextual_batches_parallel(
+                batches=batches,
+                model=model,
+                dimensions=dimensions,
+                starting_batch=starting_batch,
+                all_embeddings=all_embeddings,
+                filled=filled,
+                progress_path=progress_path,
+                config_hash=config_hash,
+                partial_path=partial_path,
+            )
+        except Exception as e:
             try:
-                api_inputs = [g["texts"] for g in batch_groups]
-                results = model.embed_contextual(api_inputs, dimensions=dimensions)
-
-                # Scatter: skip context-only chunks, place real embeddings at row indices
-                for g, group_embeddings in zip(batch_groups, results):
-                    cc = g["context_count"]
-                    real_embeddings = group_embeddings[cc:]
-                    for emb, row_idx in zip(real_embeddings, g["row_indices"]):
-                        all_embeddings[row_idx] = np.array(emb, dtype=np.float32)
-                        filled[row_idx] = True
-
-                # Checkpoint progress
-                _save_contextual_progress(progress_path, batch_idx + 1, config_hash)
-                with h5py.File(partial_path, 'w') as f:
-                    f.create_dataset("embeddings", data=all_embeddings)
-                    f.create_dataset("filled", data=filled)
-
-            except Exception as e:
-                print(f"Error in contextual batch {batch_idx}: {e}")
-                print(f"  Progress saved at batch {batch_idx}. Rerun with --rerun {embedding_id}")
-                sys.exit(1)
+                _write_partial_contextual_checkpoint(partial_path, all_embeddings, filled)
+                completed_rows = int(np.sum(filled))
+                print(f"  Saved partial checkpoint ({completed_rows}/{len(df)} rows)")
+            except Exception:
+                pass
+            print(f"Error in contextual embedding: {e}")
+            print(f"  Rerun with --rerun {embedding_id}")
+            sys.exit(1)
 
         # Verify all rows filled
         unfilled_count = int(np.sum(~filled))
@@ -524,7 +771,7 @@ def embed(dataset_id, text_column, model_id, prefix, rerun, dimensions, batch_si
         with open(os.path.join(embedding_dir, f"{embedding_id}.json"), 'w') as f:
             json.dump({
                 "id": embedding_id,
-                "model_id": model_id,
+                "model_id": resolved_model_id,
                 "dataset_id": dataset_id,
                 "text_column": text_column,
                 "rows": n_rows,
@@ -580,7 +827,7 @@ def embed(dataset_id, text_column, model_id, prefix, rerun, dimensions, batch_si
         with open(os.path.join(embedding_dir, f"{embedding_id}.json"), 'w') as f:
             json.dump({
                 "id": embedding_id,
-                "model_id": model_id,
+                "model_id": resolved_model_id,
                 "dataset_id": dataset_id,
                 "text_column": text_column,
                 "rows": n_rows,
@@ -595,10 +842,10 @@ def embed(dataset_id, text_column, model_id, prefix, rerun, dimensions, batch_si
     history_file_path = os.path.join(DATA_DIR, "embedding_model_history.csv")
     try:
         with open(history_file_path, 'a') as history_file:
-            history_file.write(f"{datetime.now().isoformat()},{model_id}\n")
+            history_file.write(f"{datetime.now().isoformat()},{resolved_model_id}\n")
     except FileNotFoundError:
         with open(history_file_path, 'w') as history_file:
-            history_file.write(f"{datetime.now().isoformat()},{model_id}\n")
+            history_file.write(f"{datetime.now().isoformat()},{resolved_model_id}\n")
 
     print("done with", embedding_id)
 

@@ -118,7 +118,7 @@ Additional filters can be combined with `--year`:
 
 ```bash
 ls-ingest-csv "my-dataset" ~/data.csv
-ls-embed my-dataset "text" voyageai-voyage-4-lite
+ls-embed my-dataset "text" voyage-context-3
 ls-umap my-dataset embedding-001 25 0.1                           # 2D display
 ls-umap my-dataset embedding-001 25 0.1 --purpose cluster --n_components 10  # kD for clustering
 ls-cluster my-dataset umap-001 50 5 --clustering_umap_id umap-002
@@ -141,7 +141,7 @@ import pandas as pd
 ls.init("~/latent-scope-data", openai_key="XXX")
 df = pd.read_parquet("my_data.parquet")
 ls.ingest("my-dataset", df, text_column="text")
-ls.embed("my-dataset", "text", "voyageai-voyage-4-lite")
+ls.embed("my-dataset", "text", "voyage-context-3")
 ls.umap("my-dataset", "embedding-001", 25, 0.1)
 ls.cluster("my-dataset", "umap-001", 50, 5)
 ls.scope("my-dataset", "cluster-001-labels-default", "My scope", "Description")
@@ -172,7 +172,7 @@ Three datasets are used for development and testing. Archive zips live in `archi
 | **sheik-tweets** | Native X export (`archives/my-twitter-archive.zip`) | ~10k tweets | Current | Primary dev corpus |
 | **patrick-tweets** | Native X export | 50 tweets | Outdated — needs re-import | Future read-only public dataset |
 
-"Current pipeline" means: voyage-4-lite embeddings, split UMAP (2D display + 10D clustering), HDBSCAN on kD manifold, hierarchical toponymy labels with audit loop.
+"Current pipeline" means: voyage-context-3 embeddings, split UMAP (2D display + 10D clustering), HDBSCAN on kD manifold, hierarchical toponymy labels with audit loop.
 
 To set up from scratch:
 
@@ -228,7 +228,7 @@ Converts CSV/Parquet/JSON/XLSX into `input.parquet` + `meta.json`. For Twitter a
 
 ### 1. Embed
 
-Encodes the text column into high-dimensional vectors stored as HDF5. Supports local models (HuggingFace sentence-transformers) and API providers (VoyageAI, OpenAI, Cohere, Mistral, Together). Default: `voyageai-voyage-4-lite`.
+Encodes the text column into high-dimensional vectors stored as HDF5. Supports local models (HuggingFace sentence-transformers) and API providers (VoyageAI, OpenAI, Cohere, Mistral, Together). Default: `voyage-context-3`.
 
 Resumable — if interrupted, re-running picks up from the last completed batch.
 
