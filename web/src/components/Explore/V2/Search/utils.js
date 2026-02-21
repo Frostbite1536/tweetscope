@@ -38,13 +38,10 @@ export const validateColumnAndValue = (column, value, columnFilters) => {
 export const NUM_SEARCH_RESULTS = 4;
 const CLUSTERS_GROUP = 'Clusters';
 
-export function buildGroupedOptions(query, searchMode, clusterLabels) {
+export function buildGroupedOptions(query, clusterLabels) {
   const groups = [];
   if (query.trim() !== '') {
-    const searchOpt = searchMode === 'keyword'
-      ? { value: query, label: query, isKeywordSearch: true }
-      : { value: query, label: query, isSemanticSearch: true };
-    groups.push({ label: 'Search', options: [searchOpt] });
+    groups.push({ label: 'Search', options: [{ value: query, label: query, isKeywordSearch: true }] });
   }
   const clusterOptions = findClustersByQuery(clusterLabels, query, NUM_SEARCH_RESULTS);
   if (clusterOptions.length > 0) {

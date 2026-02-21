@@ -81,3 +81,14 @@
     text-underline-offset: 3px;
     text-decoration-thickness: 1px;
 }
+
+.semanticHint {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--text-color-text-subtle);
+    opacity: 0.6;
+    white-space: nowrap;
+}

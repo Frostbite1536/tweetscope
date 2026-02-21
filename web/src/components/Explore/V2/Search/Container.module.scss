@@ -14,7 +14,7 @@
 
 .searchBarRow {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
     background: transparent;
@@ -27,28 +27,33 @@
     opacity: 0.45;
     width: 15px;
     height: 15px;
+    margin-top: var(--space-1);
 }
 
 .inputWrapper {
     display: flex;
-    align-items: center;
-    gap: var(--space-2);
+    align-items: flex-start;
+    gap: var(--space-1) var(--space-2);
     flex: 1;
     min-width: 0;
     flex-wrap: wrap;
 }
 
 .searchInput {
-    flex: 1;
+    flex: 1 1 100%;
     padding: var(--space-1) 0;
     font-family: 'Instrument Sans', system-ui, sans-serif;
     font-size: 13px;
     font-weight: 400;
+    line-height: 1.4;
     color: var(--text-color-text-main);
     background: transparent;
     border: none;
     outline: none;
-    min-width: 80px;
+    min-width: 0;
+    resize: none;
+    overflow: hidden;
+    field-sizing: content;
 
     &::placeholder {
         color: var(--text-color-text-subtle);
@@ -118,6 +123,8 @@
 }
 
 .chipClearAll {
+    order: 99;
+    margin-left: auto;
     padding: 1px var(--space-2);
     background: transparent;
     border: none;
@@ -133,60 +140,6 @@
     &:hover {
         color: var(--text-color-text-main);
     }
-}
-
-/* ---- Inner pill toggle (inside search row, right-aligned) ---- */
-
-.modePill {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    background: var(--neutrals-color-neutral-1);
-    border: 1px solid var(--borders-color-border-1);
-    border-radius: 999px;
-    padding: 2px;
-    gap: 0;
-}
-
-.modeButton {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    font-family: 'Instrument Sans', system-ui, sans-serif;
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    color: var(--text-color-text-subtle);
-    background: transparent;
-    border: none;
-    border-radius: 999px;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    white-space: nowrap;
-    line-height: 1;
-
-    &:hover {
-        color: var(--text-color-text-main);
-    }
-}
-
-.modeButtonActive {
-    background: var(--neutrals-color-neutral-0);
-    color: var(--text-color-text-main);
-    box-shadow: 0 1px 3px rgba(40, 39, 38, 0.08), 0 0 0 0.5px var(--borders-color-border-2);
-}
-
-.modeButtonActiveSemantic {
-    background: var(--neutrals-color-neutral-0);
-    color: var(--semantic-color-semantic-info);
-    box-shadow: 0 1px 3px rgba(40, 39, 38, 0.08), 0 0 0 0.5px var(--borders-color-border-2);
-}
-
-.modeIcon {
-    width: 11px;
-    height: 11px;
-    flex-shrink: 0;
 }
 
 /* ---- Dropdown results ---- */
@@ -247,7 +200,9 @@
     font-weight: 500;
     color: var(--text-color-text-subtle);
     white-space: nowrap;
-    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .metadataRight {

@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useCallback, useMemo } from 'react';
 import { useCombobox } from 'downshift';
-import { Search, Type, Sparkles } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 import FilterChips from './FilterChips';
 import SearchResults from './SearchResults';
@@ -16,8 +16,6 @@ import {
   SLOT_TO_FILTER_TYPE,
 } from './utils';
 
-const SEARCH_MODES = { KEYWORD: 'keyword', SEMANTIC: 'semantic' };
-
 // Ordered list of filter slots for backspace-to-clear (last active gets removed first)
 const CHIP_ORDER = [
   FILTER_SLOT.CLUSTER, FILTER_SLOT.SEARCH, FILTER_SLOT.COLUMN,
@@ -25,7 +23,6 @@ const CHIP_ORDER = [
 ];
 
 const Container = () => {
-  const [searchMode, setSearchMode] = useState(SEARCH_MODES.KEYWORD);
   const { clusterLabels } = useScope();
   const {
     filterQuery, setFilterQuery,
@@ -33,16 +30,10 @@ const Container = () => {
     applyEngagement, clearFilter, clearAllFilters,
   } = useFilter();
 
-  // Sync search mode from active search slot (e.g. URL hydration)
-  useEffect(() => {
-    if (filterSlots.search?.mode === 'semantic') setSearchMode(SEARCH_MODES.SEMANTIC);
-    else if (filterSlots.search?.mode === 'keyword') setSearchMode(SEARCH_MODES.KEYWORD);
-  }, [filterSlots.search?.mode]);
-
   // Build items for downshift
   const groupedOptions = useMemo(
-    () => buildGroupedOptions(filterQuery, searchMode, clusterLabels),
-    [filterQuery, searchMode, clusterLabels],
+    () => buildGroupedOptions(filterQuery, clusterLabels),
+    [filterQuery, clusterLabels],
   );
   const flatItems = useMemo(() => flattenGroups(groupedOptions), [groupedOptions]);
 
@@ -59,18 +50,24 @@ const Container = () => {
     applyCluster(clusterObj);
   }, [clusterLabels, applyCluster, applyKeywordSearch, applySearch]);
 
-  // Enter with no highlighted item → run search / engagement operators
-  const handleEnterKeyRef = useRef(null);
-  handleEnterKeyRef.current = useCallback(() => {
+  // Run search with the given apply function (keyword or semantic)
+  const runSearch = useCallback((applyFn) => {
     if (!filterQuery) return;
     const { minFaves, remainingQuery } = parseEngagementOperators(filterQuery);
     if (minFaves) applyEngagement(minFaves);
     if (remainingQuery) {
-      (searchMode === SEARCH_MODES.KEYWORD ? applyKeywordSearch : applySearch)(remainingQuery);
+      applyFn(remainingQuery);
     } else if (minFaves) {
       setFilterQuery('');
     }
-  }, [filterQuery, searchMode, applyKeywordSearch, applySearch, applyEngagement, setFilterQuery]);
+  }, [filterQuery, applyEngagement, setFilterQuery]);
+
+  // Enter with no highlighted item → keyword search
+  const handleEnterKeyRef = useRef(null);
+  handleEnterKeyRef.current = () => runSearch(applyKeywordSearch);
+
+  // ⌘+Enter → semantic search
+  const handleMetaEnter = useCallback(() => runSearch(applySearch), [runSearch, applySearch]);
 
   // Backspace on empty input → clear last active chip
   const clearLastChip = useCallback(() => {
@@ -128,36 +125,30 @@ const Container = () => {
             onClearSlot={clearSlot}
             onClearAll={clearAllFilters}
           />
-          <input
+          <textarea
+            rows={1}
             {...getInputProps({
               className: styles.searchInput,
-              placeholder: searchMode === SEARCH_MODES.KEYWORD
-                ? 'Search by keyword...'
-                : 'Search by meaning...',
+              placeholder: 'Search by keyword...',
               onFocus: () => openMenu(),
               onKeyDown: (e) => {
+                // Submit on bare Enter (suppress newline); allow shift+Enter for newlines
+                if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                  e.preventDefault();
+                }
                 if (e.key === 'Backspace' && filterQuery === '') clearLastChip();
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  handleMetaEnter();
+                }
+              },
+              onChange: (e) => {
+                // Auto-resize textarea
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
               },
             })}
           />
-        </div>
-        <div className={styles.modePill}>
-          <button
-            className={`${styles.modeButton} ${searchMode === SEARCH_MODES.KEYWORD ? styles.modeButtonActive : ''}`}
-            onClick={() => setSearchMode(SEARCH_MODES.KEYWORD)}
-            type="button"
-          >
-            <Type size={11} className={styles.modeIcon} />
-            Keyword
-          </button>
-          <button
-            className={`${styles.modeButton} ${searchMode === SEARCH_MODES.SEMANTIC ? styles.modeButtonActiveSemantic : ''}`}
-            onClick={() => setSearchMode(SEARCH_MODES.SEMANTIC)}
-            type="button"
-          >
-            <Sparkles size={11} className={styles.modeIcon} />
-            Semantic
-          </button>
         </div>
       </div>
 

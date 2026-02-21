@@ -50,6 +50,9 @@ const OptionRow = ({ option, group, query, isHighlighted, colorMap, isDark, item
     >
       {icon}
       <div className={styles.optionLabel}>{labelContent}</div>
+      {option.isKeywordSearch && (
+        <span className={styles.semanticHint}>⌘ Enter for vibe search</span>
+      )}
     </div>
   );
 };
