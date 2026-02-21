@@ -564,7 +564,11 @@ const VisualizationPane = forwardRef(function VisualizationPane({
 
             {/* 3. Cluster hint */}
             {hoveredCluster && (
-              <div className={hoverStyles.clusterHint}>
+              <div
+                className={hoverStyles.clusterHint}
+                onClick={() => onFilterToCluster && onFilterToCluster(hoveredCluster)}
+                style={{ cursor: 'pointer' }}
+              >
                 <span
                   className={hoverStyles.clusterDotSmall}
                   style={{ backgroundColor: resolveClusterColorCSS(colorMap, hoveredCluster.cluster, isDarkMode) }}

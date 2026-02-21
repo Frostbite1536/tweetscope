@@ -356,7 +356,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     if (labelDebounceRef.current) clearTimeout(labelDebounceRef.current);
     labelDebounceRef.current = setTimeout(() => {
       setDebouncedViewState(vs);
-    }, 150);
+    }, 50);
     return () => clearTimeout(labelDebounceRef.current);
   }, [controlledViewState, currentViewState, initialViewState]);
 
@@ -1309,11 +1309,11 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
           getBackgroundColor: d => {
             const alpha = Number.isFinite(d?.backgroundAlpha) ? d.backgroundAlpha : 64;
             // Keep chip backgrounds neutral; active state is expressed via text color.
-            return isDarkMode ? [52, 51, 49, alpha] : [230, 228, 217, alpha];
+            return isDarkMode ? [16, 15, 15, alpha] : [230, 228, 217, alpha];
           },
           backgroundPadding: [8, 5, 8, 5],
           outlineWidth: 0.55,
-          outlineColor: isDarkMode ? [28, 27, 26, 150] : [159, 157, 150, 118],
+          outlineColor: isDarkMode ? [8, 8, 8, 150] : [159, 157, 150, 118],
           sizeMinPixels: 10,
           sizeMaxPixels: 32,
           billboard: true,
