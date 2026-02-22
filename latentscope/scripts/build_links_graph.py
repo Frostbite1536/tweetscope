@@ -464,6 +464,17 @@ def _build_node_stats_df(
     )
 
 
+def _get_cloud_db():
+    """Return a LanceDB Cloud connection if LANCEDB_URI + LANCEDB_API_KEY are set, else None."""
+    import lancedb
+
+    cloud_uri = os.environ.get("LANCEDB_URI")
+    cloud_key = os.environ.get("LANCEDB_API_KEY")
+    if cloud_uri and cloud_key:
+        return lancedb.connect(cloud_uri, api_key=cloud_key)
+    return None
+
+
 def _write_lance_edges(dataset_dir: str, dataset_id: str, edges_df: pd.DataFrame) -> None:
     """Write edges DataFrame to a {dataset_id}__edges LanceDB table (full replace)."""
     import lancedb
@@ -488,14 +499,19 @@ def _write_lance_edges(dataset_dir: str, dataset_id: str, edges_df: pd.DataFrame
     for col in ("src_ls_index", "dst_ls_index"):
         write_df[col] = pd.to_numeric(write_df[col], errors="coerce").fillna(-1).astype(int)
 
-    tbl = db.create_table(table_name, write_df, mode="overwrite")
+    def _create_edges_table(target_db, label="local"):
+        tbl = target_db.create_table(table_name, write_df, mode="overwrite")
+        tbl.create_scalar_index("src_tweet_id", index_type="BTREE")
+        tbl.create_scalar_index("dst_tweet_id", index_type="BTREE")
+        tbl.create_scalar_index("edge_kind", index_type="BTREE")
+        tbl.create_scalar_index("internal_target", index_type="BTREE")
+        print(f"LanceDB ({label}): wrote {len(write_df)} edges to '{table_name}' with indexes")
 
-    tbl.create_scalar_index("src_tweet_id", index_type="BTREE")
-    tbl.create_scalar_index("dst_tweet_id", index_type="BTREE")
-    tbl.create_scalar_index("edge_kind", index_type="BTREE")
-    tbl.create_scalar_index("internal_target", index_type="BTREE")
+    _create_edges_table(db, "local")
 
-    print(f"LanceDB: wrote {len(write_df)} edges to '{table_name}' with indexes")
+    cloud_db = _get_cloud_db()
+    if cloud_db:
+        _create_edges_table(cloud_db, "cloud")
 
 
 def _write_lance_node_stats(dataset_dir: str, dataset_id: str, node_stats_df: pd.DataFrame) -> None:
@@ -515,13 +531,18 @@ def _write_lance_node_stats(dataset_dir: str, dataset_id: str, node_stats_df: pd
         print(f"No node stats to write to LanceDB table '{table_name}'")
         return
 
-    tbl = db.create_table(table_name, node_stats_df, mode="overwrite")
+    def _create_stats_table(target_db, label="local"):
+        tbl = target_db.create_table(table_name, node_stats_df, mode="overwrite")
+        tbl.create_scalar_index("tweet_id", index_type="BTREE")
+        tbl.create_scalar_index("ls_index", index_type="BTREE")
+        tbl.create_scalar_index("thread_root_id", index_type="BTREE")
+        print(f"LanceDB ({label}): wrote {len(node_stats_df)} node stats to '{table_name}' with indexes")
 
-    tbl.create_scalar_index("tweet_id", index_type="BTREE")
-    tbl.create_scalar_index("ls_index", index_type="BTREE")
-    tbl.create_scalar_index("thread_root_id", index_type="BTREE")
+    _create_stats_table(db, "local")
 
-    print(f"LanceDB: wrote {len(node_stats_df)} node stats to '{table_name}' with indexes")
+    cloud_db = _get_cloud_db()
+    if cloud_db:
+        _create_stats_table(cloud_db, "cloud")
 
 
 def build_links_graph(

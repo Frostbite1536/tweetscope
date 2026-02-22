@@ -123,8 +123,9 @@ def run_scope(
     with open(json_path, "w") as f:
         json.dump(scope_meta, f, indent=2)
 
-    print("exporting to lancedb")
-    export_lance(data_dir, dataset_id, resolved_scope_id)
+    cloud = bool(os.environ.get("LANCEDB_URI") and os.environ.get("LANCEDB_API_KEY"))
+    print(f"exporting to lancedb (cloud={cloud})")
+    export_lance(data_dir, dataset_id, resolved_scope_id, cloud=cloud)
 
     from latentscope.pipeline.catalog_registry import upsert_dataset_meta, upsert_scope_meta
 
