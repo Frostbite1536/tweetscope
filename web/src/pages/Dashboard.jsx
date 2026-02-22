@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import { apiUrl, catalogClient } from '../lib/apiService';
@@ -137,7 +137,6 @@ function ScopeGrid({ datasetId, scopeList, typeLabel }) {
             to={`/datasets/${datasetId}/explore/${scope.id}`}
             key={i}
           >
-            <span className={styles.scopeLabel}>{label}</span>
             <ScopeThumbnail
               datasetId={datasetId}
               scopeId={scope.id}
@@ -149,6 +148,7 @@ function ScopeGrid({ datasetId, scopeList, typeLabel }) {
               }
               alt={label}
             />
+            <span className={styles.scopeLabel}>{label}</span>
             {scope.description ? (
               <span className={styles.scopeDescription}>{scope.description}</span>
             ) : null}
@@ -169,6 +169,12 @@ function CollectionCard({ collection }) {
   const profile = tweetsDataset.profile || likesDataset?.profile;
   const displayName = profile?.display_name || id;
   const username = profile?.username;
+  const avatarUrl = profile?.avatar_url;
+
+  const [avatarError, setAvatarError] = useState(false);
+  const onAvatarError = useCallback(() => setAvatarError(true), []);
+
+  const initial = displayName.charAt(0).toUpperCase();
 
   const statParts = [];
   statParts.push(`${tweetCount.toLocaleString()} tweets`);
@@ -181,11 +187,23 @@ function CollectionCard({ collection }) {
   return (
     <div className={styles.collectionCard}>
       <div className={styles.collectionHeader}>
-        <h3 className={styles.collectionName}>
-          {displayName}
-          {username && <span className={styles.collectionUsername}> @{username}</span>}
-        </h3>
-        <span className={styles.collectionStats}>{statParts.join(' · ')}</span>
+        {avatarUrl && !avatarError ? (
+          <img
+            src={avatarUrl}
+            alt={displayName}
+            className={styles.avatar}
+            onError={onAvatarError}
+          />
+        ) : (
+          <div className={styles.avatarFallback}>{initial}</div>
+        )}
+        <div className={styles.collectionHeaderText}>
+          <h3 className={styles.collectionName}>
+            {displayName}
+            {username && <span className={styles.collectionUsername}> @{username}</span>}
+          </h3>
+          <span className={styles.collectionStats}>{statParts.join(' · ')}</span>
+        </div>
       </div>
 
       <ScopeGrid

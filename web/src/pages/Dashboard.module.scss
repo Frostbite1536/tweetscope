@@ -15,7 +15,7 @@
 
 .dashboard {
   padding: var(--space-6);
-  max-width: 960px;
+  max-width: 1080px;
   margin: 0 auto;
 }
 
@@ -98,8 +98,8 @@
 
 /* Collections list */
 .collectionsList {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-4);
 }
 
@@ -112,7 +112,7 @@
   border: 1px solid var(--glass-border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--glass-shadow);
-  padding: var(--space-5);
+  padding: var(--space-4);
   transition: box-shadow var(--transition-normal), transform var(--transition-normal);
   animation: fadeInUp 0.35s ease-out both;
 
@@ -146,11 +146,42 @@
 
 .collectionHeader {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
   position: relative;
   z-index: 1;
+}
+
+.avatar,
+.avatarFallback {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.avatar {
+  object-fit: cover;
+  border: 1px solid var(--glass-border-subtle);
+}
+
+.avatarFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--neutrals-color-neutral-1);
+  color: var(--text-color-text-subtle);
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.collectionHeaderText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .collectionName {
@@ -182,46 +213,41 @@
   z-index: 1;
 
   & + & {
-    margin-top: var(--space-4);
+    margin-top: var(--space-3);
   }
 }
 
 .scopeCard {
+  flex: 1 1 auto;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  background: var(--neutrals-color-neutral-0);
-  border: 1px solid var(--glass-border-subtle);
-  border-radius: var(--radius-md);
-  transition: all var(--transition-fast);
+  gap: var(--space-1);
   text-decoration: none;
   color: inherit;
+  border-radius: var(--radius-md);
+  transition: opacity var(--transition-fast);
 
   &:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--glass-shadow);
-    border-color: var(--interactions---primary-color-interaction-primary);
+    opacity: 0.85;
   }
 }
 
 .scopeLabel {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  color: var(--text-color-text-main);
+  color: var(--text-color-text-subtle);
 }
 
 .scopeImage {
   display: block;
-  width: 220px;
+  width: 100%;
   height: auto;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   border: 1px solid var(--glass-border-subtle);
 }
 
 .scopeDescription {
-  display: inline-block;
-  max-width: 220px;
   font-size: 0.8rem;
   color: var(--text-color-text-subtle);
   line-height: 1.4;
@@ -230,6 +256,7 @@
 
 /* Empty state */
 .emptyState {
+  grid-column: 1 / -1;
   text-align: center;
   padding: var(--space-10) var(--space-6);
   color: var(--text-color-text-subtle);
@@ -259,8 +286,8 @@
     font-size: 1.5rem;
   }
 
-  .scopeImage {
-    width: 180px;
+  .collectionsList {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -274,11 +301,7 @@
   }
 
   .collectionCard {
-    padding: var(--space-4);
-  }
-
-  .scopeImage {
-    width: 140px;
+    padding: var(--space-3);
   }
 
   .sectionHeader {
