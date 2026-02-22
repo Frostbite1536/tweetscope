@@ -76,27 +76,49 @@ function Dashboard({ appConfig = null }) {
         <div className={styles.sectionHeader}>
           <h3 className={styles.sectionTitle}>Your Collections</h3>
           <Link to="/new" className={styles.newCollectionButton}>
-            {canCreate ? '+ New Collection' : 'Coming Soon'}
+            {canCreate ? '+ New Collection' : (
+              <>Import a Twitter Account <span className={styles.comingSoonBadge}>Coming Soon</span></>
+            )}
           </Link>
         </div>
 
-        <div className={styles.collectionsList}>
-          {loading ? (
-            <div className={styles.emptyState}>Loading collections...</div>
-          ) : collections.length === 0 ? (
-            <div className={styles.emptyState}>
-              No collections yet.{' '}
-              <Link to="/new" className={styles.emptyLink}>
-                {canCreate ? 'Build your first knowledge map' : 'Join the waitlist'}
-              </Link>
-            </div>
-          ) : (
-            collections.map((collection) => (
-              <CollectionCard key={collection.id} collection={collection} />
-            ))
-          )}
-        </div>
+        {canCreate ? (
+          <div className={styles.collectionsList}>
+            {loading ? (
+              <div className={styles.emptyState}>Loading collections...</div>
+            ) : collections.length === 0 ? (
+              <div className={styles.emptyState}>
+                No collections yet.{' '}
+                <Link to="/new" className={styles.emptyLink}>
+                  Build your first knowledge map
+                </Link>
+              </div>
+            ) : (
+              collections.map((collection) => (
+                <CollectionCard key={collection.id} collection={collection} />
+              ))
+            )}
+          </div>
+        ) : (
+          <div className={styles.emptyState}>
+            Import your Twitter archive and explore it as a visual knowledge base.{' '}
+            <Link to="/new" className={styles.emptyLink}>Join the waitlist</Link> to get notified.
+          </div>
+        )}
       </div>
+
+      {!canCreate && collections.length > 0 && (
+        <div className={styles.collectionsSection}>
+          <div className={styles.sectionHeader}>
+            <h3 className={styles.sectionTitle}>Public Maps</h3>
+          </div>
+          <div className={styles.collectionsList}>
+            {collections.map((collection) => (
+              <CollectionCard key={collection.id} collection={collection} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
