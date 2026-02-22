@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getDatasetTable, getTableColumns, resolveDatasetTableId } from "../lib/lancedb.js";
+import { getDatasetTable, getTableColumns, resolveDatasetTableId, paginatedScan } from "../lib/lancedb.js";
 import {
   DATA_DIR,
   getScopeMeta,
@@ -31,6 +31,7 @@ function fullScanLimit(countRaw: unknown): number {
   return Math.floor(count);
 }
 
+
 async function resolveViewTableId(dataset: string, view: string): Promise<string> {
   const meta = await getScopeMeta(dataset, view);
   const tableId = meta.lancedb_table_id;
@@ -54,9 +55,9 @@ async function queryServingRows({
 
   // Select only serving columns that exist in the table (exclude vector)
   const queryCols = contractSelected.filter((col) => tableCols.includes(col) && col !== "vector");
-  const limit = fullScanLimit(await table.countRows());
+  const totalRows = fullScanLimit(await table.countRows());
 
-  const rawRows = (await table.query().select(queryCols).limit(limit).toArray()) as JsonRecord[];
+  const rawRows = await paginatedScan(table, queryCols, totalRows);
   const normalized = rawRows.map((row, idx) => {
     const safe = jsonSafe(row) as JsonRecord;
     const lsIndex = normalizeIndex(safe.ls_index) ?? idx;
@@ -110,9 +111,9 @@ export const viewsRoutes = new Hono()
 
       const selected = ["id", "ls_index", "x", "y", "cluster", "label", "deleted"];
       const queryCols = selected.filter((col) => tableCols.includes(col));
-      const limit = fullScanLimit(await table.countRows());
+      const totalRows = fullScanLimit(await table.countRows());
 
-      const rawRows = (await table.query().select(queryCols).limit(limit).toArray()) as JsonRecord[];
+      const rawRows = await paginatedScan(table, queryCols, totalRows);
 
       const normalized = rawRows.map((row, idx) => {
         const safe = jsonSafe(row) as JsonRecord;

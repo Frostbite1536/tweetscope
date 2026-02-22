@@ -5,7 +5,7 @@
  * tables written by build_links_graph.py.
  */
 
-import { getGraphTable } from "./lancedb.js";
+import { getGraphTable, paginatedScan, paginatedFilteredScan } from "./lancedb.js";
 import type { EdgeRow, NodeStatsRow, JsonRecord } from "../routes/dataShared.js";
 import { normalizeIndex } from "../routes/dataShared.js";
 
@@ -61,14 +61,16 @@ export class LanceGraphRepo {
    */
   async getEdges(dataset: string, edgeKinds?: string[]): Promise<EdgeRow[]> {
     const table = await getGraphTable(dataset, "edges");
-    let query = table.query();
+    const totalRows = fullScanLimit(await table.countRows());
+    let rows: Record<string, unknown>[];
     if (edgeKinds && edgeKinds.length > 0) {
       const kindList = edgeKinds.map((k) => `'${k.replace(/'/g, "''")}'`).join(", ");
-      query = query.where(`edge_kind IN (${kindList})`);
+      rows = await paginatedFilteredScan(table, `edge_kind IN (${kindList})`, totalRows);
+    } else {
+      const cols = ["edge_id", "edge_kind", "src_tweet_id", "dst_tweet_id", "src_ls_index", "dst_ls_index", "internal_target", "provenance", "source_url"];
+      rows = await paginatedScan(table, cols, totalRows);
     }
-    const limit = fullScanLimit(await table.countRows());
-    const rows = await query.limit(limit).toArray();
-    return rows.map((r) => toEdgeRow(r as Record<string, unknown>));
+    return rows.map((r) => toEdgeRow(r));
   }
 
   /**
@@ -111,9 +113,9 @@ export class LanceGraphRepo {
     const descLimit = opts?.descLimit ?? 3000;
 
     const table = await getGraphTable(dataset, "edges");
-    const limit = fullScanLimit(await table.countRows());
-    const replyRows = await table.query().where("edge_kind = 'reply'").limit(limit).toArray();
-    const replyEdges = replyRows.map((r) => toEdgeRow(r as Record<string, unknown>));
+    const totalRows = fullScanLimit(await table.countRows());
+    const replyRows = await paginatedFilteredScan(table, "edge_kind = 'reply'", totalRows);
+    const replyEdges = replyRows.map((r) => toEdgeRow(r));
 
     // Build node_stats ls_index lookup
     const lsByTweet = new Map<string, number | null>();
@@ -191,9 +193,9 @@ export class LanceGraphRepo {
   }> {
     const maxLimit = limit ?? 2000;
     const table = await getGraphTable(dataset, "edges");
-    const fullLimit = fullScanLimit(await table.countRows());
-    const quoteRows = await table.query().where("edge_kind = 'quote'").limit(fullLimit).toArray();
-    const quoteEdges = quoteRows.map((r) => toEdgeRow(r as Record<string, unknown>));
+    const totalRows = fullScanLimit(await table.countRows());
+    const quoteRows = await paginatedFilteredScan(table, "edge_kind = 'quote'", totalRows);
+    const quoteEdges = quoteRows.map((r) => toEdgeRow(r));
 
     const outgoingAll = quoteEdges.filter((edge) => edge.src_tweet_id === tweetId);
     const incomingAll = quoteEdges.filter((edge) => edge.dst_tweet_id === tweetId);
@@ -211,9 +213,10 @@ export class LanceGraphRepo {
    */
   async getNodeStats(dataset: string): Promise<NodeStatsRow[]> {
     const table = await getGraphTable(dataset, "node_stats");
-    const limit = fullScanLimit(await table.countRows());
-    const rows = await table.query().limit(limit).toArray();
-    return rows.map((r) => toNodeStatsRow(r as Record<string, unknown>));
+    const totalRows = fullScanLimit(await table.countRows());
+    const cols = ["tweet_id", "ls_index", "thread_root_id", "thread_depth", "thread_size", "reply_child_count", "reply_in_count", "reply_out_count", "quote_in_count", "quote_out_count"];
+    const rows = await paginatedScan(table, cols, totalRows);
+    return rows.map((r) => toNodeStatsRow(r));
   }
 
   /**

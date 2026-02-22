@@ -318,6 +318,71 @@ export async function vectorSearch(
 }
 
 // ---------------------------------------------------------------------------
+// Paginated full-table scan (LanceDB Cloud caps at 10K rows per query)
+// ---------------------------------------------------------------------------
+
+const LANCE_PAGE_SIZE = 10_000;
+
+/**
+ * Paginated full-table scan that respects the LanceDB Cloud 10K row limit.
+ * For tables under 10K rows, performs a single query.
+ */
+export async function paginatedScan(
+  table: lancedb.Table,
+  columns: string[],
+  totalRows: number,
+): Promise<Record<string, unknown>[]> {
+  if (totalRows <= LANCE_PAGE_SIZE) {
+    return (await table.query().select(columns).limit(totalRows).toArray()) as Record<string, unknown>[];
+  }
+
+  const allRows: Record<string, unknown>[] = [];
+  let offset = 0;
+  while (offset < totalRows) {
+    const pageSize = Math.min(LANCE_PAGE_SIZE, totalRows - offset);
+    const page = (await table
+      .query()
+      .select(columns)
+      .offset(offset)
+      .limit(pageSize)
+      .toArray()) as Record<string, unknown>[];
+    allRows.push(...page);
+    if (page.length < pageSize) break;
+    offset += page.length;
+  }
+  return allRows;
+}
+
+/**
+ * Paginated filtered scan — applies a WHERE clause and paginates.
+ */
+export async function paginatedFilteredScan(
+  table: lancedb.Table,
+  where: string,
+  totalRows: number,
+): Promise<Record<string, unknown>[]> {
+  if (totalRows <= LANCE_PAGE_SIZE) {
+    return (await table.query().where(where).limit(totalRows).toArray()) as Record<string, unknown>[];
+  }
+
+  const allRows: Record<string, unknown>[] = [];
+  let offset = 0;
+  while (offset < totalRows) {
+    const pageSize = Math.min(LANCE_PAGE_SIZE, totalRows - offset);
+    const page = (await table
+      .query()
+      .where(where)
+      .offset(offset)
+      .limit(pageSize)
+      .toArray()) as Record<string, unknown>[];
+    allRows.push(...page);
+    if (page.length < pageSize) break;
+    offset += page.length;
+  }
+  return allRows;
+}
+
+// ---------------------------------------------------------------------------
 // Catalog registry LanceDB (system__datasets, system__scopes)
 // ---------------------------------------------------------------------------
 

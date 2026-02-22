@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type * as lancedb from "@lancedb/lancedb";
-import { getDatasetTable } from "../lib/lancedb.js";
+import { getDatasetTable, paginatedScan } from "../lib/lancedb.js";
 import {
   attachIndexFields,
   buildFilterWhere,
@@ -177,8 +177,8 @@ export const queryRoutes = new Hono()
       total = rows.length;
       rows = rows.slice(offset, offset + perPage);
     } else if (sort) {
-      const limit = fullScanLimit(await table.countRows());
-      const allRows = (await table.query().select(selectedColumns).limit(limit).toArray()) as JsonRecord[];
+      const totalRows = fullScanLimit(await table.countRows());
+      const allRows = (await paginatedScan(table, selectedColumns, totalRows)) as JsonRecord[];
       rows = sortRows(
         allRows.map((row) => attachIndexFields(jsonSafe(row) as JsonRecord, indexColumn)),
         sort
