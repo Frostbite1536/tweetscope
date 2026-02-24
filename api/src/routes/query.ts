@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type * as lancedb from "@lancedb/lancedb";
-import { getDatasetTable, paginatedScan } from "../lib/lancedb.js";
+import { getDatasetTable, paginatedFilteredScan, paginatedScan } from "../lib/lancedb.js";
 import {
   attachIndexFields,
   buildFilterWhere,
@@ -14,12 +14,6 @@ import {
   sqlIdentifier,
   type JsonRecord,
 } from "./dataShared.js";
-
-function fullScanLimit(countRaw: unknown): number {
-  const count = Number(countRaw);
-  if (!Number.isFinite(count) || count <= 0) return 1;
-  return Math.floor(count);
-}
 
 function uniqueIntegers(values: number[]): number[] {
   const seen = new Set<number>();
@@ -177,8 +171,7 @@ export const queryRoutes = new Hono()
       total = rows.length;
       rows = rows.slice(offset, offset + perPage);
     } else if (sort) {
-      const totalRows = fullScanLimit(await table.countRows());
-      const allRows = (await paginatedScan(table, selectedColumns, totalRows)) as JsonRecord[];
+      const allRows = (await paginatedScan(table, selectedColumns)) as JsonRecord[];
       rows = sortRows(
         allRows.map((row) => attachIndexFields(jsonSafe(row) as JsonRecord, indexColumn)),
         sort
@@ -223,11 +216,9 @@ export const queryRoutes = new Hono()
     const indexColumn = resolveIndexColumn(tableColumns);
     const where = buildFilterWhere(payload.filters);
 
-    const query = table.query().select([indexColumn]);
-    if (where) query.where(where);
-
-    const limit = fullScanLimit(await table.countRows());
-    const rows = (await query.limit(limit).toArray()) as JsonRecord[];
+    const rows = where
+      ? ((await paginatedFilteredScan(table, where, [indexColumn])) as JsonRecord[])
+      : ((await paginatedScan(table, [indexColumn])) as JsonRecord[]);
     const indices = uniqueIntegers(
       rows
       .map((row) => normalizeIndex(row[indexColumn]))

@@ -318,31 +318,64 @@ export async function vectorSearch(
 }
 
 // ---------------------------------------------------------------------------
-// Paginated full-table scan (LanceDB Cloud caps at 10K rows per query)
+// Full-table scans (Cloud-safe pagination)
 // ---------------------------------------------------------------------------
 
+/**
+ * LanceDB Cloud enforces a hard upper bound of 10,000 rows for `Query.limit(k)`
+ * on non-vector table scans. If you try to scan more than 10k rows in one call
+ * (e.g. `table.query().limit(await table.countRows()).toArray()`), Cloud can
+ * fail with an HTTP 400 like:
+ *
+ *   "k cannot be bigger than 10000, please set an explicit smaller limit"
+ *
+ * Verified 2026-02-24 using `@lancedb/lancedb` v0.15.0 against a `db://` Cloud
+ * table where `countRows()` returned 14,989.
+ *
+ * Therefore any "return all rows" operation must be implemented via pagination
+ * using `.offset(n).limit(<= 10_000)` and concatenating pages.
+ *
+ * Query builder reference (limit/offset/where/select):
+ * https://lancedb.github.io/lancedb/js/classes/Query/
+ */
 const LANCE_PAGE_SIZE = 10_000;
 
-/**
- * Paginated full-table scan that respects the LanceDB Cloud 10K row limit.
- * For tables under 10K rows, performs a single query.
- */
-export async function paginatedScan(
+function normalizeRowCount(countRaw: unknown): number {
+  const count = Number(countRaw);
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  return Math.floor(count);
+}
+
+function buildScanQuery(
   table: lancedb.Table,
-  columns: string[],
-  totalRows: number,
+  opts?: { columns?: string[]; where?: string },
+): lancedb.Query {
+  let query = table.query();
+  if (opts?.where) {
+    query = query.where(opts.where);
+  }
+  if (opts?.columns && opts.columns.length > 0) {
+    query = query.select(opts.columns);
+  }
+  return query;
+}
+
+async function paginatedScanInternal(
+  table: lancedb.Table,
+  opts: { columns?: string[]; where?: string; totalRows: number },
 ): Promise<Record<string, unknown>[]> {
+  const totalRows = opts.totalRows;
+  if (totalRows <= 0) return [];
+
   if (totalRows <= LANCE_PAGE_SIZE) {
-    return (await table.query().select(columns).limit(totalRows).toArray()) as Record<string, unknown>[];
+    return (await buildScanQuery(table, opts).limit(totalRows).toArray()) as Record<string, unknown>[];
   }
 
   const allRows: Record<string, unknown>[] = [];
   let offset = 0;
   while (offset < totalRows) {
     const pageSize = Math.min(LANCE_PAGE_SIZE, totalRows - offset);
-    const page = (await table
-      .query()
-      .select(columns)
+    const page = (await buildScanQuery(table, opts)
       .offset(offset)
       .limit(pageSize)
       .toArray()) as Record<string, unknown>[];
@@ -354,32 +387,26 @@ export async function paginatedScan(
 }
 
 /**
- * Paginated filtered scan — applies a WHERE clause and paginates.
+ * Paginated scan that fetches every row in the table, selecting only requested columns.
+ */
+export async function paginatedScan(
+  table: lancedb.Table,
+  columns?: string[],
+): Promise<Record<string, unknown>[]> {
+  const totalRows = normalizeRowCount(await table.countRows());
+  return paginatedScanInternal(table, { columns, totalRows });
+}
+
+/**
+ * Paginated scan with a filter predicate applied (SQL expression).
  */
 export async function paginatedFilteredScan(
   table: lancedb.Table,
   where: string,
-  totalRows: number,
+  columns?: string[],
 ): Promise<Record<string, unknown>[]> {
-  if (totalRows <= LANCE_PAGE_SIZE) {
-    return (await table.query().where(where).limit(totalRows).toArray()) as Record<string, unknown>[];
-  }
-
-  const allRows: Record<string, unknown>[] = [];
-  let offset = 0;
-  while (offset < totalRows) {
-    const pageSize = Math.min(LANCE_PAGE_SIZE, totalRows - offset);
-    const page = (await table
-      .query()
-      .where(where)
-      .offset(offset)
-      .limit(pageSize)
-      .toArray()) as Record<string, unknown>[];
-    allRows.push(...page);
-    if (page.length < pageSize) break;
-    offset += page.length;
-  }
-  return allRows;
+  const totalRows = normalizeRowCount(await table.countRows(where));
+  return paginatedScanInternal(table, { columns, where, totalRows });
 }
 
 // ---------------------------------------------------------------------------

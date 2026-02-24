@@ -5,7 +5,7 @@
  * with visibility filtering.
  */
 
-import { getCatalogTable } from "./lancedb.js";
+import { getCatalogTable, paginatedFilteredScan, paginatedScan } from "./lancedb.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +44,8 @@ export interface ParsedScopeMeta {
   lancedb_table_id?: string;
   [key: string]: unknown;
 }
+
+type ScopeListRow = Pick<ScopeRow, "scope_id" | "lancedb_table_id" | "is_active" | "meta_json">;
 
 // ---------------------------------------------------------------------------
 // Config
@@ -91,13 +93,7 @@ function normalizeCount(value: unknown): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
-function fullScanLimit(countRaw: unknown): number {
-  const count = Number(countRaw);
-  if (!Number.isFinite(count) || count <= 0) return 1;
-  return Math.floor(count);
-}
-
-function projectScopeListItem(row: ScopeRow): ParsedScopeMeta {
+function projectScopeListItem(row: ScopeListRow): ParsedScopeMeta {
   // Scope cards only need a small subset for listing.
   const meta = parseMeta<Record<string, unknown>>(row.meta_json);
   return {
@@ -129,18 +125,12 @@ export async function listDatasets(
   const table = await getCatalogTable(DATASETS_TABLE);
   const where = buildVisibilityWhere(userId);
 
-  let query = table
-    .query()
-    .select(["dataset_id", "visibility", "active_scope_id", "row_count", "meta_json"]);
-
-  if (where) {
-    query = query.where(where);
-  }
-  const limit = fullScanLimit(await table.countRows());
-
-  const rows = (await query.limit(limit).toArray()) as Array<
-    Pick<DatasetRow, "dataset_id" | "visibility" | "active_scope_id" | "row_count" | "meta_json">
-  >;
+  const columns = ["dataset_id", "visibility", "active_scope_id", "row_count", "meta_json"];
+  const rows = (where
+    ? await paginatedFilteredScan(table, where, columns)
+    : await paginatedScan(table, columns)) as Array<
+      Pick<DatasetRow, "dataset_id" | "visibility" | "active_scope_id" | "row_count" | "meta_json">
+    >;
 
   return rows.map((row) => {
     const meta = row.meta_json ? parseMeta<Record<string, unknown>>(row.meta_json) : {};
@@ -199,13 +189,12 @@ export async function listScopes(
   if (!dataset) return [];
 
   const table = await getCatalogTable(SCOPES_TABLE);
-  const limit = fullScanLimit(await table.countRows());
-  const rows = (await table
-    .query()
-    .select(["scope_id", "lancedb_table_id", "is_active", "meta_json"])
-    .where(`dataset_id = ${sqlLiteral(datasetId)}`)
-    .limit(limit)
-    .toArray()) as ScopeRow[];
+  const where = `dataset_id = ${sqlLiteral(datasetId)}`;
+  const rows = (await paginatedFilteredScan(
+    table,
+    where,
+    ["scope_id", "lancedb_table_id", "is_active", "meta_json"],
+  )) as ScopeListRow[];
 
   return rows.map(projectScopeListItem);
 }
