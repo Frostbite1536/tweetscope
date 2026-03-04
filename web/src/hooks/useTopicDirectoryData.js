@@ -1,44 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useScope } from '@/contexts/ScopeContext';
 import { queryApi } from '@/lib/apiService';
-import { getLikesCount } from '@/lib/engagement';
 import { appQueryClient } from '@/query/client';
 import { queryKeys } from '@/query/keys';
+import { buildClusterFeedIndex, normalizeClusterId } from '@/lib/buildClusterFeedIndex';
 
 const ROWS_PER_PAGE = 30;
 
 const EMPTY_CLUSTERS = [];
-const EMPTY_MAPPING = { clusterToTopLevel: {}, indicesByTopLevel: {} };
-
-function normalizeClusterId(value) {
-  if (value === null || value === undefined) return null;
-  return String(value);
-}
-
-function buildDescendantsMap(roots) {
-  const descendantsByCluster = new Map();
-
-  const walk = (node) => {
-    const nodeId = normalizeClusterId(node?.cluster);
-    if (nodeId === null) return new Set();
-
-    const descendants = new Set([nodeId]);
-    const children = Array.isArray(node?.children) ? node.children : [];
-    children.forEach((child) => {
-      const childDescendants = walk(child);
-      childDescendants.forEach((id) => descendants.add(id));
-    });
-
-    descendantsByCluster.set(nodeId, descendants);
-    return descendants;
-  };
-
-  (Array.isArray(roots) ? roots : []).forEach((root) => {
-    walk(root);
-  });
-
-  return descendantsByCluster;
-}
 
 export default function useTopicDirectoryData(selectedClusterIndex, enabled = true) {
   const { clusterHierarchy, scopeRows, dataset, scope, clusterMap } = useScope();
@@ -56,47 +25,14 @@ export default function useTopicDirectoryData(selectedClusterIndex, enabled = tr
     return clusterHierarchy.children;
   }, [clusterHierarchy]);
 
-  const descendantsByCluster = useMemo(
-    () => buildDescendantsMap(topLevelClusters),
-    [topLevelClusters]
+  // Shared feed index — identity-cached at module level, no duplicate work
+  const feedIndex = useMemo(
+    () => enabled
+      ? buildClusterFeedIndex(topLevelClusters, scopeRows, clusterHierarchy)
+      : { clusterToTopLevel: {}, indicesByTopLevel: {}, descendantsByCluster: new Map() },
+    [enabled, topLevelClusters, scopeRows, clusterHierarchy]
   );
-
-  // Build mapping: cluster id → top-level root, and indices grouped by top-level
-  const { clusterToTopLevel, indicesByTopLevel } = useMemo(() => {
-    if (!enabled || !topLevelClusters.length || !scopeRows?.length) {
-      return EMPTY_MAPPING;
-    }
-
-    const c2tl = {};
-    const walkTree = (node, rootClusterId) => {
-      c2tl[node.cluster] = rootClusterId;
-      if (node.children) {
-        node.children.forEach((child) => walkTree(child, rootClusterId));
-      }
-    };
-    topLevelClusters.forEach((root) => walkTree(root, root.cluster));
-
-    const groups = {};
-    topLevelClusters.forEach((root) => {
-      groups[root.cluster] = [];
-    });
-
-    scopeRows.forEach((row) => {
-      if (row.deleted) return;
-      const topLevel = c2tl[row.cluster];
-      if (topLevel !== undefined && topLevel !== null && groups[topLevel]) {
-        groups[topLevel].push(row);
-      }
-    });
-
-    const indicesByTL = {};
-    for (const [clusterId, rows] of Object.entries(groups)) {
-      rows.sort((a, b) => getLikesCount(b) - getLikesCount(a));
-      indicesByTL[clusterId] = rows.map((r) => r.ls_index);
-    }
-
-    return { clusterToTopLevel: c2tl, indicesByTopLevel: indicesByTL };
-  }, [enabled, topLevelClusters, scopeRows]);
+  const { clusterToTopLevel, indicesByTopLevel, descendantsByCluster } = feedIndex;
 
   // Fetch data for the selected cluster
   const fetchFeedData = useCallback(
