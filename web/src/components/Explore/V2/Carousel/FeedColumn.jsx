@@ -1,12 +1,14 @@
-import { useState, useCallback, useMemo, memo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect, memo } from 'react';
 import { groupRowsByThread } from '../../../../lib/groupRowsByThread';
-import { useHoveredIndex } from '../../../../contexts/HoverContext';
 import { useScope } from '../../../../contexts/ScopeContext';
 import TweetCard from '../TweetFeed/TweetCard';
 import ThreadGroup from '../TweetFeed/ThreadGroup';
 import StandaloneWithAncestors from '../TweetFeed/StandaloneWithAncestors';
 import SubClusterPills from './SubClusterPills';
 import styles from './FeedColumn.module.scss';
+
+const INITIAL_RENDER_BUDGET = 10;
+const RENDER_CHUNK_SIZE = 20;
 
 function FeedColumn({
   columnIndex,
@@ -30,6 +32,15 @@ function FeedColumn({
 }) {
   const { scope } = useScope();
   const [descExpanded, setDescExpanded] = useState(false);
+  const [renderBudget, setRenderBudget] = useState(INITIAL_RENDER_BUDGET);
+  const sentinelRef = useRef(null);
+
+  // Reset render budget when the available list shrinks under the current budget.
+  useEffect(() => {
+    if (renderBudget !== INITIAL_RENDER_BUDGET && tweets.length < renderBudget) {
+      setRenderBudget(INITIAL_RENDER_BUDGET);
+    }
+  }, [tweets.length, renderBudget]);
 
   const handleLoadMore = useCallback(() => {
     if (onLoadMore) onLoadMore(columnIndex);
@@ -46,6 +57,46 @@ function FeedColumn({
     () => groupRowsByThread(tweets, nodeStats),
     [tweets, nodeStats]
   );
+
+  // Slice groupedItems to render budget, respecting thread integrity
+  const visibleItems = useMemo(() => {
+    if (groupedItems.length <= renderBudget) return groupedItems;
+
+    let count = 0;
+    let cutoff = groupedItems.length;
+    for (let i = 0; i < groupedItems.length; i++) {
+      const item = groupedItems[i];
+      const itemSize = item.type === 'thread' ? item.rows.length : 1;
+      count += itemSize;
+      // If adding this item would exceed budget, check if it's a thread group
+      // straddling the boundary — include it fully to preserve thread integrity
+      if (count >= renderBudget) {
+        cutoff = i + 1; // include this item
+        break;
+      }
+    }
+    return groupedItems.slice(0, cutoff);
+  }, [groupedItems, renderBudget]);
+
+  const hasMoreToReveal = visibleItems.length < groupedItems.length;
+
+  // IntersectionObserver sentinel to progressively reveal more items
+  useEffect(() => {
+    if (!hasMoreToReveal) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setRenderBudget((prev) => prev + RENDER_CHUNK_SIZE);
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreToReveal]);
 
   return (
     <div
@@ -84,7 +135,7 @@ function FeedColumn({
         />
 
         <div className={styles.tweetScroll}>
-          {groupedItems.map((item) => {
+          {visibleItems.map((item) => {
             if (item.type === 'thread') {
               return (
                 <ThreadGroup
@@ -139,6 +190,11 @@ function FeedColumn({
               />
             );
           })}
+
+          {/* Sentinel for progressive rendering */}
+          {hasMoreToReveal && (
+            <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />
+          )}
 
           {loading && (
             <div className={styles.loadingRow}>

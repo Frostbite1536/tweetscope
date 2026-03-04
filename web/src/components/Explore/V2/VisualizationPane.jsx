@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle, memo } from 'react';
 import Scatter from './DeckGLScatter';
 import { useClusterColors, resolveClusterColorCSS } from '@/hooks/useClusterColors';
 
@@ -59,6 +59,7 @@ function formatCount(value) {
 const VisualizationPane = forwardRef(function VisualizationPane({
   width,
   height,
+  isHidden = false,
   contentPaddingRight = 0,
   hovered,
   hoveredIndex,
@@ -446,6 +447,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
             points={drawingPoints}
             width={width}
             height={height}
+            isHidden={isHidden}
             contentPaddingRight={contentPaddingRight}
             pointScale={vizConfig.pointSize}
             pointOpacity={vizConfig.pointOpacity}
@@ -648,4 +650,4 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   );
 });
 
-export default VisualizationPane;
+export default memo(VisualizationPane);

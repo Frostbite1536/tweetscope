@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect, useCallback } from 'react';
+import { memo, useState, useCallback, useRef, useEffect } from 'react';
 import styles from './TopicCard.module.scss';
 
 function TopicCard({ cluster, isActive, isUnclustered, onClick, clusterColor }) {
@@ -10,9 +10,12 @@ function TopicCard({ cluster, isActive, isUnclustered, onClick, clusterColor }) 
   useEffect(() => {
     const el = subsRef.current;
     if (!el) return;
-    // Check if content overflows the 2-line clamp
-    setIsOverflowing(el.scrollHeight > el.clientHeight + 2);
-  }, [subClusters]);
+    const ro = new ResizeObserver(() => {
+      setIsOverflowing(el.scrollHeight > el.clientHeight + 2);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const handleToggleSubs = useCallback((e) => {
     e.stopPropagation();

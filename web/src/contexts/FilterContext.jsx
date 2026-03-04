@@ -218,7 +218,7 @@ export function FilterProvider({ children }) {
 
   const [filteredIndices, setFilteredIndices] = useState([]);
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState('likes');
   const [sortDirection, setSortDirection] = useState('desc');
 
@@ -505,66 +505,58 @@ export function FilterProvider({ children }) {
         return baseIndices;
       }
 
-      let indices = baseIndices;
-
-      // Cluster slot
+      // Pre-resolve filter sets — cluster is sync, search + column are async (parallel)
+      let clusterSet = null;
       if (filterSlots.cluster) {
         const cluster = clusterLabels.find((item) =>
           isSameClusterValue(item.cluster, filterSlots.cluster.value)
         );
-        if (cluster) {
-          const clusterSet = new Set(clusterFilterFn(cluster));
-          indices = indices.filter((i) => clusterSet.has(i));
+        if (cluster) clusterSet = new Set(clusterFilterFn(cluster));
+      }
+
+      const [searchIndices, columnIndices] = await Promise.all([
+        filterSlots.search
+          ? (filterSlots.search.mode === 'keyword' ? keywordSearchFilterFn : semanticSearchFilterFn)(filterSlots.search.value)
+          : null,
+        filterSlots.column
+          ? columnFilterFn(filterSlots.column.column, filterSlots.column.value)
+          : null,
+      ]);
+      const searchSet = searchIndices ? new Set(searchIndices) : null;
+      const columnSet = columnIndices ? new Set(columnIndices) : null;
+
+      const hasTimeRange = filterSlots.timeRange
+        && filterSlots.timeRange.timestampsByLsIndex
+        && Number.isFinite(filterSlots.timeRange.start)
+        && Number.isFinite(filterSlots.timeRange.end);
+
+      const hasEngagement = filterSlots.engagement && filterSlots.engagement.minFaves > 0;
+
+      // Single pass — check all predicates per index
+      const out = [];
+      for (const i of baseIndices) {
+        if (clusterSet && !clusterSet.has(i)) continue;
+        if (searchSet && !searchSet.has(i)) continue;
+        if (columnSet && !columnSet.has(i)) continue;
+        if (hasTimeRange) {
+          const ts = filterSlots.timeRange.timestampsByLsIndex.get(i);
+          if (ts !== undefined && !Number.isNaN(ts)) {
+            if (ts < filterSlots.timeRange.start || ts > filterSlots.timeRange.end) continue;
+          }
         }
-      }
-
-      // Search slot (keyword or semantic)
-      if (filterSlots.search) {
-        const searchFn = filterSlots.search.mode === 'keyword'
-          ? keywordSearchFilterFn
-          : semanticSearchFilterFn;
-        const searchIndices = await searchFn(filterSlots.search.value);
-        const searchSet = new Set(searchIndices);
-        indices = indices.filter((i) => searchSet.has(i));
-      }
-
-      // Column slot
-      if (filterSlots.column) {
-        const columnIndices = await columnFilterFn(filterSlots.column.column, filterSlots.column.value);
-        const columnSet = new Set(columnIndices);
-        indices = indices.filter((i) => columnSet.has(i));
-      }
-
-      // Time range slot
-      if (filterSlots.timeRange) {
-        const { start, end, timestampsByLsIndex } = filterSlots.timeRange;
-        if (timestampsByLsIndex && Number.isFinite(start) && Number.isFinite(end)) {
-          indices = indices.filter((lsIndex) => {
-            const ts = timestampsByLsIndex.get(lsIndex);
-            if (ts === undefined || Number.isNaN(ts)) return true;
-            return ts >= start && ts <= end;
-          });
+        if (hasEngagement) {
+          const row = scopeRowsByIndex.get(i);
+          if (!row || getLikesCount(row) < filterSlots.engagement.minFaves) continue;
         }
+        out.push(i);
       }
-
-      // Engagement slot (client-side, like timeRange)
-      if (filterSlots.engagement) {
-        const { minFaves } = filterSlots.engagement;
-        if (minFaves > 0) {
-          indices = indices.filter((lsIndex) => {
-            const row = scopeRowsByIndex.get(lsIndex);
-            return row ? getLikesCount(row) >= minFaves : false;
-          });
-        }
-      }
-
-      return indices;
+      return out;
     };
 
     computeIntersection()
       .then((indices) => {
         if (filterReqSeqRef.current !== reqId) return;
-        setFilteredIndices(uniqueOrderedIndices(indices));
+        setFilteredIndices(indices);
         setPage(0);
         setLoading(false);
       })

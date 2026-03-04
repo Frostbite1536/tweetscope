@@ -59,8 +59,8 @@ function CarouselTOC({
               <span className={styles.tocCount}>{cluster.count || cluster.cumulativeCount || 0}</span>
             </button>
 
-            {/* Sub-clusters (indented) */}
-            {cluster.children?.length > 0 && (
+            {/* Sub-clusters (indented) — only render for focused/hovered cluster */}
+            {cluster.children?.length > 0 && (index === focusedIndex || index === hoveredIndex) && (
               <div className={styles.subList}>
                 {cluster.children.map((sub) => (
                   <div key={sub.cluster}>

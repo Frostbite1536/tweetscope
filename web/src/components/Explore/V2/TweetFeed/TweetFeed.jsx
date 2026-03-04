@@ -19,11 +19,14 @@ TweetFeed.propTypes = {
   onViewQuotes: PropTypes.func,
 };
 
+const NOOP = () => {};
+const EMPTY_OBJ = {};
+
 function TweetFeed({
   dataset,
-  clusterMap = {},
-  onHover = () => {},
-  onClick = () => {},
+  clusterMap = EMPTY_OBJ,
+  onHover = NOOP,
+  onClick = NOOP,
   dateColumn = null,
   nodeStats = null,
   onViewThread,

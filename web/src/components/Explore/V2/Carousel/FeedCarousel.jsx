@@ -42,13 +42,17 @@ function FeedCarousel({
   const containerRef = useRef(null);
   const scrollRafRef = useRef(null);
   const latestScrollLeftRef = useRef(0);
-  const focusedIndexRef = useRef(focusedClusterIndex);
-  focusedIndexRef.current = focusedClusterIndex;
-  const [scrollX, setScrollX] = useState(0);
+  const normalizedFocusedIndex = Number.isFinite(focusedClusterIndex)
+    ? Math.trunc(focusedClusterIndex)
+    : 0;
+  const clampedFocusedIndex = topLevelClusters.length > 0
+    ? Math.min(Math.max(normalizedFocusedIndex, 0), topLevelClusters.length - 1)
+    : 0;
+  const focusedIndexRef = useRef(clampedFocusedIndex);
+  focusedIndexRef.current = clampedFocusedIndex;
   const [spacerWidth, setSpacerWidth] = useState(getSpacerWidth());
   const [overlayTweetId, setOverlayTweetId] = useState(null);
   const [overlayLsIndex, setOverlayLsIndex] = useState(null);
-  const initialOffset = PADDING_LEFT;
 
   // Update spacer on resize
   useEffect(() => {
@@ -66,6 +70,13 @@ function FeedCarousel({
     };
   }, []);
 
+  useEffect(() => {
+    if (!topLevelClusters.length) return;
+    if (normalizedFocusedIndex !== clampedFocusedIndex) {
+      onFocusedIndexChange(clampedFocusedIndex);
+    }
+  }, [normalizedFocusedIndex, clampedFocusedIndex, onFocusedIndexChange, topLevelClusters.length]);
+
   const handleScroll = useCallback(() => {
     if (!containerRef.current) return;
     latestScrollLeftRef.current = containerRef.current.scrollLeft;
@@ -74,7 +85,6 @@ function FeedCarousel({
     scrollRafRef.current = window.requestAnimationFrame(() => {
       scrollRafRef.current = null;
       const scrollLeft = latestScrollLeftRef.current;
-      setScrollX((prev) => (prev === scrollLeft ? prev : scrollLeft));
 
       // Find which column center is closest to viewport center
       const viewportCenter = window.innerWidth / 2;
@@ -135,20 +145,31 @@ function FeedCarousel({
   }, []);
 
   const getFocusState = (index) => {
-    const distance = Math.abs(index - focusedClusterIndex);
+    const distance = Math.abs(index - clampedFocusedIndex);
     if (distance === 0) return 'focused';
     if (distance <= 2) return 'adjacent';
     return 'far';
   };
 
-  const { visibleStart, visibleEnd } = useMemo(() => {
-    if (!topLevelClusters?.length) return { visibleStart: 0, visibleEnd: 0 };
+  const { visibleStart, visibleEnd, leadingSpacerWidth, trailingSpacerWidth } = useMemo(() => {
+    if (!topLevelClusters?.length) return { visibleStart: 0, visibleEnd: 0, leadingSpacerWidth: 0, trailingSpacerWidth: 0 };
     const lastIndex = topLevelClusters.length - 1;
+    // Add buffer of 2 beyond visible radius for smoother scrolling
+    const windowStart = Math.max(0, clampedFocusedIndex - VISIBLE_COLUMN_RADIUS - 2);
+    const windowEnd = Math.min(lastIndex, clampedFocusedIndex + VISIBLE_COLUMN_RADIUS + 2);
+
+    // Spacer width for k omitted columns: k * COLUMN_WIDTH + max(0, k - 1) * GAP
+    const leadingCount = windowStart;
+    const trailingCount = lastIndex - windowEnd;
+    const calcSpacerWidth = (k) => k > 0 ? k * COLUMN_WIDTH + Math.max(0, k - 1) * GAP : 0;
+
     return {
-      visibleStart: Math.max(0, focusedClusterIndex - VISIBLE_COLUMN_RADIUS),
-      visibleEnd: Math.min(lastIndex, focusedClusterIndex + VISIBLE_COLUMN_RADIUS),
+      visibleStart: windowStart,
+      visibleEnd: windowEnd,
+      leadingSpacerWidth: calcSpacerWidth(leadingCount),
+      trailingSpacerWidth: calcSpacerWidth(trailingCount),
     };
-  }, [focusedClusterIndex, topLevelClusters.length]);
+  }, [clampedFocusedIndex, topLevelClusters.length]);
 
   if (!topLevelClusters?.length) {
     return (
@@ -163,7 +184,7 @@ function FeedCarousel({
       <div ref={containerRef} className={styles.carousel} onScroll={handleScroll}>
         <CarouselTOC
           topLevelClusters={topLevelClusters}
-          focusedIndex={focusedClusterIndex}
+          focusedIndex={clampedFocusedIndex}
           onClickCluster={scrollToColumn}
           onClickSubCluster={handleSubClusterClick}
         />
@@ -171,8 +192,20 @@ function FeedCarousel({
         {/* Spacer to center first feed */}
         <div className={styles.spacer} style={{ width: spacerWidth }} />
 
-        {topLevelClusters.map((cluster, index) => {
-          if (index < visibleStart || index > visibleEnd) {
+        {/* Leading spacer replaces omitted columns before window */}
+        {leadingSpacerWidth > 0 && (
+          <div style={{ width: leadingSpacerWidth, minWidth: leadingSpacerWidth, flexShrink: 0 }} aria-hidden="true" />
+        )}
+
+        {topLevelClusters.slice(visibleStart, visibleEnd + 1).map((cluster, i) => {
+          const index = visibleStart + i;
+          const col = columnData[index] || {};
+          const tweets = columnRowsMap[index] || [];
+          const distance = Math.abs(index - clampedFocusedIndex);
+          const isInViewRadius = distance <= VISIBLE_COLUMN_RADIUS;
+
+          if (!isInViewRadius) {
+            // Buffer zone: render lightweight placeholder
             return (
               <div
                 key={cluster.cluster}
@@ -182,9 +215,6 @@ function FeedCarousel({
               />
             );
           }
-
-          const col = columnData[index] || {};
-          const tweets = columnRowsMap[index] || [];
 
           return (
             <motion.div
@@ -217,6 +247,11 @@ function FeedCarousel({
             </motion.div>
           );
         })}
+
+        {/* Trailing spacer replaces omitted columns after window */}
+        {trailingSpacerWidth > 0 && (
+          <div style={{ width: trailingSpacerWidth, minWidth: trailingSpacerWidth, flexShrink: 0 }} aria-hidden="true" />
+        )}
       </div>
 
       <ThreadOverlay

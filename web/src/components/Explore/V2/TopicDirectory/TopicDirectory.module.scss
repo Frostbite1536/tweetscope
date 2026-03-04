@@ -100,7 +100,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1), transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ── Directory pane ── */
@@ -115,7 +115,7 @@
   padding: var(--space-4) var(--space-5);
   backdrop-filter: blur(4px) saturate(110%);
   -webkit-backdrop-filter: blur(4px) saturate(110%);
-  transition: flex 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  /* transition: flex removed — non-compositable, causes CLS */
 
   /* Full width when no feed panel */
   flex: 1;

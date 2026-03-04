@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { Heart, Repeat2, Link, Twitter, CornerLeftUp } from 'lucide-react';
+import { Heart, Repeat2, Link, CornerLeftUp } from 'lucide-react';
 import { useColorMode } from '../../../../hooks/useColorMode';
-import { useClusterColors, resolveClusterColorCSS, resolveClusterColorRGBA } from '@/hooks/useClusterColors';
-import { useScope } from '../../../../contexts/ScopeContext';
+import { resolveClusterColorCSS, resolveClusterColorRGBA } from '@/hooks/useClusterColors';
+import { useClusterColorMap } from '../../../../contexts/ClusterColorContext';
 import { useHoveredIndex } from '../../../../contexts/HoverContext';
 import { urlResolver } from '../../../../lib/urlResolver';
 import { parseJsonArray, classifyUrls } from '../../../../lib/tweetUrls';
@@ -111,8 +111,7 @@ function TweetCard({
   const cardRef = useRef(null);
   const isMountedRef = useRef(true);
   const { colorMode, isDark: isDarkMode } = useColorMode();
-  const { clusterLabels, clusterHierarchy } = useScope();
-  const { colorMap } = useClusterColors(clusterLabels, clusterHierarchy);
+  const colorMap = useClusterColorMap();
 
   // Track mount state
   useEffect(() => {
@@ -203,7 +202,7 @@ function TweetCard({
     return {
       '--highlight-bg': `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${isDarkMode ? 0.06 : 0.08})`,
     };
-  }, [isHighlighted, clusterNumber, isDarkMode]);
+  }, [isHighlighted, colorMap, clusterNumber, isDarkMode]);
 
   // Tweet metadata
   const username = row.username;

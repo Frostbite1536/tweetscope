@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronsRight, GalleryHorizontalEnd, LayoutGrid, PanelRightClose, PanelRightOpen } from 'lucide-react';
 
@@ -14,6 +14,7 @@ import FilterActions from '../../components/Explore/V2/FilterActions';
 import FeedCarousel from '../../components/Explore/V2/Carousel/FeedCarousel';
 import TopicDirectory from '../../components/Explore/V2/TopicDirectory/TopicDirectory';
 import { HoverProvider } from '../../contexts/HoverContext';
+import { ClusterColorProvider } from '../../contexts/ClusterColorContext';
 import ThreadView from '../../components/Explore/V2/ThreadView/ThreadView';
 import QuoteView from '../../components/Explore/V2/ThreadView/QuoteView';
 
@@ -25,6 +26,7 @@ import useCarouselData from '../../hooks/useCarouselData';
 import useTopicDirectoryData from '../../hooks/useTopicDirectoryData';
 import useTimelineData from '../../hooks/useTimelineData';
 import useNodeStats from '../../hooks/useNodeStats';
+import { useClusterColors } from '../../hooks/useClusterColors';
 
 import { filterConstants } from '../../components/Explore/V2/Search/utils';
 
@@ -165,6 +167,7 @@ function ExploreContent() {
 
   // Node link stats (thread/quote metadata per tweet)
   const { statsMap: nodeStats, tweetIdMap } = useNodeStats(dataset?.id, linksAvailable);
+  const { colorMap } = useClusterColors(clusterLabels, clusterHierarchy);
 
   // ====================================================================================================
   // Timeline state
@@ -974,8 +977,11 @@ function ExploreContent() {
   const [size, setSize] = useState(() => [window.innerWidth, window.innerHeight]);
   const visualizationContainerRef = useRef(null);
   const resizeRafRef = useRef(null);
+  const isExpandedRef = useRef(false);
 
   function updateSize() {
+    // Skip getBoundingClientRect while map is hidden (expanded/carousel mode)
+    if (isExpandedRef.current) return;
     if (visualizationContainerRef.current) {
       const vizRect = visualizationContainerRef.current.getBoundingClientRect();
       setSize((prev) => {
@@ -1023,6 +1029,7 @@ function ExploreContent() {
   const [width, height] = size;
   const isCollapsed = sidebarMode === SIDEBAR_MODES.COLLAPSED;
   const isExpanded = sidebarMode === SIDEBAR_MODES.EXPANDED;
+  isExpandedRef.current = isExpanded;
   const isNormal = sidebarMode === SIDEBAR_MODES.NORMAL;
   const isThread = sidebarMode === SIDEBAR_MODES.THREAD;
   const isQuotes = sidebarMode === SIDEBAR_MODES.QUOTES;
@@ -1100,9 +1107,12 @@ function ExploreContent() {
     document.removeEventListener('mouseup', stopDragging);
   };
 
-  // Update viz size after mode transition
+  // Update viz size after mode transition — skip while expanded, resync on return
   useEffect(() => {
-    const timer = setTimeout(updateSize, 350); // After 300ms transition + buffer
+    if (sidebarMode === SIDEBAR_MODES.EXPANDED) return;
+    const timer = setTimeout(() => {
+      requestAnimationFrame(updateSize);
+    }, 350); // After 300ms transition + buffer
     return () => clearTimeout(timer);
   }, [sidebarMode]);
 
@@ -1123,9 +1133,17 @@ function ExploreContent() {
   // ====================================================================================================
   const handleToggleExpand = useCallback(() => {
     const graphViewState = vizRef.current?.getViewState?.();
-    toggleExpand(graphViewState);
-    setSelectedTopicIndex(null); // Reset topic selection when leaving expanded mode
+    startTransition(() => {
+      toggleExpand(graphViewState);
+      setSelectedTopicIndex(null); // Reset topic selection when leaving expanded mode
+    });
   }, [toggleExpand]);
+
+  const handleExpandedViewChange = useCallback((view) => {
+    startTransition(() => {
+      setExpandedView(view);
+    });
+  }, []);
 
   const handleToggleCollapse = useCallback(() => {
     toggleCollapse();
@@ -1267,12 +1285,13 @@ function ExploreContent() {
         onScopeChange={handleScopeChange}
         onBack={isExpanded ? handleToggleExpand : undefined}
       />
-      <HoverProvider hoveredIndex={hoveredIndex}>
-      <div className="page-container">
-        <div
-          ref={containerRef}
-          className={`full-screen-explore-container ${isExpanded ? 'sidebar-expanded' : ''} ${isCollapsed ? 'sidebar-collapsed' : ''}`}
-        >
+      <ClusterColorProvider colorMap={colorMap}>
+        <HoverProvider hoveredIndex={hoveredIndex}>
+          <div className="page-container">
+            <div
+              ref={containerRef}
+              className={`full-screen-explore-container ${isExpanded ? 'sidebar-expanded' : ''} ${isCollapsed ? 'sidebar-collapsed' : ''}`}
+            >
           {/* Graph pane — always mounted, fades out in carousel mode */}
           <div
             ref={visualizationContainerRef}
@@ -1297,6 +1316,7 @@ function ExploreContent() {
                 ref={vizRef}
                 width={width}
                 height={height}
+                isHidden={isExpanded}
                 contentPaddingRight={mapViewportPaddingRight}
                 hovered={hovered}
                 hoveredIndex={hoveredIndex}
@@ -1332,7 +1352,11 @@ function ExploreContent() {
                 onViewQuotes={handleViewQuotes}
                 highlightIndices={graphHighlightIndices}
               />
-            ) : null}
+            ) : (
+              <div className="viz-loading-placeholder">
+                <div className="viz-loading-spinner" />
+              </div>
+            )}
 
             {/* FAB button to reopen sidebar when collapsed */}
             {isCollapsed && (
@@ -1470,7 +1494,7 @@ function ExploreContent() {
                       onViewThread={handleViewThread}
                       onViewQuotes={handleViewQuotes}
                       expandedView={expandedView}
-                      onToggleView={setExpandedView}
+                      onToggleView={handleExpandedViewChange}
                     />
                   ) : (
                     <>
@@ -1479,14 +1503,14 @@ function ExploreContent() {
                           <div className="expanded-view-toggle">
                             <button
                               className={`expanded-view-toggle-btn ${expandedView === 'directory' ? 'active' : ''}`}
-                              onClick={() => setExpandedView('directory')}
+                              onClick={() => handleExpandedViewChange('directory')}
                               title="Topic directory"
                             >
                               <LayoutGrid size={14} />
                             </button>
                             <button
                               className={`expanded-view-toggle-btn ${expandedView === 'carousel' ? 'active' : ''}`}
-                              onClick={() => setExpandedView('carousel')}
+                              onClick={() => handleExpandedViewChange('carousel')}
                               title="Feed carousel"
                             >
                               <GalleryHorizontalEnd size={14} />
@@ -1515,10 +1539,11 @@ function ExploreContent() {
                 </div>
               )}
             </div>
+            </div>
           </div>
-        </div>
-      </div>
-      </HoverProvider>
+          </div>
+        </HoverProvider>
+      </ClusterColorProvider>
     </>
   );
 }

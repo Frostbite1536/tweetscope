@@ -286,10 +286,13 @@ function selectHierarchyLabelCut(index, targetLayer) {
   return selected;
 }
 
+const EMPTY_LAYERS = [];
+
 const DeckGLScatter = forwardRef(function DeckGLScatter({
   points,
   width,
   height,
+  isHidden = false,
   contentPaddingRight = 0,
   pointScale = 1,
   pointOpacity = 1,
@@ -1406,9 +1409,9 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
         initialViewState={initialViewState}
         viewState={controlledViewState || undefined}
         onViewStateChange={handleViewStateChangeWithControl}
-        layers={layers}
-        onHover={handleHover}
-        onClick={handleClick}
+        layers={isHidden ? EMPTY_LAYERS : layers}
+        onHover={isHidden ? undefined : handleHover}
+        onClick={isHidden ? undefined : handleClick}
         width={width}
         height={height}
         style={{
@@ -1425,6 +1428,7 @@ DeckGLScatter.propTypes = {
   points: PropTypes.array.isRequired, // an array of [x, y, selectionKey, activation, cluster]
   width: PropTypes.number.isRequired,
   height: PropTypes.number.isRequired,
+  isHidden: PropTypes.bool,
   contentPaddingRight: PropTypes.number,
   maxZoom: PropTypes.number,
   pointScale: PropTypes.number,
