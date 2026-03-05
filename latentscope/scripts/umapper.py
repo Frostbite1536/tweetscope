@@ -131,13 +131,14 @@ def umapper(dataset_id, embedding_id, neighbors=25, min_dist=0.1, save=False, in
 
         # Only generate PNG for display manifolds (2D)
         if purpose == 'display':
-            fig, ax = plt.subplots(figsize=(14.22, 14.22))  # 1024px by 1024px at 72 dpi
+            fig, ax = plt.subplots(figsize=(14.22, 14.22), facecolor='none')  # 1024px by 1024px at 72 dpi
+            ax.set_facecolor('none')
             point_size = calculate_point_size(umap_embeddings.shape[0])
             print("POINT SIZE", point_size, "for", umap_embeddings.shape[0], "points")
             plt.scatter(umap_embeddings[:, 0], umap_embeddings[:, 1], s=point_size, alpha=0.5)
             plt.axis('off')  # remove axis
             plt.gca().set_position([0, 0, 1, 1])  # remove margins
-            plt.savefig(os.path.join(umap_dir, f"{umap_id}.png"))
+            plt.savefig(os.path.join(umap_dir, f"{umap_id}.png"), transparent=True)
 
         # save a json file with the umap parameters
         with open(os.path.join(umap_dir, f'{umap_id}.json'), 'w') as f:

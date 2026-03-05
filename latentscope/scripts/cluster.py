@@ -123,7 +123,8 @@ def clusterer(dataset_id, umap_id, samples, min_samples, cluster_selection_epsil
     print("wrote", output_file)
 
     # generate a scatterplot of the umap embeddings and save it to a file
-    fig, ax = plt.subplots(figsize=(14.22, 14.22))  # 1024px by 1024px at 72 dpi
+    fig, ax = plt.subplots(figsize=(14.22, 14.22), facecolor='none')  # 1024px by 1024px at 72 dpi
+    ax.set_facecolor('none')
     point_size = calculate_point_size(umap_embeddings.shape[0])
     print("POINT SIZE", point_size, "for", umap_embeddings.shape[0], "points")
     plt.scatter(umap_embeddings[:, 0], umap_embeddings[:, 1], s=point_size, alpha=0.5, c=cluster_labels, cmap='Spectral')
@@ -141,7 +142,7 @@ def clusterer(dataset_id, umap_id, samples, min_samples, cluster_selection_epsil
 
     plt.axis('off')  # remove axis
     plt.gca().set_position([0, 0, 1, 1])  # remove margins
-    plt.savefig(os.path.join(cluster_dir, f"{cluster_id}.png"))
+    plt.savefig(os.path.join(cluster_dir, f"{cluster_id}.png"), transparent=True)
 
     cluster_meta = {
         "id": cluster_id,
