@@ -1,13 +1,13 @@
-import { Button, Switch } from 'react-element-forge';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { Button } from 'react-element-forge';
+import { Sun, Moon, Monitor, Minus, Plus } from 'lucide-react';
 import { useColorMode } from '../../hooks/useColorMode';
 import styles from './ConfigurationPanel.module.scss';
 
 const THEME_CYCLE = ['auto', 'light', 'dark'];
 const THEME_META = {
-  auto: { Icon: Monitor, label: 'Auto' },
-  light: { Icon: Sun, label: 'Light' },
-  dark: { Icon: Moon, label: 'Dark' },
+  auto: { Icon: Monitor, label: 'System Theme' },
+  light: { Icon: Sun, label: 'Light Theme' },
+  dark: { Icon: Moon, label: 'Dark Theme' },
 };
 
 const ConfigurationPanel = ({
@@ -68,94 +68,128 @@ const ConfigurationPanel = ({
       </div>
 
       <div className={styles.content}>
-        <div className={styles.configSection}>
-          <label>Point Size: {pointSize}x</label>
-          <input
-            type="range"
-            min="0.1"
-            max="10"
-            step="0.1"
-            value={pointSize}
-            onChange={(e) => updatePointSize(+e.target.value)}
-            className={styles.slider}
-          />
+        {/* ── Show / Hide ── */}
+        <div className={styles.section}>
+          <span className={styles.sectionLabel}>Show</span>
+          <label className={styles.inlineToggle}>
+            <input
+              type="checkbox"
+              checked={showClusterOutlines}
+              onChange={toggleShowClusterOutlines}
+            />
+            <span>Topic Borders</span>
+          </label>
+          {timelineHasDates && (
+            <label className={styles.inlineToggle}>
+              <input
+                type="checkbox"
+                checked={showTimeline}
+                onChange={toggleShowTimeline}
+              />
+              <span>Timeline</span>
+            </label>
+          )}
+          {linksAvailable && (
+            <>
+              <label className={styles.inlineToggle}>
+                <input
+                  type="checkbox"
+                  checked={showReplyEdges}
+                  onChange={(e) => toggleShowReplyEdges(e.target.checked)}
+                />
+                <span>Reply Connections</span>
+              </label>
+              <label className={styles.inlineToggle}>
+                <input
+                  type="checkbox"
+                  checked={showQuoteEdges}
+                  onChange={(e) => toggleShowQuoteEdges(e.target.checked)}
+                />
+                <span>Quote Connections</span>
+              </label>
+            </>
+          )}
         </div>
 
-        <div className={styles.configSection}>
-          <label>Point Opacity: {pointOpacity}x</label>
-          <input
-            type="range"
-            min="0.1"
-            max="1.5"
-            step="0.1"
-            value={pointOpacity}
-            onChange={(e) => updatePointOpacity(+e.target.value)}
-            className={styles.slider}
-          />
+        {/* ── Adjust ── */}
+        <div className={styles.section}>
+          <span className={styles.sectionLabel}>Adjust</span>
+          <div className={styles.stepper}>
+            <span className={styles.stepperLabel}>Dot Size</span>
+            <div className={styles.stepperControls}>
+              <button
+                onClick={() => updatePointSize(Math.max(0.1, +(pointSize - 0.5).toFixed(1)))}
+                disabled={pointSize <= 0.1}
+                aria-label="Decrease dot size"
+              >
+                <Minus size={12} />
+              </button>
+              <span className={styles.stepperValue}>{pointSize}x</span>
+              <button
+                onClick={() => updatePointSize(Math.min(10, +(pointSize + 0.5).toFixed(1)))}
+                disabled={pointSize >= 10}
+                aria-label="Increase dot size"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+          </div>
+          <div className={styles.stepper}>
+            <span className={styles.stepperLabel}>Dot Opacity</span>
+            <div className={styles.stepperControls}>
+              <button
+                onClick={() => updatePointOpacity(Math.max(0.1, +(pointOpacity - 0.1).toFixed(1)))}
+                disabled={pointOpacity <= 0.1}
+                aria-label="Decrease dot opacity"
+              >
+                <Minus size={12} />
+              </button>
+              <span className={styles.stepperValue}>{pointOpacity}x</span>
+              <button
+                onClick={() => updatePointOpacity(Math.min(1.5, +(pointOpacity + 0.1).toFixed(1)))}
+                disabled={pointOpacity >= 1.5}
+                aria-label="Increase dot opacity"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+          </div>
+          {linksAvailable && (
+            <div className={styles.stepper}>
+              <span className={styles.stepperLabel}>Line Thickness</span>
+              <div className={styles.stepperControls}>
+                <button
+                  onClick={() => updateEdgeWidthScale(Math.max(0.2, +(edgeWidthScale - 0.2).toFixed(1)))}
+                  disabled={edgeWidthScale <= 0.2}
+                  aria-label="Decrease line thickness"
+                >
+                  <Minus size={12} />
+                </button>
+                <span className={styles.stepperValue}>{edgeWidthScale.toFixed(1)}x</span>
+                <button
+                  onClick={() => updateEdgeWidthScale(Math.min(2.2, +(edgeWidthScale + 0.2).toFixed(1)))}
+                  disabled={edgeWidthScale >= 2.2}
+                  aria-label="Increase line thickness"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-
-        <Switch
-          value={showClusterOutlines}
-          onChange={toggleShowClusterOutlines}
-          defaultState={showClusterOutlines}
-          color="secondary"
-          label="Show Cluster Outlines"
-        />
-
-        {timelineHasDates && (
-          <Switch
-            value={showTimeline}
-            onChange={toggleShowTimeline}
-            color="secondary"
-            label="Show Timeline"
-          />
-        )}
 
         {linksAvailable && (
-          <>
-            <label className={styles.inlineToggle}>
-              <input
-                type="checkbox"
-                checked={showReplyEdges}
-                onChange={(e) => toggleShowReplyEdges(e.target.checked)}
-              />
-              <span>Show Reply Edges</span>
-            </label>
-
-            <label className={styles.inlineToggle}>
-              <input
-                type="checkbox"
-                checked={showQuoteEdges}
-                onChange={(e) => toggleShowQuoteEdges(e.target.checked)}
-              />
-              <span>Show Quote Edges</span>
-            </label>
-
-            <div className={styles.configSection}>
-              <label>Edge Width: {edgeWidthScale.toFixed(1)}x</label>
-              <input
-                type="range"
-                min="0.2"
-                max="2.2"
-                step="0.1"
-                value={edgeWidthScale}
-                onChange={(e) => updateEdgeWidthScale(+e.target.value)}
-                className={styles.slider}
-              />
-            </div>
-
-            <div className={styles.linksMeta}>
-              {linksLoading ? (
-                <span>Loading links...</span>
-              ) : (
-                <span>
-                  {hasInternalBreakdown
-                    ? `In-dataset links: ${internalEdges} (${internalReplyEdges} replies, ${internalQuoteEdges} quotes)`
-                    : `Links: ${linksMeta?.edges ?? 0} (${linksMeta?.edge_kind_counts?.reply ?? 0} replies, ${linksMeta?.edge_kind_counts?.quote ?? 0} quotes)`}
-                </span>
-              )}
-            </div>
-          </>
+          <div className={styles.linksMeta}>
+            {linksLoading ? (
+              <span>Loading...</span>
+            ) : (
+              <span>
+                {hasInternalBreakdown
+                  ? `${internalEdges} connections (${internalReplyEdges} replies, ${internalQuoteEdges} quotes)`
+                  : `${linksMeta?.edges ?? 0} connections (${linksMeta?.edge_kind_counts?.reply ?? 0} replies, ${linksMeta?.edge_kind_counts?.quote ?? 0} quotes)`}
+              </span>
+            )}
+          </div>
         )}
 
         <button className={styles.themeCycler} onClick={cycleTheme} title={`Theme: ${themeLabel}`}>

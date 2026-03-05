@@ -61,23 +61,85 @@
   gap: var(--space-2);
 }
 
-.configSection {
+
+.section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--glass-border-subtle);
 
-  label {
-    font-size: 12px;
-    font-weight: 500;
-    font-family: inherit;
-    color: var(--text-color-text-subtle);
+  &:first-child {
+    padding-top: 0;
+    border-top: none;
   }
 }
 
-.slider {
-  width: 100%;
-  height: 4px;
-  accent-color: var(--semantic-color-semantic-info);
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 500;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-color-text-subtle);
+  opacity: 0.6;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.stepperLabel {
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-color-text-subtle);
+}
+
+.stepperControls {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-color-text-subtle);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+
+    &:hover:not(:disabled) {
+      color: var(--text-color-text-main);
+      background: var(--interactions---secondary-color-interaction-secondary-hover);
+    }
+
+    &:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+  }
+}
+
+.stepperValue {
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-color-text-main);
+  min-width: 32px;
+  text-align: center;
+  user-select: none;
 }
 
 .linksMeta {
@@ -116,7 +178,6 @@
   gap: 6px;
   width: 100%;
   padding: 6px 10px !important;
-  margin-top: var(--space-1);
   font-family: inherit;
   font-size: 12px !important;
   font-weight: 500;
