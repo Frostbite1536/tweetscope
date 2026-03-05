@@ -572,7 +572,10 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
         cluster: label.cluster,
         label: label.label,
         layer: label.layer || 0,
-        count: label.count || 0,
+        count: label.count ?? 0,
+        likes: label.likes ?? 0,
+        cumulativeCount: label.cumulativeCount ?? label.count ?? 0,
+        cumulativeLikes: label.cumulativeLikes ?? label.likes ?? 0,
         position: label.centroid_x !== undefined && label.centroid_y !== undefined
           ? [label.centroid_x, label.centroid_y]
           : computeCentroidFromHull(label.hull, scopeRows),
@@ -588,7 +591,10 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
           cluster: label.cluster,
           label: label.label,
           layer: 0,
-          count: label.count || 0,
+          count: label.count ?? 0,
+          likes: label.likes ?? 0,
+          cumulativeCount: label.cumulativeCount ?? label.count ?? 0,
+          cumulativeLikes: label.cumulativeLikes ?? label.likes ?? 0,
           position: centroid,
           hull: label.hull,
         };
@@ -614,17 +620,26 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
   }
 
   // Prepare labels sorted by importance (used by deterministic placement/truncation).
+  // Priority uses cumulative count (includes children), engagement boost from likes,
+  // and deprioritizes the "Unclustered" catch-all so real topics get prime placement.
   const visibleLabels = useMemo(() => {
     if (!labelData.length) return [];
 
-    // Sort by priority: layer weight * count
-    // Higher layers (coarser clusters) and higher counts get priority
-    // This lets CollisionFilterExtension naturally show important labels first
     return [...labelData]
-      .map(l => ({
-        ...l,
-        priority: (l.count || 1) * Math.pow(2, (l.layer || 0))
-      }))
+      .map(l => {
+        const layer = l.layer || 0;
+        const rawCount = l.cumulativeCount || l.count || 1;
+        const engagementScore = l.cumulativeLikes || l.likes || 0;
+        const engagementBoost = engagementScore > 0
+          ? (1 + Math.log10(engagementScore + 1) * 0.3)
+          : 1;
+        const isUnclustered = l.cluster === 'unknown'
+          || (l.label || '').toLowerCase() === 'unclustered';
+        return {
+          ...l,
+          priority: rawCount * Math.pow(2, layer) * engagementBoost * (isUnclustered ? 0.1 : 1),
+        };
+      })
       .sort((a, b) => b.priority - a.priority);
   }, [labelData]);
 
@@ -643,9 +658,17 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     const scale = Math.pow(2, zoom);
     const zoomSpan = Math.max(1e-6, maxZoom - minZoom);
     const zoom01 = clamp((zoom - minZoom) / zoomSpan, 0, 1);
+    const rightOcclusionPx = clamp(
+      Math.max(0, Number(contentPaddingRight) || 0),
+      0,
+      Math.max(0, width - 80)
+    );
+    const visibleXMin = 0;
+    const visibleXMax = Math.max(visibleXMin + 1, width - rightOcclusionPx);
+    const visibleWidthPx = Math.max(1, visibleXMax - visibleXMin);
+    const visibleCenterX = (visibleXMin + visibleXMax) / 2;
     const widthCapFraction = clamp(0.55 + zoom01 * 0.35, 0.55, 0.9);
-    const widthCapPx = Math.min(1200, width * widthCapFraction);
-    const maxLinesAtZoom = clamp(Math.round(3 + zoom01 * 7), 3, 12);
+    const widthCapPx = Math.min(1200, visibleWidthPx * widthCapFraction);
 
     const maxLayer = hierarchyIndex?.maxLayer ?? 0;
     // Label hierarchy progression should not depend on very large map maxZoom
@@ -666,9 +689,51 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
       scope?.hierarchical_labels && hierarchyIndex
         ? selectHierarchyLabelCut(hierarchyIndex, targetLayer)
         : null;
-    const labelsToProcess = selectedLabelIds
+    const rowCount = scopeRows?.length ?? 0;
+    const rowPressure = clamp((Math.log10(Math.max(rowCount, 1)) - 3) / 2.5, 0, 1);
+    const projectToScreen = (position) => {
+      const x = (position[0] - targetX) * scale + width / 2;
+      const y = (targetY - position[1]) * scale + height / 2;
+      return [x, y];
+    };
+    const filteredLabels = selectedLabelIds
       ? visibleLabels.filter((label) => selectedLabelIds.has(toClusterKey(label.cluster)))
       : visibleLabels;
+    const labelPressure = clamp((Math.log10(Math.max(filteredLabels.length, 1)) - 1.6) / 1.7, 0, 1);
+    const densityPressure = clamp(rowPressure * 0.55 + labelPressure * 0.65, 0, 1);
+    const viewportAreaScale = clamp(
+      Math.sqrt((Math.max(visibleWidthPx, 1) * Math.max(height, 1)) / (1280 * 720)),
+      0.85,
+      1.3
+    );
+    const candidateBase = 45 + zoom01 * 105; // 45..150
+    const candidatePressureScale = 1 - densityPressure * 0.4; // 0.6..1
+    const MAX_CANDIDATES = clamp(
+      Math.round(candidateBase * viewportAreaScale * candidatePressureScale),
+      30,
+      170
+    );
+    const VIEWPORT_MARGIN_PX = Math.round(clamp(120 + zoom01 * 120, 120, 240));
+    const maxLinesAtZoom = clamp(
+      Math.round(2 + zoom01 * 8 - densityPressure * 1.2),
+      2,
+      10
+    );
+    const labelsToProcess = [];
+    for (let i = 0; i < filteredLabels.length && labelsToProcess.length < MAX_CANDIDATES; i++) {
+      const label = filteredLabels[i];
+      if (!label?.position) continue;
+      const [sx, sy] = projectToScreen(label.position);
+      if (
+        sx < visibleXMin - VIEWPORT_MARGIN_PX ||
+        sx > visibleXMax + VIEWPORT_MARGIN_PX ||
+        sy < -VIEWPORT_MARGIN_PX ||
+        sy > height + VIEWPORT_MARGIN_PX
+      ) {
+        continue;
+      }
+      labelsToProcess.push(label);
+    }
 
     const measureCtx = textMeasureContext;
     const widthCache = textWidthCacheRef.current;
@@ -682,12 +747,6 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
 
     const acceptedBoxes = [];
     const placed = [];
-
-    const projectToScreen = (position) => {
-      const x = (position[0] - targetX) * scale + width / 2;
-      const y = (targetY - position[1]) * scale + height / 2;
-      return [x, y];
-    };
 
     const measureTextWidth = (text, sizePx) => {
       const clean = String(text || '');
@@ -705,11 +764,17 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
 
     const computeLabelSizePx = (d) => {
       const layer = d.layer || 0;
-      const count = d.count || 0;
+      const rawCount = d.cumulativeCount || d.count || 0;
       const layerNorm = maxLayer > 0 ? layer / maxLayer : 1;
-      const base = 13 + layerNorm * 6; // 13..19
-      const countBonus = Math.log10(Math.max(count, 1)) * 1.2;
-      return clamp(base + countBonus, 12, 22);
+      const countWeight = 1.1 + zoom01 * 1.0;
+      const likesWeight = 0.2 + zoom01 * 0.6;
+      const base = 10.5 + layerNorm * 3.8; // 10.5..14.3
+      const countBonus = Math.log10(Math.max(rawCount, 1)) * countWeight;
+      const likesVal = d.cumulativeLikes || d.likes || 0;
+      const likesBonus = likesVal > 0 ? Math.log10(likesVal + 1) * likesWeight : 0;
+      const densityScale = 1 - densityPressure * (0.12 - zoom01 * 0.04);
+      const maxSize = 18 + zoom01 * 6;
+      return clamp((base + countBonus + likesBonus) * densityScale, 10, maxSize);
     };
 
     const layoutWrappedLabel = (text, sizePx, { maxWidthPx, maxLines }) => {
@@ -766,7 +831,28 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     };
 
     const maxToProcess = 1500;
-    const maxSoftLabels = 400;
+    const softBudgetBase = Math.round(zoom01 * 8);
+    const maxSoftLabels = clamp(
+      Math.round(softBudgetBase * (1 - densityPressure * 0.7)),
+      0,
+      7
+    );
+    const softMinDist01 = clamp(0.7 - zoom01 * 0.26 + densityPressure * 0.1, 0.45, 0.78);
+    // Use the visible viewport center (accounts for right-side overlay padding)
+    // so "center" behavior stays consistent with carousel open/close states.
+    const viewportCenterX = visibleCenterX;
+    const viewportCenterY = height / 2;
+    const maxCornerDx = Math.max(
+      viewportCenterX - visibleXMin,
+      visibleXMax - viewportCenterX
+    );
+    const maxCornerDy = Math.max(viewportCenterY, height - viewportCenterY);
+    const maxViewportDist = Math.sqrt(maxCornerDx * maxCornerDx + maxCornerDy * maxCornerDy);
+    const softCenterExclusionPx = clamp(
+      Math.min(visibleWidthPx, height) * (0.2 + (1 - zoom01) * 0.12 + densityPressure * 0.05),
+      110,
+      280
+    );
     let softPlaced = 0;
     for (let i = 0; i < labelsToProcess.length && i < maxToProcess; i++) {
       const d = labelsToProcess[i];
@@ -774,27 +860,46 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
 
       const [sx, sy] = projectToScreen(d.position);
       // Skip labels whose anchor is far outside the viewport.
-      if (sx < -200 || sx > width + 200 || sy < -200 || sy > height + 200) continue;
+      if (
+        sx < visibleXMin - VIEWPORT_MARGIN_PX ||
+        sx > visibleXMax + VIEWPORT_MARGIN_PX ||
+        sy < -VIEWPORT_MARGIN_PX ||
+        sy > height + VIEWPORT_MARGIN_PX
+      ) {
+        continue;
+      }
 
       const fullText = String(d.label || '').trim();
       if (!fullText) continue;
 
-      const dx = sx - width / 2;
-      const dy = sy - height / 2;
+      const dx = sx - viewportCenterX;
+      const dy = sy - viewportCenterY;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const maxDist = Math.sqrt((width / 2) * (width / 2) + (height / 2) * (height / 2));
+      const maxDist = Math.max(1, maxViewportDist);
       const dist01 = maxDist > 0 ? clamp(dist / maxDist, 0, 1) : 0;
 
-      // Fade labels as they get further from the current view center (less visually noisy on the periphery).
-      const distanceFade = clamp(1 - Math.pow(dist01, 1.5) * 0.75, 0.35, 1);
-      const baseTextAlpha = Math.round(230 * distanceFade);
-      const baseBgAlpha = clamp(Math.round(84 * distanceFade), 28, 92);
+      // Fade more aggressively at overview zoom and in denser scopes to avoid label fog.
+      const distanceFadeStrength = clamp(0.72 - zoom01 * 0.28 + densityPressure * 0.1, 0.45, 0.85);
+      const distanceFloor = clamp(0.48 + zoom01 * 0.3 - densityPressure * 0.08, 0.35, 0.85);
+      const distanceFade = clamp(1 - Math.pow(dist01, 1.35) * distanceFadeStrength, distanceFloor, 1);
+      const rankFadeStrength = clamp(0.38 - zoom01 * 0.2 + densityPressure * 0.12, 0.15, 0.45);
+      const rankFadeFloor = clamp(0.52 + zoom01 * 0.28 - densityPressure * 0.08, 0.4, 0.88);
+      const rankFade = clamp(1 - (i / labelsToProcess.length) * rankFadeStrength, rankFadeFloor, 1);
+      const baseTextAlpha = Math.round(230 * distanceFade * rankFade);
+      const baseBgAlpha = clamp(Math.round(72 * distanceFade * rankFade), 32, 80);
 
       // Slightly shrink labels on the periphery to reduce overlap pressure (still mostly driven by cluster size).
       const distanceSizeScale = 1 - dist01 * 0.12; // down to ~0.88 at edges
       const zoomSizeScale = 1 + zoom01 * 0.32;
-      const sizePx = clamp(computeLabelSizePx(d) * distanceSizeScale * zoomSizeScale, 12, 26);
-      const baseMaxWidthPx = clamp(sizePx * (12 + zoom01 * 10), 120, Math.min(widthCapPx, width * 0.92));
+      const minSizePx = clamp(10.5 + zoom01 * 1.5 - densityPressure * 0.6, 10, 12.5);
+      const maxSizePx = clamp(18 + zoom01 * 8 - densityPressure * 1.5, 16, 25);
+      const sizePx = clamp(computeLabelSizePx(d) * distanceSizeScale * zoomSizeScale, minSizePx, maxSizePx);
+      const widthDensityScale = 1 - densityPressure * 0.18;
+      const baseMaxWidthPx = clamp(
+        sizePx * (10 + zoom01 * 10) * widthDensityScale,
+        100,
+        Math.min(widthCapPx, visibleWidthPx * 0.9)
+      );
       const widthPxOptions = [1, 0.9, 0.8, 0.7].map(f => baseMaxWidthPx * f);
       const maxLinesOptions = [];
       const pushMaxLines = (value) => {
@@ -847,24 +952,29 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
 
       if (placedPrimary) continue;
 
-      // If we couldn't place without collision, optionally place a "soft" label:
-      // very low opacity, does not reserve collision space, and only away from center.
-      if (softPlaced < maxSoftLabels && dist01 >= 0.55) {
-        // Choose the most compact candidate (prefer 1 line, narrow width).
+      // Soft label: reduced opacity, doesn't reserve collision space.
+      // Keep them low-contrast and peripheral, especially at overview zoom.
+      if (
+        softPlaced < maxSoftLabels &&
+        dist01 >= softMinDist01 &&
+        dist >= softCenterExclusionPx
+      ) {
         const compact = candidates[candidates.length - 1] || null;
         if (compact?.lines?.length) {
           const box = computeBox(sx, sy, compact.lines, sizePx);
           const intersections = countIntersections(box);
 
-          // Only allow mild overlap. This is intentionally conservative.
-          if (intersections <= 2) {
+          const maxSoftIntersections = zoom01 >= 0.75 ? 1 : 0;
+          if (intersections <= maxSoftIntersections) {
+            const softAlphaScale = clamp(0.3 + zoom01 * 0.18 - densityPressure * 0.1, 0.18, 0.5);
+            const softBgScale = clamp(0.1 + zoom01 * 0.15 - densityPressure * 0.05, 0.05, 0.22);
             const softAlpha = clamp(
-              Math.round((baseTextAlpha * 0.55) / (1 + intersections * 0.35)),
-              20,
+              Math.round(baseTextAlpha * softAlphaScale),
+              18,
               baseTextAlpha
             );
             const softBgAlpha = clamp(
-              Math.round((baseBgAlpha * 0.22) / (1 + intersections * 0.5)),
+              Math.round(baseBgAlpha * softBgScale),
               0,
               baseBgAlpha
             );
@@ -894,9 +1004,11 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     debouncedViewState,
     initialViewState,
     initialZoom,
+    contentPaddingRight,
     textMeasureContext,
     hierarchyIndex,
     scope?.hierarchical_labels,
+    scopeRows,
   ]);
 
   const labelCharacterSet = useMemo(() => {
@@ -957,24 +1069,33 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
       // Convert Deck.GL view state to domain format expected by existing code
       const scale = Math.pow(2, newViewState.zoom);
       const [centerX, centerY] = newViewState.target;
+      const rightOcclusionPx = clamp(
+        Math.max(0, Number(contentPaddingRight) || 0),
+        0,
+        Math.max(0, width - 80)
+      );
+      const visibleRightX = Math.max(1, width - rightOcclusionPx);
+      const visibleCenterX = visibleRightX / 2;
 
-      // Calculate visible domain based on zoom and viewport size
-      const halfWidthInUnits = (width / 2) / scale;
+      // Calculate visible domain based on the unoccluded viewport area.
       const halfHeightInUnits = (height / 2) / scale;
 
-      const xDomain = [centerX - halfWidthInUnits, centerX + halfWidthInUnits];
+      const xDomain = [
+        centerX + (0 - width / 2) / scale,
+        centerX + (visibleRightX - width / 2) / scale,
+      ];
       const yDomain = [centerY - halfHeightInUnits, centerY + halfHeightInUnits];
 
       // Create a transform-like object for compatibility with existing code
       const transform = {
         k: scale / Math.pow(2, initialZoom), // Relative zoom from initial
-        x: width / 2 - centerX * scale,
+        x: visibleCenterX - centerX * scale,
         y: height / 2 + centerY * scale, // Y is flipped
       };
 
       onView(xDomain, yDomain, transform);
     }
-  }, [onView, width, height, initialZoom]);
+  }, [onView, width, height, contentPaddingRight, initialZoom]);
 
   // Handle hover events
   const handleHover = useCallback((info) => {
