@@ -55,3 +55,32 @@ def test_build_cluster_labels_lookup_hierarchical_adds_unknown_and_converts_list
     assert isinstance(lookup[0]["hull"], list)
     assert isinstance(lookup[0]["children"], list)
 
+
+def test_build_cluster_labels_lookup_hierarchical_collapses_single_child_parent() -> None:
+    df = pd.DataFrame(
+        {
+            "cluster": ["0_0", "1_0"],
+            "layer": [0, 1],
+            "label": ["Casual social-media mutuals chatter", "Casual social-media mutuals chatter"],
+            "description": ["", ""],
+            "hull": [np.array([[0, 0], [1, 0]]), np.array([[0, 0], [1, 1]])],
+            "count": [3, 3],
+            "parent_cluster": ["1_0", None],
+            "children": [np.array([], dtype=object), np.array(["0_0"], dtype=object)],
+            "centroid_x": [0.0, 0.0],
+            "centroid_y": [0.0, 0.0],
+            "indices": [[0, 1, 2], [0, 1, 2]],
+        }
+    )
+
+    lookup, unknown = build_cluster_labels_lookup(
+        cluster_labels_df=df,
+        hierarchical=True,
+        umap_row_count=3,
+    )
+
+    assert unknown == 0
+    labels_by_cluster = {row["cluster"]: row for row in lookup if row["cluster"] != "unknown"}
+    assert set(labels_by_cluster.keys()) == {"0_0"}
+    assert labels_by_cluster["0_0"]["parent_cluster"] is None
+    assert labels_by_cluster["0_0"]["children"] == []

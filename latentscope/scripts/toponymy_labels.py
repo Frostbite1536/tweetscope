@@ -17,6 +17,7 @@ import pandas as pd
 import numpy as np
 import h5py
 from datetime import datetime
+from typing import Any
 
 # Use local toponymy (with GPT-5 support) instead of installed package
 # Resolve to absolute path for robust path comparison and to work with uv/different CWDs
@@ -231,11 +232,14 @@ def run_toponymy_labeling(
     # Extract hierarchical structure
     # Use display vectors (2D) for hull/centroid calculations
     print("\nExtracting hierarchical cluster structure...")
-    hierarchical_labels = build_hierarchical_labels(
+    hierarchical_labels, collapse_info = build_hierarchical_labels(
         topic_model,
         display_vectors,
         texts
     )
+    collapsed_count = int(collapse_info.get("collapsed_count", 0))
+    if collapsed_count > 0:
+        print(f"  Collapsed {collapsed_count} single-child hierarchy nodes")
 
     print(f"\nGenerated {len(hierarchical_labels)} cluster labels across {len(topic_model.topic_names_)} layers:")
     for layer_idx, layer_names in enumerate(topic_model.topic_names_):
@@ -256,6 +260,7 @@ def run_toponymy_labeling(
         base_min_cluster_size=base_min_cluster_size,
         audit_info=audit_info,
         enrichment_stats=enrich_stats,
+        collapse_info=collapse_info,
     )
 
     print(f"\nSaved hierarchical labels to: clusters/{output_id}.parquet")
@@ -350,11 +355,112 @@ def _build_child_to_parent_map(cluster_tree, num_layers):
     return child_to_parent, violations
 
 
+def _cluster_key(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return text
+
+
+def _layer_value(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _collapse_single_child_nodes(
+    hierarchical_labels: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """
+    Collapse non-leaf hierarchy nodes that have exactly one child.
+
+    The child is promoted to the removed node's parent. This is repeated until
+    no eligible single-child parents remain (covers transitive chains).
+    """
+    by_id: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    order_index: dict[str, int] = {}
+
+    for row in hierarchical_labels:
+        cluster_id = _cluster_key(row.get("cluster"))
+        if cluster_id is None:
+            continue
+        normalized = dict(row)
+        normalized["cluster"] = cluster_id
+        normalized["parent_cluster"] = _cluster_key(normalized.get("parent_cluster"))
+        by_id[cluster_id] = normalized
+        order_index[cluster_id] = len(order)
+        order.append(cluster_id)
+
+    collapsed_clusters: list[str] = []
+
+    while True:
+        children_by_parent: dict[str, list[str]] = {}
+        for cluster_id, row in by_id.items():
+            parent_id = _cluster_key(row.get("parent_cluster"))
+            if parent_id is None:
+                row["parent_cluster"] = None
+                continue
+            if parent_id not in by_id:
+                row["parent_cluster"] = None
+                continue
+            children_by_parent.setdefault(parent_id, []).append(cluster_id)
+
+        candidates = [
+            parent_id
+            for parent_id, children in children_by_parent.items()
+            if len(children) == 1 and _layer_value(by_id[parent_id].get("layer")) > 0
+        ]
+        if not candidates:
+            break
+
+        candidates.sort(
+            key=lambda parent_id: (
+                _layer_value(by_id[parent_id].get("layer")),
+                -order_index.get(parent_id, 0),
+            ),
+            reverse=True,
+        )
+        parent_id = candidates[0]
+        child_id = children_by_parent[parent_id][0]
+        grandparent_id = _cluster_key(by_id[parent_id].get("parent_cluster"))
+
+        by_id[child_id]["parent_cluster"] = grandparent_id
+        collapsed_clusters.append(parent_id)
+        del by_id[parent_id]
+        order = [cluster_id for cluster_id in order if cluster_id != parent_id]
+
+    children_by_parent: dict[str, list[str]] = {}
+    for cluster_id, row in by_id.items():
+        parent_id = _cluster_key(row.get("parent_cluster"))
+        if parent_id is None:
+            row["parent_cluster"] = None
+            continue
+        if parent_id not in by_id:
+            row["parent_cluster"] = None
+            continue
+        children_by_parent.setdefault(parent_id, []).append(cluster_id)
+
+    for cluster_id, row in by_id.items():
+        row["children"] = children_by_parent.get(cluster_id, [])
+
+    collapsed = [by_id[cluster_id] for cluster_id in order if cluster_id in by_id]
+    info = {
+        "collapsed_count": len(collapsed_clusters),
+        "collapsed_clusters": collapsed_clusters,
+    }
+    return collapsed, info
+
+
 def build_hierarchical_labels(topic_model, clusterable_vectors, texts):
     """
     Build hierarchical cluster labels from Toponymy results.
 
-    Returns a list of dicts with:
+    Returns:
+        hierarchical_labels: list of dicts with:
         - cluster: unique cluster id (layer_clusteridx format)
         - layer: layer number (0 = finest)
         - label: topic name
@@ -365,6 +471,7 @@ def build_hierarchical_labels(topic_model, clusterable_vectors, texts):
         - children: list of child cluster ids
         - centroid_x, centroid_y: cluster center coordinates
         - indices: list of point indices in this cluster
+        collapse_info: metadata about collapsed single-child nodes
     """
     from scipy.spatial import ConvexHull
     import numpy as np
@@ -472,7 +579,8 @@ def build_hierarchical_labels(topic_model, clusterable_vectors, texts):
             print(f"WARNING: {entry['cluster']} references parent {parent} which is not in output")
             entry["parent_cluster"] = None  # Fix dangling ref
 
-    return hierarchical_labels
+    collapsed_labels, collapse_info = _collapse_single_child_nodes(hierarchical_labels)
+    return collapsed_labels, collapse_info
 
 
 def generate_output_id(dataset_path):
@@ -506,6 +614,7 @@ def save_hierarchical_labels(
     base_min_cluster_size=None,
     audit_info=None,
     enrichment_stats=None,
+    collapse_info=None,
 ):
     """Save hierarchical labels to parquet and JSON files."""
     clusters_dir = os.path.join(dataset_path, "clusters")
@@ -540,6 +649,8 @@ def save_hierarchical_labels(
         meta["audit"] = audit_info
     if enrichment_stats:
         meta["enrichment_stats"] = enrichment_stats
+    if collapse_info:
+        meta["single_child_collapses"] = int(collapse_info.get("collapsed_count", 0))
 
     json_path = os.path.join(clusters_dir, f"{output_id}.json")
     with open(json_path, "w") as f:
