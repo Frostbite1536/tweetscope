@@ -37,9 +37,6 @@
   border-radius: var(--radius-md) var(--radius-md) 0 0; // rounded top, flat bottom
   border-bottom: 1px solid var(--borders-color-border-3);
 
-  .borderless & {
-    border-radius: 0; // parent has no radius in borderless mode
-  }
   cursor: pointer;
   font-family: 'Instrument Sans', system-ui, sans-serif;
   font-size: 12px;
@@ -152,9 +149,6 @@
   border-radius: 0 0 var(--radius-md) var(--radius-md); // flat top, rounded bottom
   border-top: 1px solid var(--borders-color-border-3);
 
-  .borderless & {
-    border-radius: 0; // parent has no radius in borderless mode
-  }
   cursor: pointer;
   font-family: 'Instrument Sans', system-ui, sans-serif;
   font-size: 12px;

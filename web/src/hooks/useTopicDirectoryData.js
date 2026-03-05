@@ -43,6 +43,7 @@ export default function useTopicDirectoryData(selectedClusterIndex, enabled = tr
       const allIndices = indicesByTopLevel[cluster.cluster] || [];
       const start = page * ROWS_PER_PAGE;
       const pageIndices = allIndices.slice(start, start + ROWS_PER_PAGE);
+      const hasMoreAfterPage = start + pageIndices.length < allIndices.length;
 
       if (pageIndices.length === 0) {
         setFeedData((prev) => ({
@@ -78,7 +79,7 @@ export default function useTopicDirectoryData(selectedClusterIndex, enabled = tr
               rows: newRows,
               page,
               loading: false,
-              hasMore: pageIndices.length === ROWS_PER_PAGE,
+              hasMore: hasMoreAfterPage,
             };
           });
         })

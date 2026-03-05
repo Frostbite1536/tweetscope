@@ -125,11 +125,14 @@
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   animation: fadeInUp 0.35s ease-out both;
-  transition: box-shadow var(--transition-normal);
+  border: 1px solid var(--glass-border-subtle);
+  box-shadow: var(--glass-glow);
+  transition: box-shadow var(--transition-normal), transform var(--transition-normal);
   cursor: pointer;
 
   &:hover {
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    box-shadow: var(--glass-shadow-hover);
+    transform: translateY(-1px);
   }
 }
 

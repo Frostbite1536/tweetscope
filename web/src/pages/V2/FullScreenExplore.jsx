@@ -1263,7 +1263,7 @@ function ExploreContent() {
   if (scopeError || scopeRowsError) {
     return (
       <>
-        <SubNav user={userId} dataset={dataset} scope={scope} scopes={scopes} />
+        <SubNav user={userId} dataset={dataset} scope={scope} scopes={scopes} overlay={isExpanded} />
         <div style={{ padding: 16 }}>
           Failed to load scope data. {scopeError || scopeRowsError}
         </div>
@@ -1274,7 +1274,7 @@ function ExploreContent() {
   if (!dataset)
     return (
       <>
-        <SubNav user={userId} dataset={dataset} scope={scope} scopes={scopes} />
+        <SubNav user={userId} dataset={dataset} scope={scope} scopes={scopes} overlay={isExpanded} />
         <div>Loading...</div>
       </>
     );
@@ -1288,6 +1288,7 @@ function ExploreContent() {
         scopes={scopes}
         onScopeChange={handleScopeChange}
         onBack={isExpanded ? handleToggleExpand : undefined}
+        overlay={isExpanded}
       />
       <ClusterColorProvider colorMap={colorMap}>
         <HoverProvider hoveredIndex={hoveredIndex}>
