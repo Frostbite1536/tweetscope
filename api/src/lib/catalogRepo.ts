@@ -112,6 +112,21 @@ function projectScopeListItem(row: ScopeListRow): ParsedScopeMeta {
   };
 }
 
+/** Merge dataset-level profile into a scope's nested dataset object. */
+function enrichScopeWithDatasetProfile(
+  scopeMeta: ParsedScopeMeta,
+  dataset: ParsedDatasetMeta,
+): void {
+  const profile = dataset.profile;
+  if (!profile) return;
+  const scopeDataset = (scopeMeta as Record<string, unknown>).dataset as
+    | Record<string, unknown>
+    | undefined;
+  if (scopeDataset) {
+    scopeDataset.profile = profile;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -146,6 +161,7 @@ export async function listDatasets(
         username: profile.username ?? undefined,
         display_name: profile.display_name ?? undefined,
         avatar_url: profile.avatar_url ?? undefined,
+        bio: profile.bio ?? undefined,
       } : undefined,
     };
   });
@@ -226,6 +242,7 @@ export async function getScope(
   meta.id = rows[0].scope_id;
   meta.lancedb_table_id = rows[0].lancedb_table_id;
   (meta as Record<string, unknown>).is_active = rows[0].is_active;
+  enrichScopeWithDatasetProfile(meta, dataset);
   return meta;
 }
 
@@ -264,6 +281,7 @@ export async function getActiveScope(
   meta.id = row.scope_id;
   meta.lancedb_table_id = row.lancedb_table_id;
   (meta as Record<string, unknown>).is_active = row.is_active;
+  enrichScopeWithDatasetProfile(meta, dataset);
   return meta;
 }
 
