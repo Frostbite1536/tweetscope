@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.png" width="120" alt="Tweetscope">
+</p>
+
 # tweetscope
 
 **Turn your Twitter/X archive into a searchable, visual knowledge base.**

@@ -113,21 +113,23 @@ const ConfigurationPanel = ({
 
         {linksAvailable && (
           <>
-            <Switch
-              value={showReplyEdges}
-              onChange={toggleShowReplyEdges}
-              defaultState={showReplyEdges}
-              color="secondary"
-              label="Show Reply Edges"
-            />
+            <label className={styles.inlineToggle}>
+              <input
+                type="checkbox"
+                checked={showReplyEdges}
+                onChange={(e) => toggleShowReplyEdges(e.target.checked)}
+              />
+              <span>Show Reply Edges</span>
+            </label>
 
-            <Switch
-              value={showQuoteEdges}
-              onChange={toggleShowQuoteEdges}
-              defaultState={showQuoteEdges}
-              color="secondary"
-              label="Show Quote Edges"
-            />
+            <label className={styles.inlineToggle}>
+              <input
+                type="checkbox"
+                checked={showQuoteEdges}
+                onChange={(e) => toggleShowQuoteEdges(e.target.checked)}
+              />
+              <span>Show Quote Edges</span>
+            </label>
 
             <div className={styles.configSection}>
               <label>Edge Width: {edgeWidthScale.toFixed(1)}x</label>

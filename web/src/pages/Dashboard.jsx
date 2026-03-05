@@ -68,6 +68,7 @@ function Dashboard({ appConfig = null }) {
   return (
     <div className={styles.dashboard}>
       <div className={styles.hero}>
+        <img src="/apple-touch-icon.png" alt="" className={styles.heroWatermark} />
         <h1 className={styles.heroTitle}>Tweetscope</h1>
         <p className={styles.heroSubtitle}>Explore your knowledge maps</p>
       </div>
@@ -137,6 +138,7 @@ function ScopeGrid({ datasetId, scopeList, typeLabel }) {
             to={`/datasets/${datasetId}/explore/${scope.id}`}
             key={i}
           >
+            <span className={styles.scopeLabel}>{label}</span>
             <ScopeThumbnail
               datasetId={datasetId}
               scopeId={scope.id}
@@ -148,8 +150,7 @@ function ScopeGrid({ datasetId, scopeList, typeLabel }) {
               }
               alt={label}
             />
-            <span className={styles.scopeLabel}>{label}</span>
-            {scope.description ? (
+            {scope.description && !/imported from|auto-processed/i.test(scope.description) ? (
               <span className={styles.scopeDescription}>{scope.description}</span>
             ) : null}
           </Link>
@@ -170,6 +171,7 @@ function CollectionCard({ collection }) {
   const displayName = profile?.display_name || id;
   const username = profile?.username;
   const avatarUrl = profile?.avatar_url;
+  const bio = profile?.bio;
 
   const [avatarError, setAvatarError] = useState(false);
   const onAvatarError = useCallback(() => setAvatarError(true), []);
@@ -183,9 +185,16 @@ function CollectionCard({ collection }) {
   }
 
   const hasLikes = likesScopes.length > 0;
+  const primaryScope = tweetsScopes[0];
+  const primaryHref = primaryScope
+    ? `/datasets/${tweetsDataset.id}/explore/${primaryScope.id}`
+    : null;
 
   return (
     <div className={styles.collectionCard}>
+      {primaryHref && (
+        <Link to={primaryHref} className={styles.cardLink} aria-label={`Explore ${displayName}`} />
+      )}
       <div className={styles.collectionHeader}>
         {avatarUrl && !avatarError ? (
           <img
@@ -197,12 +206,13 @@ function CollectionCard({ collection }) {
         ) : (
           <div className={styles.avatarFallback}>{initial}</div>
         )}
-        <div className={styles.collectionHeaderText}>
+        <div className={styles.collectionMeta}>
           <h3 className={styles.collectionName}>
             {displayName}
             {username && <span className={styles.collectionUsername}> @{username}</span>}
+            <span className={styles.collectionStats}> · {statParts.join(' · ')}</span>
           </h3>
-          <span className={styles.collectionStats}>{statParts.join(' · ')}</span>
+          {bio && <p className={styles.collectionBio}>{bio}</p>}
         </div>
       </div>
 
@@ -219,7 +229,6 @@ function CollectionCard({ collection }) {
           typeLabel="Liked Tweets"
         />
       )}
-
     </div>
   );
 }

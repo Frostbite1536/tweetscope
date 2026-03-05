@@ -15,7 +15,7 @@
   backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   border: 1px solid var(--glass-border-subtle);
-  box-shadow: var(--glass-shadow);
+  box-shadow: var(--glass-glow);
 }
 
 .backIcon {
@@ -41,21 +41,43 @@
   color: var(--text-color-text-main);
 }
 
-.scopeBadge {
+.profilePill {
   display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
+  align-items: center;
+  gap: 0;
   min-width: 0;
+  cursor: default;
 }
 
-.scopeValue {
+.avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity var(--transition-normal);
+}
+
+.contextBar:hover .avatar {
+  opacity: 1;
+}
+
+.profileLabel {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-color-text-main);
-  max-width: min(30vw, 260px);
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 0;
+  opacity: 0;
+  transition: max-width var(--transition-normal), opacity var(--transition-normal), margin var(--transition-normal);
+}
+
+.contextBar:hover .profileLabel {
+  max-width: min(30vw, 260px);
+  opacity: 1;
+  margin-left: 6px;
 }
 
 .scopeSelectWrap {
@@ -137,7 +159,7 @@
 }
 
 @media (max-width: 900px) {
-  .scopeValue {
+  .contextBar:hover .profileLabel {
     max-width: min(42vw, 180px);
   }
 
@@ -147,7 +169,7 @@
 }
 
 @media (max-width: 640px) {
-  .scopeBadge {
+  .profilePill {
     display: none;
   }
 

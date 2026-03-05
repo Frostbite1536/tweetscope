@@ -3,6 +3,12 @@ import { ChevronsLeft, ChevronDown, House } from 'lucide-react';
 import PropTypes from 'prop-types';
 import styles from './SubNav.module.css';
 
+function deriveCollectionLabel(dataset) {
+  const name = dataset?.profile?.display_name || dataset?.profile?.username || dataset?.id || '';
+  const isLikes = dataset?.id?.endsWith('-likes');
+  return `${name}'s ${isLikes ? 'likes' : 'tweets'}`;
+}
+
 const SubNav = ({ dataset, scope, scopes, onScopeChange, onBack }) => {
   if (!dataset) {
     return (
@@ -24,6 +30,8 @@ const SubNav = ({ dataset, scope, scopes, onScopeChange, onBack }) => {
   }
 
   const hasMultipleScopes = Array.isArray(scopes) && scopes.length > 1;
+  const avatarUrl = dataset?.profile?.avatar_url;
+  const label = deriveCollectionLabel(dataset);
 
   return (
     <div className={styles.subHeaderContainer}>
@@ -37,8 +45,11 @@ const SubNav = ({ dataset, scope, scopes, onScopeChange, onBack }) => {
             <ChevronsLeft size={16} />
           </button>
         )}
-        <div className={styles.scopeBadge}>
-          <span className={styles.scopeValue}>{dataset?.id || '-'}</span>
+        <div className={styles.profilePill} title={label}>
+          {avatarUrl && (
+            <img src={avatarUrl} alt="" className={styles.avatar} />
+          )}
+          <span className={styles.profileLabel}>{label}</span>
         </div>
 
         {hasMultipleScopes && onScopeChange && (

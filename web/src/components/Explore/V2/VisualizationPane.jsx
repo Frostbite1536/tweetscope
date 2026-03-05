@@ -22,6 +22,7 @@ import hoverStyles from './HoverCard.module.scss';
 import ConfigurationPanel from '../ConfigurationPanel';
 import TimelineControls from './TimelineControls';
 import TwitterEmbed from './TweetFeed/TwitterEmbed';
+import { EMBED_PRIORITY } from '../../../lib/embedScheduler';
 import { Button } from 'react-element-forge';
 import useHoverCardPlacement from './useHoverCardPlacement';
 
@@ -181,19 +182,22 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   });
 
   // Disable edges by default for large datasets (>10k points) — they add
-  // visual noise and hurt performance.  Runs once when scopeRows loads.
-  const edgeDefaultsAppliedRef = useRef(false);
+  // visual noise and hurt performance. Apply once per scope, not on every
+  // rerender, so manual user toggles persist within the same scope.
+  const edgeDefaultsScopeRef = useRef(null);
   useEffect(() => {
-    if (edgeDefaultsAppliedRef.current || !scopeRows?.length) return;
-    edgeDefaultsAppliedRef.current = true;
-    if (scopeRows.length > 10_000) {
-      setVizConfig(prev => ({
-        ...prev,
-        showReplyEdges: false,
-        showQuoteEdges: false,
-      }));
-    }
-  }, [scopeRows]);
+    const scopeKey = scope?.id ?? null;
+    if (!scopeKey || !scopeRows?.length) return;
+    if (edgeDefaultsScopeRef.current === scopeKey) return;
+
+    edgeDefaultsScopeRef.current = scopeKey;
+    const enableEdgesByDefault = scopeRows.length <= 10_000;
+    setVizConfig((prev) => ({
+      ...prev,
+      showReplyEdges: enableEdgesByDefault,
+      showQuoteEdges: enableEdgesByDefault,
+    }));
+  }, [scope?.id, scopeRows]);
 
   const toggleShowClusterOutlines = useCallback(() => {
     setVizConfig((prev) => ({ ...prev, showClusterOutlines: !prev.showClusterOutlines }));
@@ -207,12 +211,20 @@ const VisualizationPane = forwardRef(function VisualizationPane({
     setVizConfig((prev) => ({ ...prev, pointOpacity: value }));
   }, []);
 
-  const toggleShowReplyEdges = useCallback(() => {
-    setVizConfig((prev) => ({ ...prev, showReplyEdges: !prev.showReplyEdges }));
+  const toggleShowReplyEdges = useCallback((nextValue) => {
+    setVizConfig((prev) => ({
+      ...prev,
+      showReplyEdges:
+        typeof nextValue === 'boolean' ? nextValue : !prev.showReplyEdges,
+    }));
   }, []);
 
-  const toggleShowQuoteEdges = useCallback(() => {
-    setVizConfig((prev) => ({ ...prev, showQuoteEdges: !prev.showQuoteEdges }));
+  const toggleShowQuoteEdges = useCallback((nextValue) => {
+    setVizConfig((prev) => ({
+      ...prev,
+      showQuoteEdges:
+        typeof nextValue === 'boolean' ? nextValue : !prev.showQuoteEdges,
+    }));
   }, []);
 
   const updateEdgeWidthScale = useCallback((value) => {
@@ -591,6 +603,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
                       theme={isDarkMode ? 'dark' : 'light'}
                       hideConversation={true}
                       compact={true}
+                      priority={EMBED_PRIORITY.HOVER}
                     />
                   </div>
                 ))}

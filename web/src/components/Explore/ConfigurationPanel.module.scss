@@ -87,6 +87,29 @@
   padding: var(--space-1) 0;
 }
 
+.inlineToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-color-text-subtle);
+  cursor: pointer;
+  user-select: none;
+
+  input[type='checkbox'] {
+    margin: 0;
+    accent-color: var(--semantic-color-semantic-info);
+    inline-size: 14px;
+    block-size: 14px;
+    cursor: pointer;
+  }
+
+  &:hover {
+    color: var(--text-color-text-main);
+  }
+}
+
 .themeCycler {
   display: flex;
   align-items: center;

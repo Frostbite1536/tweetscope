@@ -21,21 +21,36 @@
 
 /* Hero */
 .hero {
+  position: relative;
   text-align: center;
-  margin-bottom: var(--space-10);
-  animation: fadeInUp 0.4s ease-out both;
+  margin-bottom: var(--space-6);
+  padding: var(--space-4) 0 var(--space-2);
+  animation: fadeInUp 0.5s ease-out both;
+  overflow: hidden;
+}
+
+.heroWatermark {
+  display: block;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto -34px;
+  opacity: 0.8;
+  pointer-events: none;
+  user-select: none;
 }
 
 .heroTitle {
+  position: relative;
   font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 2rem;
+  font-size: 2.75rem;
   font-weight: 400;
   color: var(--text-color-text-main);
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--space-1);
   letter-spacing: -0.02em;
 }
 
 .heroSubtitle {
+  position: relative;
   font-family: 'Instrument Sans', sans-serif;
   font-size: 1rem;
   font-weight: 400;
@@ -56,9 +71,9 @@
 }
 
 .sectionTitle {
-  font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 1.15rem;
-  font-weight: 400;
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 600;
   color: var(--text-color-text-main);
   margin: 0;
 }
@@ -100,70 +115,113 @@
 .collectionsList {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-8) var(--space-6);
 }
 
 /* Collection card */
 .collectionCard {
   position: relative;
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border-subtle);
   border-radius: var(--radius-lg);
-  box-shadow: var(--glass-shadow);
   padding: var(--space-4);
-  transition: box-shadow var(--transition-normal), transform var(--transition-normal);
   animation: fadeInUp 0.35s ease-out both;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    background: linear-gradient(135deg, var(--glass-glow), transparent);
-    transition: opacity var(--transition-fast);
-    pointer-events: none;
-    border-radius: inherit;
-  }
+  transition: box-shadow var(--transition-normal);
+  cursor: pointer;
 
   &:hover {
-    box-shadow: var(--glass-shadow-hover);
-    transform: translateY(-1px);
-
-    &::before {
-      opacity: 1;
-    }
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   }
 }
 
-/* Stagger card animations */
+.cardLink {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
 .collectionCard:nth-child(1) { animation-delay: 0.05s; }
 .collectionCard:nth-child(2) { animation-delay: 0.1s; }
 .collectionCard:nth-child(3) { animation-delay: 0.15s; }
 .collectionCard:nth-child(4) { animation-delay: 0.2s; }
 .collectionCard:nth-child(5) { animation-delay: 0.25s; }
 
-.collectionHeader {
+/* Scope thumbnails — the hero */
+.scopeGrid {
   display: flex;
-  align-items: center;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: var(--space-3);
-  margin-bottom: var(--space-2);
+
+  & + & {
+    margin-top: var(--space-3);
+  }
+}
+
+.scopeCard {
   position: relative;
   z-index: 1;
+  flex: 1 1 auto;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform var(--transition-normal);
+
+  &:hover {
+    transform: scale(1.015);
+
+    .scopeImage {
+      filter: saturate(1.1);
+    }
+  }
+}
+
+.scopeImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  transition: filter var(--transition-normal);
+}
+
+.scopeLabel {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-color-text-subtle);
+  padding: 0 var(--space-1) var(--space-1);
+}
+
+.scopeDescription {
+  font-size: 0.75rem;
+  color: var(--text-color-text-subtle);
+  line-height: 1.4;
+  padding: 0 var(--space-1);
+}
+
+/* Profile header */
+.collectionHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .avatar,
 .avatarFallback {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-full);
   flex-shrink: 0;
 }
 
 .avatar {
   object-fit: cover;
-  border: 1px solid var(--glass-border-subtle);
 }
 
 .avatarFallback {
@@ -173,20 +231,17 @@
   background: var(--neutrals-color-neutral-1);
   color: var(--text-color-text-subtle);
   font-family: 'Instrument Sans', sans-serif;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
-.collectionHeaderText {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+.collectionMeta {
   min-width: 0;
 }
 
 .collectionName {
   font-family: 'Instrument Sans', sans-serif;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-color-text-main);
   margin: 0;
@@ -194,63 +249,25 @@
 
 .collectionUsername {
   font-weight: 400;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--text-color-text-subtle);
 }
 
 .collectionStats {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--text-color-text-subtle);
+  margin-left: var(--space-1);
 }
 
-/* Scope thumbnails grid */
-.scopeGrid {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  position: relative;
-  z-index: 1;
-
-  & + & {
-    margin-top: var(--space-3);
-  }
-}
-
-.scopeCard {
-  flex: 1 1 auto;
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  text-decoration: none;
-  color: inherit;
-  border-radius: var(--radius-md);
-  transition: opacity var(--transition-fast);
-
-  &:hover {
-    opacity: 0.85;
-  }
-}
-
-.scopeLabel {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-color-text-subtle);
-}
-
-.scopeImage {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--glass-border-subtle);
-}
-
-.scopeDescription {
-  font-size: 0.8rem;
-  color: var(--text-color-text-subtle);
+.collectionBio {
+  font-size: 0.75rem;
+  color: var(--text-color-text-neutral);
+  margin: 2px 0 0;
   line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 
@@ -298,10 +315,6 @@
 
   .heroTitle {
     font-size: 1.25rem;
-  }
-
-  .collectionCard {
-    padding: var(--space-3);
   }
 
   .sectionHeader {

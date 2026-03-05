@@ -12,6 +12,9 @@
     border-color: var(--borders-color-border-2);
   }
 
+  // No need for conditional parent radius — overflow: hidden clips children.
+  // But children need explicit radius:0 to override the global button{border-radius:8px}.
+
   &.borderless {
     border: none;
     border-radius: 0;
@@ -31,7 +34,12 @@
   text-align: left;
   background: color-mix(in srgb, var(--semantic-color-semantic-info) 6%, transparent);
   border: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0; // rounded top, flat bottom
   border-bottom: 1px solid var(--borders-color-border-3);
+
+  .borderless & {
+    border-radius: 0; // parent has no radius in borderless mode
+  }
   cursor: pointer;
   font-family: 'Instrument Sans', system-ui, sans-serif;
   font-size: 12px;
@@ -141,7 +149,12 @@
   padding: var(--space-2) var(--space-4);
   background: color-mix(in srgb, var(--semantic-color-semantic-info) 6%, transparent);
   border: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md); // flat top, rounded bottom
   border-top: 1px solid var(--borders-color-border-3);
+
+  .borderless & {
+    border-radius: 0; // parent has no radius in borderless mode
+  }
   cursor: pointer;
   font-family: 'Instrument Sans', system-ui, sans-serif;
   font-size: 12px;

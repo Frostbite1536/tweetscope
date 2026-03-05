@@ -91,12 +91,8 @@ function ScopeThumbnail({ datasetId, scopeId, className, alt, fallbackSrc }) {
 
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    ctx.fillStyle = isDark ? 'rgba(17, 24, 39, 0.92)' : 'rgba(248, 244, 236, 0.9)';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.11)' : 'rgba(45, 35, 24, 0.12)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, CANVAS_WIDTH - 2, CANVAS_HEIGHT - 2);
+    // Transparent background — let page bg show through; CSS handles the border
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     if (!hasRenderablePoints) return;
 

@@ -1076,6 +1076,10 @@ function ExploreContent() {
 
   const mapViewportPaddingRight = isDesktopOverlay ? clampedSidebarWidth + 24 : 0;
   const visualizationViewportWidth = Math.max(320, width - mapViewportPaddingRight);
+  const mapLoadingPlaceholderStyle = useMemo(
+    () => ({ width: `${Math.max(1, width - mapViewportPaddingRight)}px` }),
+    [width, mapViewportPaddingRight]
+  );
 
   useEffect(() => {
     hoverFocusViewportRef.current = {
@@ -1353,7 +1357,7 @@ function ExploreContent() {
                 highlightIndices={graphHighlightIndices}
               />
             ) : (
-              <div className="viz-loading-placeholder">
+              <div className="viz-loading-placeholder" style={mapLoadingPlaceholderStyle}>
                 <div className="viz-loading-spinner" />
               </div>
             )}

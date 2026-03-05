@@ -11,7 +11,7 @@
   border: 1px solid var(--glass-border-subtle);
   border-top: 2px solid var(--card-color, transparent);
   border-radius: var(--radius-md);
-  box-shadow: var(--glass-glow), var(--glass-shadow);
+  box-shadow: var(--glass-glow);
   cursor: pointer;
   text-align: left;
   width: 100%;
@@ -40,7 +40,7 @@
 
   &:hover {
     transform: translateY(-1px);
-    box-shadow: var(--glass-glow), var(--glass-shadow-hover);
+    box-shadow: var(--glass-glow);
     background: color-mix(in srgb, var(--card-color, transparent) 5%, var(--glass-bg));
   }
 
@@ -50,7 +50,6 @@
     background: color-mix(in srgb, var(--card-color, var(--interactions---primary-color-interaction-primary)) 8%, var(--glass-bg));
     box-shadow:
       var(--glass-glow),
-      var(--glass-shadow-hover),
       inset 0 0 20px color-mix(in srgb, var(--card-color, var(--interactions---primary-color-interaction-primary)) 8%, transparent);
   }
 
@@ -65,7 +64,7 @@
 
     &:hover {
       opacity: 0.8;
-      box-shadow: var(--glass-shadow);
+      box-shadow: var(--glass-glow);
     }
   }
 }
@@ -81,7 +80,7 @@
   flex: 1;
   font-family: 'Instrument Serif', Georgia, serif;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--text-color-text-main);
   line-height: 1.25;
   min-width: 0;
