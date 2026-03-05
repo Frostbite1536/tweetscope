@@ -1,7 +1,35 @@
 import { memo, useState, useCallback, useRef, useEffect } from 'react';
+import { Heart } from 'lucide-react';
 import styles from './TopicCard.module.scss';
 
-function TopicCard({ cluster, isActive, isUnclustered, onClick, clusterColor }) {
+function compactNumber(n) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}m`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(n);
+}
+
+function getMetric(cluster, sortMode) {
+  switch (sortMode) {
+    case 'popular': {
+      const v = cluster.cumulativeLikes || cluster.likes || 0;
+      return v ? { icon: 'heart', value: compactNumber(v) } : null;
+    }
+    case 'largest': {
+      const v = cluster.cumulativeCount || cluster.count || 0;
+      return v ? { icon: null, value: compactNumber(v) } : null;
+    }
+    default: {
+      // similar, az — show likes if available, otherwise count
+      const likes = cluster.cumulativeLikes || cluster.likes || 0;
+      if (likes) return { icon: 'heart', value: compactNumber(likes) };
+      const count = cluster.cumulativeCount || cluster.count || 0;
+      if (count) return { icon: null, value: compactNumber(count) };
+      return null;
+    }
+  }
+}
+
+function TopicCard({ cluster, isActive, isUnclustered, onClick, clusterColor, sortMode }) {
   const subClusters = cluster.children || [];
   const subsRef = useRef(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
@@ -22,6 +50,8 @@ function TopicCard({ cluster, isActive, isUnclustered, onClick, clusterColor }) 
     setIsSubsExpanded((prev) => !prev);
   }, []);
 
+  const metric = getMetric(cluster, sortMode);
+
   return (
     <button
       className={`${styles.card} ${isActive ? styles.active : ''} ${isUnclustered ? styles.unclustered : ''}`}
@@ -32,7 +62,12 @@ function TopicCard({ cluster, isActive, isUnclustered, onClick, clusterColor }) 
     >
       <div className={styles.header}>
         <span className={styles.label}>{cluster.label}</span>
-        <span className={styles.count}>{cluster.cumulativeCount || cluster.count || 0}</span>
+        {metric && (
+          <span className={styles.count}>
+            {metric.icon === 'heart' && <Heart size={10} className={styles.metricIcon} />}
+            {metric.value}
+          </span>
+        )}
       </div>
       {subClusters.length > 0 && (
         <>

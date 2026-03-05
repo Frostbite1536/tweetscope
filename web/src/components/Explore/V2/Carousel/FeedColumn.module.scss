@@ -10,7 +10,7 @@
   /* Focus states — match prototype scales */
   &.focused {
     opacity: 1;
-    transform: scale(1.05);
+    transform: scale(1);
   }
 
   &.adjacent {
@@ -49,8 +49,16 @@
 
 .columnHeaderTop {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
+}
+
+.colorDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--col-color, var(--borders-color-border-2));
+  flex-shrink: 0;
 }
 
 .descriptionWrap {

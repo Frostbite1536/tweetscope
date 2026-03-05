@@ -5,6 +5,11 @@
   z-index: 120;
 }
 
+.overlay {
+  top: 8px;
+  left: 10px;
+}
+
 .contextBar {
   display: inline-flex;
   align-items: center;
@@ -18,27 +23,8 @@
   box-shadow: var(--glass-glow);
 }
 
-.backIcon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  background: none;
-  border: none;
-  border-right: 1px solid var(--glass-border-subtle);
-  border-radius: 0;
-  margin-right: var(--space-1);
-  padding-right: var(--space-1);
-  cursor: pointer;
-  color: var(--text-color-text-subtle);
-  transition: color var(--transition-fast);
-  flex-shrink: 0;
-}
-
-.backIcon:hover {
-  color: var(--text-color-text-main);
+.overlayContextBar {
+  padding: 5px var(--space-2);
 }
 
 .profilePill {

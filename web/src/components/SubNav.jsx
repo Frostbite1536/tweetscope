@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ChevronsLeft, ChevronDown, House } from 'lucide-react';
+import { ArrowLeft, ChevronDown, House } from 'lucide-react';
 import PropTypes from 'prop-types';
 import styles from './SubNav.module.css';
 
@@ -9,11 +9,19 @@ function deriveCollectionLabel(dataset) {
   return `${name}'s ${isLikes ? 'likes' : 'tweets'}`;
 }
 
-const SubNav = ({ dataset, scope, scopes, onScopeChange, onBack }) => {
+const SubNav = ({ dataset, scope, scopes, onScopeChange, onBack, overlay = false }) => {
+  const subHeaderClassName = overlay
+    ? `${styles.subHeaderContainer} ${styles.overlay}`
+    : styles.subHeaderContainer;
+
+  const contextBarClassName = overlay
+    ? `${styles.contextBar} ${styles.overlayContextBar}`
+    : styles.contextBar;
+
   if (!dataset) {
     return (
-      <div className={styles.subHeaderContainer}>
-        <div className={styles.contextBar}>
+      <div className={subHeaderClassName}>
+        <div className={contextBarClassName}>
           <div className={styles.scopeBadge}>
             <span className={styles.scopeValue}>Loading...</span>
           </div>
@@ -34,16 +42,16 @@ const SubNav = ({ dataset, scope, scopes, onScopeChange, onBack }) => {
   const label = deriveCollectionLabel(dataset);
 
   return (
-    <div className={styles.subHeaderContainer}>
-      <div className={styles.contextBar}>
-        <Link to="/" className={`${styles.actionButton} ${styles.homeButton}`} aria-label="All maps" title="All maps">
-          <House size={14} />
-        </Link>
-
-        {onBack && (
-          <button className={styles.backIcon} onClick={onBack} aria-label="Back to map">
-            <ChevronsLeft size={16} />
+    <div className={subHeaderClassName}>
+      <div className={contextBarClassName}>
+        {onBack ? (
+          <button className={`${styles.actionButton} ${styles.homeButton}`} onClick={onBack} aria-label="Back to map" title="Back to map">
+            <ArrowLeft size={14} />
           </button>
+        ) : (
+          <Link to="/" className={`${styles.actionButton} ${styles.homeButton}`} aria-label="All maps" title="All maps">
+            <House size={14} />
+          </Link>
         )}
         <div className={styles.profilePill} title={label}>
           {avatarUrl && (
@@ -79,6 +87,7 @@ SubNav.propTypes = {
   scopes: PropTypes.array,
   onScopeChange: PropTypes.func,
   onBack: PropTypes.func,
+  overlay: PropTypes.bool,
 };
 
 export default SubNav;

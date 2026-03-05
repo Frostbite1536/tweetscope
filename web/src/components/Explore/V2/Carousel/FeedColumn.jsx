@@ -7,6 +7,9 @@ import TweetCard from '../TweetFeed/TweetCard';
 import ThreadGroup from '../TweetFeed/ThreadGroup';
 import StandaloneWithAncestors from '../TweetFeed/StandaloneWithAncestors';
 import SubClusterPills from './SubClusterPills';
+import { useClusterColorMap } from '../../../../contexts/ClusterColorContext';
+import { resolveClusterColorCSS } from '../../../../hooks/useClusterColors';
+import { useColorMode } from '../../../../hooks/useColorMode';
 import styles from './FeedColumn.module.scss';
 
 const FOCUS_TO_PRIORITY = {
@@ -39,6 +42,11 @@ function FeedColumn({
   onViewQuotes,
 }) {
   const { scope } = useScope();
+  const colorMap = useClusterColorMap();
+  const { isDark } = useColorMode();
+  const clusterColor = cluster?.cluster != null
+    ? resolveClusterColorCSS(colorMap, cluster.cluster, isDark)
+    : undefined;
   const [descExpanded, setDescExpanded] = useState(false);
   const [renderBudget, setRenderBudget] = useState(INITIAL_RENDER_BUDGET);
   const sentinelRef = useRef(null);
@@ -114,8 +122,9 @@ function FeedColumn({
       className={`${styles.columnOuter} ${styles[focusState]}`}
       style={{ width: columnWidth, minWidth: columnWidth }}
     >
-      <div className={styles.columnHeader}>
+      <div className={styles.columnHeader} style={{ '--col-color': clusterColor || 'transparent' }}>
         <div className={styles.columnHeaderTop}>
+          <span className={styles.colorDot} />
           <h3 className={styles.clusterLabel}>{cluster?.label}</h3>
           {cluster?.count > 0 && (
             <span className={styles.clusterCount}>{cluster.count} tweets</span>

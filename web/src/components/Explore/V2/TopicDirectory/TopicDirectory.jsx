@@ -198,7 +198,7 @@ function TopicDirectory({
             >
               <option value="popular">Most popular</option>
               <option value="similar">By similarity</option>
-              <option value="largest">Largest first</option>
+              <option value="largest">Most tweets</option>
               <option value="az">A–Z</option>
             </select>
             <ChevronDown size={12} className={styles.sortIcon} />
@@ -242,6 +242,7 @@ function TopicDirectory({
                     isActive={index === selectedClusterIndex}
                     onClick={() => handleCardClick(index)}
                     clusterColor={getClusterColor(cluster.cluster)}
+                    sortMode={sortMode}
                   />
                 </div>
               );
