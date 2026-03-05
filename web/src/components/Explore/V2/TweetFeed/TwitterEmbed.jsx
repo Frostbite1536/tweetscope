@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, memo } from 'react';
+import { useEffect, useRef, useState, memo, useId } from 'react';
 import PropTypes from 'prop-types';
+import { embedScheduler, EMBED_PRIORITY } from '../../../../lib/embedScheduler';
+import { useEmbedPriority } from '../../../../contexts/EmbedPriorityContext';
 import styles from './TwitterEmbed.module.scss';
 
 // Track if widgets.js is loaded globally
@@ -127,6 +129,8 @@ TwitterEmbed.propTypes = {
   hideConversation: PropTypes.bool,
   hideMedia: PropTypes.bool,
   compact: PropTypes.bool,
+  priority: PropTypes.number,
+  allowDuringActivity: PropTypes.bool,
   onLoad: PropTypes.func,
   onError: PropTypes.func,
 };
@@ -138,15 +142,25 @@ function TwitterEmbed({
   hideConversation = true,
   hideMedia = false,
   compact = false,
+  priority: propPriority,
+  allowDuringActivity: propAllowDuringActivity,
   onLoad,
   onError,
 }) {
   const containerRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const instanceId = useId();
+  const contextPriority = useEmbedPriority();
 
   // Resolve tweet ID from either prop
   const resolvedId = tweetId || extractTweetId(tweetUrl);
+
+  // Resolve priority: explicit prop > context > FAR
+  const resolvedPriority = propPriority ?? contextPriority;
+  // User-initiated embeds bypass activity gate by default
+  const resolvedAllowDuringActivity =
+    propAllowDuringActivity ?? (resolvedPriority >= EMBED_PRIORITY.USER_INITIATED);
 
   useEffect(() => {
     if (!resolvedId || !containerRef.current) {
@@ -155,8 +169,8 @@ function TwitterEmbed({
       return;
     }
 
-    let cancelled = false;
     const container = containerRef.current;
+    const schedulerKey = `${instanceId}:${resolvedId}`;
 
     // Clear previous content
     container.innerHTML = '';
@@ -165,15 +179,9 @@ function TwitterEmbed({
 
     const EMBED_TIMEOUT_MS = 15000;
 
-    loadWidgets().then((twttr) => {
-      if (cancelled || !twttr) {
-        if (!cancelled) {
-          setError('Failed to load Twitter widgets');
-          setLoading(false);
-          onError?.();
-        }
-        return;
-      }
+    const run = async () => {
+      const twttr = await loadWidgets();
+      if (!twttr) throw new Error('Failed to load Twitter widgets');
 
       // Only specify non-default widget params. Invalid values can cause embeds to hang.
       const options = {
@@ -186,39 +194,42 @@ function TwitterEmbed({
 
       const embedPromise = twttr.widgets?.createTweet?.(resolvedId, container, options);
       if (!embedPromise || typeof embedPromise.then !== 'function') {
-        setError('Twitter widgets not ready');
-        setLoading(false);
-        onError?.();
-        return;
+        throw new Error('Twitter widgets not ready');
       }
 
       const timeoutPromise = new Promise((_, reject) => {
         window.setTimeout(() => reject(new Error('Embed timeout')), EMBED_TIMEOUT_MS);
       });
 
-      Promise.race([embedPromise, timeoutPromise])
-        .then((el) => {
-          if (cancelled) return;
-          setLoading(false);
-          if (el) {
-            onLoad?.();
-          } else {
-            setError('Tweet not found or unavailable');
-            onError?.();
-          }
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setError('Failed to embed tweet');
-          setLoading(false);
+      return Promise.race([embedPromise, timeoutPromise]);
+    };
+
+    embedScheduler
+      .schedule(schedulerKey, run, {
+        priority: resolvedPriority,
+        allowDuringActivity: resolvedAllowDuringActivity,
+      })
+      .then((el) => {
+        setLoading(false);
+        if (el) {
+          onLoad?.();
+        } else {
+          setError('Tweet not found or unavailable');
           onError?.();
-        });
-    });
+        }
+      })
+      .catch((err) => {
+        // Cancelled by cleanup — component is unmounting or re-rendering
+        if (err?.name === 'AbortError') return;
+        setError('Failed to embed tweet');
+        setLoading(false);
+        onError?.();
+      });
 
     return () => {
-      cancelled = true;
+      embedScheduler.cancel(schedulerKey);
     };
-  }, [resolvedId, theme, hideConversation, hideMedia, onLoad, onError]);
+  }, [resolvedId, theme, hideConversation, hideMedia, onLoad, onError, instanceId, resolvedPriority, resolvedAllowDuringActivity]);
 
   if (!resolvedId) {
     return null;

@@ -9,6 +9,7 @@ import { urlResolver } from '../../../../lib/urlResolver';
 import { parseJsonArray, classifyUrls } from '../../../../lib/tweetUrls';
 import { linkifyText } from '../../../../lib/linkifyText';
 import TwitterEmbed from './TwitterEmbed';
+import { EMBED_PRIORITY } from '../../../../lib/embedScheduler';
 import ConnectionBadges from '../ConnectionBadges';
 import styles from './TweetCard.module.scss';
 
@@ -365,6 +366,8 @@ function TweetCard({
                 tweetUrl={tweetUrl}
                 theme={colorMode}
                 hideConversation={true}
+                priority={EMBED_PRIORITY.USER_INITIATED}
+                allowDuringActivity={true}
               />
             </div>
           )}

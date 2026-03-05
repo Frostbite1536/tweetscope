@@ -16,6 +16,7 @@ const MOTION_INITIAL = { opacity: 0, y: 20 };
 const MOTION_ANIMATE = { opacity: 1, y: 0 };
 const MOTION_TRANSITION = { duration: 0.25 };
 const MOTION_STYLE = { flexShrink: 0 };
+const EMPTY_TWEETS = [];
 
 const getSpacerWidth = () => {
   const targetStart = (window.innerWidth - COLUMN_WIDTH) / 2;
@@ -200,7 +201,7 @@ function FeedCarousel({
         {topLevelClusters.slice(visibleStart, visibleEnd + 1).map((cluster, i) => {
           const index = visibleStart + i;
           const col = columnData[index] || {};
-          const tweets = columnRowsMap[index] || [];
+          const tweets = columnRowsMap[index] || EMPTY_TWEETS;
           const distance = Math.abs(index - clampedFocusedIndex);
           const isInViewRadius = distance <= VISIBLE_COLUMN_RADIUS;
 

@@ -2,6 +2,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import ThreadView from '../ThreadView/ThreadView';
 import { useScope } from '@/contexts/ScopeContext';
+import { EmbedPriorityProvider } from '../../../../contexts/EmbedPriorityContext';
+import { EMBED_PRIORITY } from '../../../../lib/embedScheduler';
 import styles from './ThreadOverlay.module.scss';
 
 export default function ThreadOverlay({
@@ -40,21 +42,23 @@ export default function ThreadOverlay({
                 <X size={16} />
               </button>
             </div>
-            <div className={styles.content}>
-              <ThreadView
-                datasetId={dataset?.id}
-                scopeId={scope?.id}
-                tweetId={tweetId}
-                currentLsIndex={currentLsIndex}
-                nodeStats={nodeStats}
-                clusterMap={clusterMap}
-                dataset={dataset}
-                onBack={onClose}
-                onViewThread={onViewThread}
-                onViewQuotes={onViewQuotes}
-                showHeader={false}
-              />
-            </div>
+            <EmbedPriorityProvider value={EMBED_PRIORITY.USER_INITIATED}>
+              <div className={styles.content}>
+                <ThreadView
+                  datasetId={dataset?.id}
+                  scopeId={scope?.id}
+                  tweetId={tweetId}
+                  currentLsIndex={currentLsIndex}
+                  nodeStats={nodeStats}
+                  clusterMap={clusterMap}
+                  dataset={dataset}
+                  onBack={onClose}
+                  onViewThread={onViewThread}
+                  onViewQuotes={onViewQuotes}
+                  showHeader={false}
+                />
+              </div>
+            </EmbedPriorityProvider>
           </motion.aside>
         </motion.div>
       )}

@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { useColorMode } from '../../../../hooks/useColorMode';
+import { EMBED_PRIORITY } from '../../../../lib/embedScheduler';
 import TweetCard from '../TweetFeed/TweetCard';
 import TwitterEmbed from '../TweetFeed/TwitterEmbed';
 import styles from './ThreadView.module.scss';
@@ -69,6 +70,8 @@ function ThreadNode({
                 theme={colorMode}
                 hideConversation
                 compact
+                priority={EMBED_PRIORITY.USER_INITIATED}
+                allowDuringActivity={true}
               />
             </div>
           ) : (

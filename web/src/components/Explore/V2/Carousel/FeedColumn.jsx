@@ -1,11 +1,19 @@
 import { useState, useCallback, useMemo, useRef, useEffect, memo } from 'react';
 import { groupRowsByThread } from '../../../../lib/groupRowsByThread';
+import { EMBED_PRIORITY } from '../../../../lib/embedScheduler';
 import { useScope } from '../../../../contexts/ScopeContext';
+import { EmbedPriorityProvider } from '../../../../contexts/EmbedPriorityContext';
 import TweetCard from '../TweetFeed/TweetCard';
 import ThreadGroup from '../TweetFeed/ThreadGroup';
 import StandaloneWithAncestors from '../TweetFeed/StandaloneWithAncestors';
 import SubClusterPills from './SubClusterPills';
 import styles from './FeedColumn.module.scss';
+
+const FOCUS_TO_PRIORITY = {
+  focused: EMBED_PRIORITY.FOCUSED,
+  adjacent: EMBED_PRIORITY.ADJACENT,
+  far: EMBED_PRIORITY.FAR,
+};
 
 const INITIAL_RENDER_BUDGET = 10;
 const RENDER_CHUNK_SIZE = 20;
@@ -98,7 +106,10 @@ function FeedColumn({
     return () => observer.disconnect();
   }, [hasMoreToReveal]);
 
+  const embedPriority = FOCUS_TO_PRIORITY[focusState] ?? EMBED_PRIORITY.FAR;
+
   return (
+    <EmbedPriorityProvider value={embedPriority}>
     <div
       className={`${styles.columnOuter} ${styles[focusState]}`}
       style={{ width: columnWidth, minWidth: columnWidth }}
@@ -218,6 +229,7 @@ function FeedColumn({
         </div>
       </div>
     </div>
+    </EmbedPriorityProvider>
   );
 }
 
