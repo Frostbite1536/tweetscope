@@ -13,7 +13,7 @@ from latentscope.pipeline.contracts.scope_input import (
     normalize_serving_types,
     validate_scope_input_df,
 )
-from latentscope.pipeline.stages.scope_labels import build_layer0_point_mappings
+from latentscope.pipeline.stages.scope_labels import build_deepest_point_mappings
 from latentscope.pipeline.stages.tiles import make_tiles
 
 
@@ -38,7 +38,7 @@ def build_scope_points_df(
     cluster_df = cluster_df.copy()
 
     if hierarchical:
-        point_to_cluster, point_to_label = build_layer0_point_mappings(cluster_labels_df)
+        point_to_cluster, point_to_label = build_deepest_point_mappings(cluster_labels_df)
         cluster_df["cluster"] = cluster_df.index.map(point_to_cluster).fillna("unknown")
         cluster_df["label"] = cluster_df.index.map(point_to_label).fillna("Unknown")
     else:

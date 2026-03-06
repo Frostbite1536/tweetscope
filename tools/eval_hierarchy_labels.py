@@ -128,26 +128,49 @@ def eval_structure(labels_df, scope_meta, scope_df):
     results["wrong_layer_parents"] = wrong_layer_parents
     results["parent_issues"] = parent_details
 
+    # --- Layer contiguity ---
+    # Verify every layer from 0..max_layer has at least one cluster
+    contiguity_gaps = []
+    if layers:
+        for expected_layer in range(max_layer + 1):
+            if expected_layer not in layers:
+                contiguity_gaps.append(expected_layer)
+    results["layer_contiguity_gaps"] = contiguity_gaps
+
     # --- Coverage ---
     total_rows = scope_meta.get("rows", len(scope_df))
 
-    # Count assigned rows from layer 0 clusters
-    layer0_assigned = sum(
-        clusters[cid]["count"] for cid in layers.get(0, [])
-    )
+    # Count assigned rows from deepest (leaf) clusters.
+    # After renumbering, the minimum layer may not be 0 on every branch,
+    # so we find leaf clusters (those not appearing as any other cluster's parent).
+    all_parent_ids = set()
+    for cid, c in clusters.items():
+        if cid == "unknown":
+            continue
+        p = c.get("parent_cluster")
+        if p is not None:
+            all_parent_ids.add(p)
+
+    leaf_cluster_ids = [
+        cid for cid in clusters if cid != "unknown" and cid not in all_parent_ids
+    ]
+    deepest_assigned = sum(clusters[cid]["count"] for cid in leaf_cluster_ids)
+
     unknown_count = clusters.get("unknown", {}).get("count", 0)
 
     # Also check scope parquet for actual unknown assignment
     if "cluster" in scope_df.columns:
         actual_unknown = int((scope_df["cluster"] == "unknown").sum())
     else:
-        actual_unknown = total_rows - layer0_assigned
+        actual_unknown = total_rows - deepest_assigned
 
     results["total_rows"] = total_rows
-    results["layer0_assigned"] = layer0_assigned
+    results["deepest_assigned"] = deepest_assigned
+    # Keep backward compat key
+    results["layer0_assigned"] = deepest_assigned
     results["unknown_count_metadata"] = unknown_count
     results["unknown_count_actual"] = actual_unknown
-    results["coverage_gap"] = total_rows - layer0_assigned - actual_unknown
+    results["coverage_gap"] = total_rows - deepest_assigned - actual_unknown
     results["unknown_count_mismatch"] = unknown_count != actual_unknown
 
     # --- Duplicate assignment check ---
@@ -273,13 +296,14 @@ def format_markdown(report):
         f"| Invalid parent refs | {s['invalid_parent_refs']} |",
         f"| Orphan nodes | {s['orphan_nodes']} |",
         f"| Wrong layer parents | {s['wrong_layer_parents']} |",
+        f"| Layer contiguity gaps | {s.get('layer_contiguity_gaps', [])} |",
         f"| Duplicate assignments | {s['duplicate_assignments']} |",
         "",
         "## Coverage",
         f"| Metric | Value |",
         f"|--------|-------|",
         f"| Total rows | {s['total_rows']} |",
-        f"| Layer 0 assigned | {s['layer0_assigned']} |",
+        f"| Deepest assigned | {s.get('deepest_assigned', s['layer0_assigned'])} |",
         f"| Unknown (metadata) | {s['unknown_count_metadata']} |",
         f"| Unknown (actual) | {s['unknown_count_actual']} |",
         f"| Coverage gap | {s['coverage_gap']} |",

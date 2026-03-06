@@ -89,6 +89,10 @@ def run_toponymy_labeling(
         sync_llm: If True, force synchronous LLM wrapper
         adaptive_exemplars: If True, adapt exemplar/keyphrase counts to cluster sizes
     """
+    # Merge stderr into stdout so tqdm progress bars and warnings are captured
+    # in log files and background task output (tqdm writes to stderr by default).
+    sys.stderr = sys.stdout
+
     from toponymy import Toponymy, ToponymyClusterer
     from toponymy.embedding_wrappers import VoyageAIEmbedder
 
@@ -241,9 +245,11 @@ def run_toponymy_labeling(
     if collapsed_count > 0:
         print(f"  Collapsed {collapsed_count} single-child hierarchy nodes")
 
-    print(f"\nGenerated {len(hierarchical_labels)} cluster labels across {len(topic_model.topic_names_)} layers:")
-    for layer_idx, layer_names in enumerate(topic_model.topic_names_):
-        print(f"  Layer {layer_idx}: {len(layer_names)} topics")
+    post_layers = collapse_info.get("post_collapse_layer_counts", {})
+    num_post = collapse_info.get("post_collapse_num_layers", len(topic_model.topic_names_))
+    print(f"\nGenerated {len(hierarchical_labels)} cluster labels across {num_post} layers (pre-collapse: {len(topic_model.topic_names_)}):")
+    for layer_num in sorted(post_layers.keys()):
+        print(f"  Layer {layer_num}: {post_layers[layer_num]} topics")
 
     # Save results
     output_id = output_id or generate_output_id(dataset_path)
@@ -455,6 +461,70 @@ def _collapse_single_child_nodes(
     return collapsed, info
 
 
+def _renumber_layers(
+    labels: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """
+    Renumber layers top-down so every parent-child edge spans exactly one layer.
+
+    After single-child collapse, a child at original layer 0 might point to a
+    parent at original layer 3 (because layers 1-2 were collapsed away).  This
+    function assigns contiguous layer numbers starting from the roots downward:
+      roots  → max surviving depth
+      leaves → 0 (or the shallowest surviving depth on that branch)
+
+    Mutates ``labels`` in place and returns a summary dict.
+    """
+    by_id: dict[str, dict[str, Any]] = {
+        str(row["cluster"]): row for row in labels
+    }
+
+    # Build parent→children adjacency from surviving nodes.
+    children_map: dict[str, list[str]] = {}
+    roots: list[str] = []
+    for row in labels:
+        cid = str(row["cluster"])
+        pid = row.get("parent_cluster")
+        if pid is None or str(pid) not in by_id:
+            roots.append(cid)
+        else:
+            children_map.setdefault(str(pid), []).append(cid)
+
+    # Compute max depth from each root via DFS to determine its layer number.
+    def _max_depth(node_id: str) -> int:
+        children = children_map.get(node_id, [])
+        if not children:
+            return 0
+        return 1 + max(_max_depth(c) for c in children)
+
+    global_max_depth = max((_max_depth(r) for r in roots), default=0)
+
+    # BFS from roots, assigning layers top-down.
+    from collections import deque
+
+    queue: deque[tuple[str, int]] = deque()
+    for r in roots:
+        by_id[r]["layer"] = global_max_depth
+        queue.append((r, global_max_depth))
+
+    while queue:
+        node_id, node_layer = queue.popleft()
+        for child_id in children_map.get(node_id, []):
+            by_id[child_id]["layer"] = node_layer - 1
+            queue.append((child_id, node_layer - 1))
+
+    # Compute post-collapse layer counts.
+    layer_counts: dict[int, int] = {}
+    for row in labels:
+        layer = row["layer"]
+        layer_counts[layer] = layer_counts.get(layer, 0) + 1
+
+    return {
+        "num_layers": global_max_depth + 1,
+        "layer_counts": layer_counts,
+    }
+
+
 def build_hierarchical_labels(topic_model, clusterable_vectors, texts):
     """
     Build hierarchical cluster labels from Toponymy results.
@@ -580,6 +650,12 @@ def build_hierarchical_labels(topic_model, clusterable_vectors, texts):
             entry["parent_cluster"] = None  # Fix dangling ref
 
     collapsed_labels, collapse_info = _collapse_single_child_nodes(hierarchical_labels)
+
+    # Renumber layers so every parent-child edge spans exactly one layer.
+    renumber_info = _renumber_layers(collapsed_labels)
+    collapse_info["post_collapse_num_layers"] = renumber_info["num_layers"]
+    collapse_info["post_collapse_layer_counts"] = renumber_info["layer_counts"]
+
     return collapsed_labels, collapse_info
 
 
@@ -641,9 +717,19 @@ def save_hierarchical_labels(
         "max_concurrent_requests": max_concurrent_requests,
         "min_clusters": min_clusters,
         "base_min_cluster_size": base_min_cluster_size,
-        "num_layers": len(topic_model.topic_names_),
+        "num_layers_pre_collapse": len(topic_model.topic_names_),
+        "layer_counts_pre_collapse": [len(names) for names in topic_model.topic_names_],
+        "num_layers": (
+            collapse_info.get("post_collapse_num_layers", len(topic_model.topic_names_))
+            if collapse_info
+            else len(topic_model.topic_names_)
+        ),
         "num_clusters": len(hierarchical_labels),
-        "layer_counts": [len(names) for names in topic_model.topic_names_],
+        "layer_counts": (
+            collapse_info.get("post_collapse_layer_counts", {})
+            if collapse_info
+            else {}
+        ),
     }
     if audit_info:
         meta["audit"] = audit_info
