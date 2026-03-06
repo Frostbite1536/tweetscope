@@ -121,6 +121,11 @@ function ExploreContent() {
     applyCluster,
     applyTimeRange,
     clearFilter,
+    setThreadMembership,
+    threadsOnlyAvailable,
+    threadsOnlyActive,
+    toggleThreadsOnly,
+    threadMembership,
   } = useFilter();
 
   // ====================================================================================================
@@ -143,12 +148,26 @@ function ExploreContent() {
 
   // Carousel data hook — only enabled in expanded mode
   const carouselEnabled = sidebarMode === SIDEBAR_MODES.EXPANDED;
-  const carouselData = useCarouselData(focusedClusterIndex, carouselEnabled);
+  // Pass thread membership to carousel/directory hooks only when active
+  const activeThreadMembership = threadsOnlyActive ? threadMembership : null;
+  const carouselData = useCarouselData(focusedClusterIndex, carouselEnabled, activeThreadMembership);
 
   // Topic directory data hook — also for expanded mode
   const [selectedTopicIndex, setSelectedTopicIndex] = useState(null);
   const [expandedView, setExpandedView] = useState('directory'); // 'directory' | 'carousel'
-  const topicDirData = useTopicDirectoryData(selectedTopicIndex, carouselEnabled);
+  const topicDirData = useTopicDirectoryData(selectedTopicIndex, carouselEnabled, activeThreadMembership);
+
+  useEffect(() => {
+    if (selectedTopicIndex == null) return;
+    if (selectedTopicIndex < topicDirData.topLevelClusters.length) return;
+    setSelectedTopicIndex(null);
+  }, [selectedTopicIndex, topicDirData.topLevelClusters.length]);
+
+  useEffect(() => {
+    if (!carouselData.topLevelClusters.length) return;
+    if (focusedClusterIndex < carouselData.topLevelClusters.length) return;
+    setFocusedClusterIndex(carouselData.topLevelClusters.length - 1);
+  }, [focusedClusterIndex, carouselData.topLevelClusters.length, setFocusedClusterIndex]);
 
   // Keep visualization-specific state
   const [hoveredIndex, setHoveredIndex] = useState(null);
@@ -168,6 +187,11 @@ function ExploreContent() {
   // Node link stats (thread/quote metadata per tweet)
   const { statsMap: nodeStats, tweetIdMap } = useNodeStats(dataset?.id, linksAvailable);
   const { colorMap } = useClusterColors(clusterLabels, clusterHierarchy);
+
+  // Push nodeStats into FilterContext to build chain-safe thread membership mask
+  useEffect(() => {
+    setThreadMembership(nodeStats);
+  }, [nodeStats, setThreadMembership]);
 
   // ====================================================================================================
   // Timeline state
@@ -1356,6 +1380,9 @@ function ExploreContent() {
                 onViewThread={handleViewThread}
                 onViewQuotes={handleViewQuotes}
                 highlightIndices={graphHighlightIndices}
+                threadsOnlyActive={threadsOnlyActive}
+                threadsOnlyAvailable={threadsOnlyAvailable}
+                onToggleThreadsOnly={toggleThreadsOnly}
               />
             ) : (
               <div className="viz-loading-placeholder" style={mapLoadingPlaceholderStyle}>

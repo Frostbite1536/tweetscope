@@ -70,7 +70,7 @@ function Dashboard({ appConfig = null }) {
       <div className={styles.hero}>
         <img src="/apple-touch-icon.png" alt="" className={styles.heroWatermark} />
         <h1 className={styles.heroTitle}>Tweetscope</h1>
-        <p className={styles.heroSubtitle}>Explore your knowledge maps</p>
+        <p className={styles.heroSubtitle}>Every tweet tells a story. See the whole picture.</p>
       </div>
 
       <div className={styles.collectionsSection}>

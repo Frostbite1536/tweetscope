@@ -58,6 +58,13 @@ const CHIP_DEFS = [
     getLabel: (s) => s.label,
     getStyle: () => chipStyle(ENGAGEMENT_COLOR),
   },
+  {
+    slot: FILTER_SLOT.THREAD,
+    icon: '⇶',
+    prefix: '',
+    getLabel: (s) => s.label,
+    getStyle: () => chipStyle(SEMANTIC_COLOR),
+  },
 ];
 
 const FilterChips = ({ filterSlots, onClearSlot, onClearAll }) => {

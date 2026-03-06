@@ -4,6 +4,7 @@ import { queryApi } from '@/lib/apiService';
 import { appQueryClient } from '@/query/client';
 import { queryKeys } from '@/query/keys';
 import { buildClusterFeedIndex, normalizeClusterId } from '@/lib/buildClusterFeedIndex';
+import { isThreadMember } from '@/lib/threadMembership';
 
 const ROWS_PER_PAGE = 30;
 const PREFETCH_RANGE = 2; // Fetch columns within focusedIndex +/- this range
@@ -11,7 +12,7 @@ const PREFETCH_RANGE = 2; // Fetch columns within focusedIndex +/- this range
 const EMPTY_CLUSTERS = [];
 const EMPTY_ROWS_MAP = {};
 
-export default function useCarouselData(focusedClusterIndex, enabled = true) {
+export default function useCarouselData(focusedClusterIndex, enabled = true, threadMembership = null) {
   const { clusterHierarchy, scopeRows, dataset, scope, clusterMap } = useScope();
 
   // Per-column state: { [clusterIndex]: { rows: [], page: 0, loading: false, hasMore: true } }
@@ -24,19 +25,33 @@ export default function useCarouselData(focusedClusterIndex, enabled = true) {
   columnDataRef.current = columnData;
 
   // Extract top-level clusters (roots of the hierarchy)
-  const topLevelClusters = useMemo(() => {
+  const allTopLevelClusters = useMemo(() => {
     if (!clusterHierarchy?.children) return EMPTY_CLUSTERS;
     return clusterHierarchy.children;
   }, [clusterHierarchy]);
 
   // Shared feed index — identity-cached at module level, no duplicate work
-  const feedIndex = useMemo(
-    () => enabled
-      ? buildClusterFeedIndex(topLevelClusters, scopeRows, clusterHierarchy)
-      : { clusterToTopLevel: {}, indicesByTopLevel: {}, descendantsByCluster: new Map() },
-    [enabled, topLevelClusters, scopeRows, clusterHierarchy]
+  const baseFeedIndex = useMemo(
+    () => buildClusterFeedIndex(allTopLevelClusters, scopeRows, clusterHierarchy),
+    [allTopLevelClusters, scopeRows, clusterHierarchy]
   );
-  const { clusterToTopLevel, indicesByTopLevel, descendantsByCluster } = feedIndex;
+  const { clusterToTopLevel, indicesByTopLevel: baseIndicesByTopLevel, descendantsByCluster } = baseFeedIndex;
+
+  const indicesByTopLevel = useMemo(() => {
+    if (!threadMembership) return baseIndicesByTopLevel;
+    const filtered = {};
+    for (let i = 0; i < allTopLevelClusters.length; i++) {
+      const clusterId = allTopLevelClusters[i].cluster;
+      const indices = baseIndicesByTopLevel[clusterId] || [];
+      filtered[clusterId] = indices.filter((lsIndex) => isThreadMember(threadMembership, lsIndex));
+    }
+    return filtered;
+  }, [allTopLevelClusters, baseIndicesByTopLevel, threadMembership]);
+
+  const topLevelClusters = useMemo(() => {
+    if (!threadMembership) return allTopLevelClusters;
+    return allTopLevelClusters.filter((cluster) => (indicesByTopLevel[cluster.cluster]?.length ?? 0) > 0);
+  }, [allTopLevelClusters, indicesByTopLevel, threadMembership]);
 
   // Fetch column data for a given column index
   const fetchColumnData = useCallback(
@@ -154,7 +169,7 @@ export default function useCarouselData(focusedClusterIndex, enabled = true) {
     setColumnData({});
     setActiveSubClusters({});
     fetchedRef.current = new Set();
-  }, [clusterHierarchy]);
+  }, [topLevelClusters]);
 
   // Sub-cluster filtering (client-side)
   const setSubClusterFilter = useCallback((columnIndex, subClusterId) => {
@@ -171,21 +186,37 @@ export default function useCarouselData(focusedClusterIndex, enabled = true) {
     for (const [indexStr, col] of Object.entries(columnData)) {
       const index = Number(indexStr);
       if (!col?.rows) { map[index] = []; continue; }
+
+      let rows = col.rows;
+
+      // Sub-cluster filter
       const activeSubCluster = activeSubClusters[index];
-      if (activeSubCluster === null || activeSubCluster === undefined) { map[index] = col.rows; continue; }
-      const activeId = normalizeClusterId(activeSubCluster);
-      const allowedIds = activeId === null
-        ? null
-        : descendantsByCluster.get(activeId) ?? new Set([activeId]);
-      if (!allowedIds) { map[index] = col.rows; continue; }
-      map[index] = col.rows.filter((row) => {
-        const info = clusterMap[row.ls_index] ?? clusterMap[String(row.ls_index)];
-        const rowClusterId = normalizeClusterId(info?.cluster ?? row.cluster);
-        return rowClusterId !== null && allowedIds.has(rowClusterId);
-      });
+      if (activeSubCluster !== null && activeSubCluster !== undefined) {
+        const activeId = normalizeClusterId(activeSubCluster);
+        const allowedIds = activeId === null
+          ? null
+          : descendantsByCluster.get(activeId) ?? new Set([activeId]);
+        if (allowedIds) {
+          rows = rows.filter((row) => {
+            const info = clusterMap[row.ls_index] ?? clusterMap[String(row.ls_index)];
+            const rowClusterId = normalizeClusterId(info?.cluster ?? row.cluster);
+            return rowClusterId !== null && allowedIds.has(rowClusterId);
+          });
+        }
+      }
+
+      // Thread membership filter
+      if (threadMembership) {
+        rows = rows.filter((row) => {
+          const lsIdx = Number(row.ls_index ?? row.index);
+          return isThreadMember(threadMembership, lsIdx);
+        });
+      }
+
+      map[index] = rows;
     }
     return map;
-  }, [enabled, columnData, activeSubClusters, clusterMap, descendantsByCluster]);
+  }, [enabled, columnData, activeSubClusters, clusterMap, descendantsByCluster, threadMembership]);
 
   return {
     topLevelClusters,

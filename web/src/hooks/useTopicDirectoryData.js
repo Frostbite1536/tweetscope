@@ -4,12 +4,13 @@ import { queryApi } from '@/lib/apiService';
 import { appQueryClient } from '@/query/client';
 import { queryKeys } from '@/query/keys';
 import { buildClusterFeedIndex, normalizeClusterId } from '@/lib/buildClusterFeedIndex';
+import { isThreadMember } from '@/lib/threadMembership';
 
 const ROWS_PER_PAGE = 30;
 
 const EMPTY_CLUSTERS = [];
 
-export default function useTopicDirectoryData(selectedClusterIndex, enabled = true) {
+export default function useTopicDirectoryData(selectedClusterIndex, enabled = true, threadMembership = null) {
   const { clusterHierarchy, scopeRows, dataset, scope, clusterMap } = useScope();
 
   // Per-cluster state: { rows, page, loading, hasMore }
@@ -20,19 +21,33 @@ export default function useTopicDirectoryData(selectedClusterIndex, enabled = tr
   const prevClusterIndexRef = useRef(null);
 
   // Extract top-level clusters (roots of the hierarchy)
-  const topLevelClusters = useMemo(() => {
+  const allTopLevelClusters = useMemo(() => {
     if (!clusterHierarchy?.children) return EMPTY_CLUSTERS;
     return clusterHierarchy.children;
   }, [clusterHierarchy]);
 
   // Shared feed index — identity-cached at module level, no duplicate work
-  const feedIndex = useMemo(
-    () => enabled
-      ? buildClusterFeedIndex(topLevelClusters, scopeRows, clusterHierarchy)
-      : { clusterToTopLevel: {}, indicesByTopLevel: {}, descendantsByCluster: new Map() },
-    [enabled, topLevelClusters, scopeRows, clusterHierarchy]
+  const baseFeedIndex = useMemo(
+    () => buildClusterFeedIndex(allTopLevelClusters, scopeRows, clusterHierarchy),
+    [allTopLevelClusters, scopeRows, clusterHierarchy]
   );
-  const { clusterToTopLevel, indicesByTopLevel, descendantsByCluster } = feedIndex;
+  const { clusterToTopLevel, indicesByTopLevel: baseIndicesByTopLevel, descendantsByCluster } = baseFeedIndex;
+
+  const indicesByTopLevel = useMemo(() => {
+    if (!threadMembership) return baseIndicesByTopLevel;
+    const filtered = {};
+    for (let i = 0; i < allTopLevelClusters.length; i++) {
+      const clusterId = allTopLevelClusters[i].cluster;
+      const indices = baseIndicesByTopLevel[clusterId] || [];
+      filtered[clusterId] = indices.filter((lsIndex) => isThreadMember(threadMembership, lsIndex));
+    }
+    return filtered;
+  }, [allTopLevelClusters, baseIndicesByTopLevel, threadMembership]);
+
+  const topLevelClusters = useMemo(() => {
+    if (!threadMembership) return allTopLevelClusters;
+    return allTopLevelClusters.filter((cluster) => (indicesByTopLevel[cluster.cluster]?.length ?? 0) > 0);
+  }, [allTopLevelClusters, indicesByTopLevel, threadMembership]);
 
   // Fetch data for the selected cluster
   const fetchFeedData = useCallback(
@@ -115,27 +130,41 @@ export default function useTopicDirectoryData(selectedClusterIndex, enabled = tr
     setFeedData({ rows: [], page: 0, loading: false, hasMore: true });
     setActiveSubCluster(null);
     prevClusterIndexRef.current = null;
-  }, [clusterHierarchy]);
+  }, [topLevelClusters]);
 
   // Sub-cluster filtering (client-side)
   const setSubClusterFilter = useCallback((subClusterId) => {
     setActiveSubCluster(subClusterId); // null = "all"
   }, []);
 
-  // Filtered rows based on active sub-cluster
+  // Filtered rows based on active sub-cluster + thread membership
   const filteredRows = useMemo(() => {
-    if (!feedData.rows.length) return feedData.rows;
-    if (activeSubCluster === null || activeSubCluster === undefined) return feedData.rows;
-    const activeId = normalizeClusterId(activeSubCluster);
-    if (activeId === null) return feedData.rows;
-    const allowedIds = descendantsByCluster.get(activeId) ?? new Set([activeId]);
+    let rows = feedData.rows;
+    if (!rows.length) return rows;
 
-    return feedData.rows.filter((row) => {
-      const info = clusterMap[row.ls_index] ?? clusterMap[String(row.ls_index)];
-      const rowClusterId = normalizeClusterId(info?.cluster ?? row.cluster);
-      return rowClusterId !== null && allowedIds.has(rowClusterId);
-    });
-  }, [feedData.rows, activeSubCluster, clusterMap, descendantsByCluster]);
+    // Sub-cluster filter
+    if (activeSubCluster !== null && activeSubCluster !== undefined) {
+      const activeId = normalizeClusterId(activeSubCluster);
+      if (activeId !== null) {
+        const allowedIds = descendantsByCluster.get(activeId) ?? new Set([activeId]);
+        rows = rows.filter((row) => {
+          const info = clusterMap[row.ls_index] ?? clusterMap[String(row.ls_index)];
+          const rowClusterId = normalizeClusterId(info?.cluster ?? row.cluster);
+          return rowClusterId !== null && allowedIds.has(rowClusterId);
+        });
+      }
+    }
+
+    // Thread membership filter
+    if (threadMembership) {
+      rows = rows.filter((row) => {
+        const lsIdx = Number(row.ls_index ?? row.index);
+        return isThreadMember(threadMembership, lsIdx);
+      });
+    }
+
+    return rows;
+  }, [feedData.rows, activeSubCluster, clusterMap, descendantsByCluster, threadMembership]);
 
   return {
     topLevelClusters,

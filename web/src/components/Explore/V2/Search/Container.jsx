@@ -19,7 +19,7 @@ import {
 // Ordered list of filter slots for backspace-to-clear (last active gets removed first)
 const CHIP_ORDER = [
   FILTER_SLOT.CLUSTER, FILTER_SLOT.SEARCH, FILTER_SLOT.COLUMN,
-  FILTER_SLOT.TIME_RANGE, FILTER_SLOT.ENGAGEMENT,
+  FILTER_SLOT.TIME_RANGE, FILTER_SLOT.ENGAGEMENT, FILTER_SLOT.THREAD,
 ];
 
 const Container = () => {

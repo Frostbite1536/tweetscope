@@ -96,6 +96,9 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   onViewThread,
   onViewQuotes,
   highlightIndices = null,
+  threadsOnlyActive = false,
+  threadsOnlyAvailable = false,
+  onToggleThreadsOnly,
 }, ref) {
   const { scopeRows, scope, clusterLabels, clusterHierarchy } = useScope();
   const { isDark: isDarkMode } = useColorMode();
@@ -129,6 +132,9 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   const isFilterActive = filterActive;
 
   // Points format: [x, y, selectionKey, activation, cluster]
+  // When thread filter is active, non-matching points are hard-hidden (alpha=0)
+  const nonMatchKey = threadsOnlyActive ? mapSelectionKey.hidden : mapSelectionKey.notSelected;
+
   const drawingPoints = useMemo(() => {
     return scopeRows.map((p, i) => {
       const cluster = p.cluster ?? 0;
@@ -155,7 +161,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
         return [
           p.x,
           p.y,
-          isMatch ? mapSelectionKey.selected : mapSelectionKey.notSelected,
+          isMatch ? mapSelectionKey.selected : nonMatchKey,
           0.0,
           cluster,
         ];
@@ -163,7 +169,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
 
       return [p.x, p.y, mapSelectionKey.normal, 0.0, cluster];
     });
-  }, [scopeRows, isFilterActive, visibleIndexSet, timeRange, timestamps]);
+  }, [scopeRows, isFilterActive, visibleIndexSet, timeRange, timestamps, nonMatchKey]);
 
 
 
@@ -449,6 +455,9 @@ const VisualizationPane = forwardRef(function VisualizationPane({
           updateEdgeWidthScale={updateEdgeWidthScale}
           timelineHasDates={timelineHasDates}
           toggleShowTimeline={toggleShowTimeline}
+          threadsOnlyActive={threadsOnlyActive}
+          threadsOnlyAvailable={threadsOnlyAvailable}
+          onToggleThreadsOnly={onToggleThreadsOnly}
         />
       </div>
 

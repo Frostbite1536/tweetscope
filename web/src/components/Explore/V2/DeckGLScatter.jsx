@@ -510,6 +510,18 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     return map;
   }, [scopeRows]);
 
+  // Build set of hidden ls_indices from points so edges to hidden nodes are suppressed
+  const hiddenIndexSet = useMemo(() => {
+    const set = new Set();
+    for (let i = 0; i < points.length; i++) {
+      if (points[i][2] === mapSelectionKey.hidden) {
+        const lsIndex = toIntOrNull(scopeRows?.[i]?.ls_index ?? i);
+        if (lsIndex !== null) set.add(lsIndex);
+      }
+    }
+    return set;
+  }, [points, scopeRows]);
+
   const { replyEdgeData, quoteEdgeData } = useMemo(() => {
     const reply = [];
     const quote = [];
@@ -522,6 +534,9 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
       const srcIdx = toIntOrNull(edge?.src_ls_index);
       const dstIdx = toIntOrNull(edge?.dst_ls_index);
       if (srcIdx === null || dstIdx === null) continue;
+
+      // Skip edges to/from hidden nodes (thread filter hard-hide)
+      if (hiddenIndexSet.size > 0 && (hiddenIndexSet.has(srcIdx) || hiddenIndexSet.has(dstIdx))) continue;
 
       const sourcePosition = lsIndexPositionMap.get(srcIdx);
       const targetPosition = lsIndexPositionMap.get(dstIdx);
@@ -558,7 +573,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     }
 
     return { replyEdgeData: reply, quoteEdgeData: quote };
-  }, [linkEdges, lsIndexPositionMap, isDarkMode]);
+  }, [linkEdges, lsIndexPositionMap, isDarkMode, hiddenIndexSet]);
 
   // Prepare label data for TextLayer with hierarchical support
   const labelData = useMemo(() => {
@@ -619,13 +634,28 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     return count > 0 ? [sumX / count, sumY / count] : [0, 0];
   }
 
+  // When points are hard-hidden (thread filter), suppress labels/hulls for empty clusters.
+  // Check if any hull boundary point is visible — a fast proxy for cluster visibility.
+  const effectiveLabelData = useMemo(() => {
+    if (hiddenIndexSet.size === 0) return labelData;
+    return labelData.filter(l => {
+      if (!l.hull || l.hull.length === 0) return false;
+      return l.hull.some(idx => points[idx] && points[idx][2] !== mapSelectionKey.hidden);
+    });
+  }, [labelData, hiddenIndexSet, points]);
+
+  const visibleClusterIdSet = useMemo(
+    () => new Set(effectiveLabelData.map((l) => String(l.cluster))),
+    [effectiveLabelData]
+  );
+
   // Prepare labels sorted by importance (used by deterministic placement/truncation).
   // Priority uses cumulative count (includes children), engagement boost from likes,
   // and deprioritizes the "Unclustered" catch-all so real topics get prime placement.
   const visibleLabels = useMemo(() => {
-    if (!labelData.length) return [];
+    if (!effectiveLabelData.length) return [];
 
-    return [...labelData]
+    return [...effectiveLabelData]
       .map(l => {
         const layer = l.layer || 0;
         const rawCount = l.cumulativeCount || l.count || 1;
@@ -641,7 +671,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
         };
       })
       .sort((a, b) => b.priority - a.priority);
-  }, [labelData]);
+  }, [effectiveLabelData]);
 
   const hierarchyIndex = useMemo(() => {
     if (!scope?.hierarchical_labels || !visibleLabels.length) return null;
@@ -1055,11 +1085,16 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
       .filter(h => h.polygon.length >= 4);
   }, [clusterLabels, scopeRows]);
 
+  const effectiveHullData = useMemo(() => {
+    if (hiddenIndexSet.size === 0) return hullData;
+    return hullData.filter((h) => visibleClusterIdSet.has(String(h.cluster)));
+  }, [hullData, hiddenIndexSet, visibleClusterIdSet]);
+
   const activeHullData = useMemo(() => {
     if (activeClusterId === null || activeClusterId === undefined) return [];
     const activeId = String(activeClusterId);
-    return hullData.filter((h) => String(h.cluster) === activeId);
-  }, [hullData, activeClusterId]);
+    return effectiveHullData.filter((h) => String(h.cluster) === activeId);
+  }, [effectiveHullData, activeClusterId]);
 
   // Handle view state changes
   const handleViewStateChange = useCallback(({ viewState: newViewState }) => {
@@ -1466,7 +1501,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     replyEdgeData,
     quoteEdgeData,
     scatterData,
-    hullData,
+    effectiveHullData,
     activeHullData,
     placedLabels,
     labelCharacterSet,

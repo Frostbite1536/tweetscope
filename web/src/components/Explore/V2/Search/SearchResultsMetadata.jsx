@@ -27,6 +27,7 @@ const SearchResultsMetadata = ({ filterSlots }) => {
         filterSlots.column?.label,
         filterSlots.timeRange?.label || (filterSlots.timeRange && 'Time range'),
         filterSlots.engagement?.label,
+        filterSlots.thread?.label,
       ].filter(Boolean).join(' + ')
     : null;
 

@@ -67,6 +67,7 @@ export const filterConstants = {
   COLUMN: 'column',
   TIME_RANGE: 'timeRange',
   ENGAGEMENT: 'engagement',
+  THREAD: 'thread',
 };
 
 // Maps FILTER_SLOT keys → filterConstants values (imported by Container + FilterChips)
@@ -77,6 +78,7 @@ export const SLOT_TO_FILTER_TYPE = {
   column: filterConstants.COLUMN,
   timeRange: filterConstants.TIME_RANGE,
   engagement: filterConstants.ENGAGEMENT,
+  thread: filterConstants.THREAD,
 };
 
 const ENGAGEMENT_PATTERN = /\b(?:min_faves|min_likes):(\d+)\b/gi;

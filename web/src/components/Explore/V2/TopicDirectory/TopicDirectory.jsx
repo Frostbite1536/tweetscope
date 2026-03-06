@@ -111,7 +111,7 @@ function TopicDirectory({
       );
       return labelMatch || descMatch || subMatch;
     });
-  }, [realClusters, searchQuery]);
+  }, [sortedClusters, searchQuery]);
 
   const matchingIndices = useMemo(() => {
     if (!searchQuery.trim()) return null; // null = no filter active

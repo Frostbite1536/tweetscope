@@ -26,6 +26,9 @@ const ConfigurationPanel = ({
   updateEdgeWidthScale = () => {},
   timelineHasDates = false,
   toggleShowTimeline = () => {},
+  threadsOnlyActive = false,
+  threadsOnlyAvailable = false,
+  onToggleThreadsOnly = () => {},
 }) => {
   const { themePreference, setThemePreference } = useColorMode();
 
@@ -108,6 +111,16 @@ const ConfigurationPanel = ({
                 <span>Quote Connections</span>
               </label>
             </>
+          )}
+          {threadsOnlyAvailable && (
+            <label className={styles.inlineToggle}>
+              <input
+                type="checkbox"
+                checked={threadsOnlyActive}
+                onChange={onToggleThreadsOnly}
+              />
+              <span>Show Threads Only</span>
+            </label>
           )}
         </div>
 

@@ -15,11 +15,14 @@ import {
   validateColumnAndValue,
 } from '../components/Explore/V2/Search/utils';
 import { getLikesCount } from '../lib/engagement';
+import { isThreadMember } from '../lib/threadMembership';
 
 const FilterContext = createContext(null);
 const ROWS_PER_PAGE = 20;
-const FILTER_URL_KEYS = ['cluster', 'search', 'keyword', 'column', 'value', 'feature', 'min_faves'];
+const FILTER_URL_KEYS = ['cluster', 'search', 'keyword', 'column', 'value', 'min_faves'];
 const HYDRATED_URL_KEYS = ['cluster', 'search', 'keyword', 'column', 'value', 'min_faves'];
+const THREAD_MASK_MAX_INDEX = 5_000_000;
+const THREAD_MASK_DENSITY_DIVISOR = 16;
 
 function uniqueOrderedIndices(values) {
   const seen = new Set();
@@ -56,6 +59,7 @@ const ACTION = {
   APPLY_COLUMN: 'APPLY_COLUMN',
   APPLY_TIME_RANGE: 'APPLY_TIME_RANGE',
   APPLY_ENGAGEMENT: 'APPLY_ENGAGEMENT',
+  APPLY_THREAD: 'APPLY_THREAD',
   SET_FILTER_QUERY: 'SET_FILTER_QUERY',
   CLEAR_SLOT: 'CLEAR_SLOT',
   CLEAR_ALL: 'CLEAR_ALL',
@@ -68,6 +72,7 @@ const SLOT = {
   COLUMN: 'column',
   TIME_RANGE: 'timeRange',
   ENGAGEMENT: 'engagement',
+  THREAD: 'thread',
 };
 
 const emptySlots = {
@@ -76,6 +81,7 @@ const emptySlots = {
   [SLOT.COLUMN]: null,
   [SLOT.TIME_RANGE]: null,
   [SLOT.ENGAGEMENT]: null,
+  [SLOT.THREAD]: null,
 };
 
 const initialFilterState = {
@@ -156,6 +162,16 @@ function filterReducer(state, action) {
       };
     }
 
+    case ACTION.APPLY_THREAD: {
+      return {
+        ...state,
+        filterSlots: {
+          ...state.filterSlots,
+          [SLOT.THREAD]: { enabled: true, label: 'Threads only' },
+        },
+      };
+    }
+
     case ACTION.SET_FILTER_QUERY:
       return { ...state, filterQuery: action.query };
 
@@ -212,6 +228,9 @@ export function FilterProvider({ children }) {
     }
     if (filterSlots.engagement) {
       return { type: filterConstants.ENGAGEMENT, ...filterSlots.engagement };
+    }
+    if (filterSlots.thread) {
+      return { type: filterConstants.THREAD, ...filterSlots.thread };
     }
     return null;
   }, [filterSlots]);
@@ -316,6 +335,78 @@ export function FilterProvider({ children }) {
     dispatch({ type: ACTION.APPLY_ENGAGEMENT, minFaves });
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Thread-membership mask (chain-safe predicate)
+  // Stored outside reducer to avoid large object churn.
+  // ---------------------------------------------------------------------------
+
+  const [threadMembership, setThreadMembershipState] = useState(null); // Uint8Array | Set<number> | null
+
+  // Accept nodeStats from page level and build chain-safe membership mask
+  const setThreadMembership = useCallback((nodeStats) => {
+    if (!nodeStats || !(nodeStats instanceof Map) || nodeStats.size === 0) {
+      setThreadMembershipState(null);
+      return;
+    }
+    // Build set of all tweetIds in dataset (for root_in_dataset check)
+    const allTweetIds = new Set();
+    let maxIndex = 0;
+    for (const [key, stats] of nodeStats) {
+      if (typeof key !== 'number') continue;
+      if (key > maxIndex) maxIndex = key;
+      if (stats.tweetId) allTweetIds.add(String(stats.tweetId));
+    }
+
+    const memberIndices = [];
+    for (const [key, stats] of nodeStats) {
+      if (typeof key !== 'number') continue;
+      const threadSize = stats.threadSize ?? 1;
+      if (threadSize < 2) continue;
+      const rootInDataset = stats.threadRootId && allTweetIds.has(String(stats.threadRootId));
+      const depthGt1 = (stats.threadDepth ?? 0) > 1;
+      const hasReplyChildren = (stats.replyChildCount ?? 0) > 0;
+      if (rootInDataset || depthGt1 || hasReplyChildren) {
+        memberIndices.push(key);
+      }
+    }
+    if (memberIndices.length === 0) {
+      setThreadMembershipState(null);
+      return;
+    }
+
+    const shouldUseMask =
+      maxIndex <= THREAD_MASK_MAX_INDEX &&
+      maxIndex <= memberIndices.length * THREAD_MASK_DENSITY_DIVISOR;
+
+    if (shouldUseMask) {
+      const mask = new Uint8Array(maxIndex + 1);
+      for (let i = 0; i < memberIndices.length; i++) {
+        mask[memberIndices[i]] = 1;
+      }
+      setThreadMembershipState(mask);
+      return;
+    }
+
+    setThreadMembershipState(new Set(memberIndices));
+  }, []);
+
+  const threadsOnlyAvailable = threadMembership !== null;
+  const threadsOnlyActive = !!filterSlots.thread;
+
+  const toggleThreadsOnly = useCallback(() => {
+    if (filterSlots.thread) {
+      dispatch({ type: ACTION.CLEAR_SLOT, slotKey: SLOT.THREAD });
+    } else {
+      dispatch({ type: ACTION.APPLY_THREAD });
+    }
+  }, [filterSlots.thread]);
+
+  useEffect(() => {
+    if (threadMembership !== null) return;
+    if (!filterSlots.thread) return;
+    dispatch({ type: ACTION.CLEAR_SLOT, slotKey: SLOT.THREAD });
+  }, [threadMembership, filterSlots.thread]);
+
   // Map filter type constants to slot keys for clearFilter backward compat
   const typeToSlot = useMemo(() => ({
     [filterConstants.CLUSTER]: SLOT.CLUSTER,
@@ -324,6 +415,7 @@ export function FilterProvider({ children }) {
     [filterConstants.COLUMN]: SLOT.COLUMN,
     [filterConstants.TIME_RANGE]: SLOT.TIME_RANGE,
     [filterConstants.ENGAGEMENT]: SLOT.ENGAGEMENT,
+    [filterConstants.THREAD]: SLOT.THREAD,
   }), []);
 
   const clearFilter = useCallback((filterType) => {
@@ -532,6 +624,9 @@ export function FilterProvider({ children }) {
 
       const hasEngagement = filterSlots.engagement && filterSlots.engagement.minFaves > 0;
 
+      // Thread membership: Uint8Array mask for dense indices, Set for sparse indices
+      const hasThread = filterSlots.thread && threadMembership;
+
       // Single pass — check all predicates per index
       const out = [];
       for (const i of baseIndices) {
@@ -548,6 +643,7 @@ export function FilterProvider({ children }) {
           const row = scopeRowsByIndex.get(i);
           if (!row || getLikesCount(row) < filterSlots.engagement.minFaves) continue;
         }
+        if (hasThread && !isThreadMember(threadMembership, i)) continue;
         out.push(i);
       }
       return out;
@@ -579,6 +675,7 @@ export function FilterProvider({ children }) {
     keywordSearchFilterFn,
     columnFilterFn,
     scopeRowsByIndex,
+    threadMembership,
   ]);
 
   // ---------------------------------------------------------------------------
@@ -711,6 +808,13 @@ export function FilterProvider({ children }) {
     columnFilter,
     setUrlParams,
     dataTableRows,
+
+    // Thread-only filter
+    setThreadMembership,
+    threadMembership,
+    threadsOnlyAvailable,
+    threadsOnlyActive,
+    toggleThreadsOnly,
   }), [
     applyCluster,
     applySearch,
@@ -744,6 +848,11 @@ export function FilterProvider({ children }) {
     columnFilter,
     setUrlParams,
     dataTableRows,
+    setThreadMembership,
+    threadMembership,
+    threadsOnlyAvailable,
+    threadsOnlyActive,
+    toggleThreadsOnly,
   ]);
 
   return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;
