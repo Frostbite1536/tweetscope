@@ -1,0 +1,44 @@
+flowchart TD
+    NativeZip["Native X archive zip"]
+    BrowserExtract["Browser extractor<br/>normalize + upload extracted JSON"]
+    Community["Community Archive"]
+    Import["`twitter_import.py`<br/>sanitize ids, apply filters, split likes,<br/>upsert `input.parquet`, write imports manifest"]
+    Input[("`input.parquet` + `meta.json`")]
+    Likes["Optional sibling dataset<br/>`<dataset>-likes`"]
+    Embed["`embed.py`<br/>contextual embeddings"]
+    EmbArtifacts[("`embeddings/*.h5` + `*.json`")]
+    DisplayUmap["`umapper.py`<br/>2D display UMAP"]
+    ClusterUmap["`umapper.py`<br/>clustering manifold"]
+    Hierarchy["`build_hierarchy.py`<br/>PLSCAN hierarchy"]
+    Labels["`toponymy_labels.py`<br/>name hierarchy + audit loop"]
+    Scope["`scope_runner.run_scope()`<br/>materialize serving parquet,<br/>validate contract, export LanceDB"]
+    ScopeArtifacts[("`scopes/*.json` + `*-input.parquet`")]
+    DatasetDB[("dataset `lancedb/`")]
+    CatalogDB[("catalog `lancedb/`<br/>`system__datasets` + `system__scopes`")]
+    Links["`build_links_graph.py`"]
+    LinkArtifacts[("`links/*.parquet` + `meta.json`")]
+    Explore["Explore UI + search + graph routes"]
+
+    NativeZip --> BrowserExtract --> Import
+    Community --> Import
+    Import --> Input
+    Import -.->|if include likes| Likes
+
+    Input --> Embed --> EmbArtifacts
+    EmbArtifacts --> DisplayUmap
+    EmbArtifacts --> ClusterUmap
+    ClusterUmap --> Hierarchy --> Labels
+
+    Input --> Scope
+    DisplayUmap --> Scope
+    Labels --> Scope
+
+    Scope --> ScopeArtifacts
+    Scope --> DatasetDB
+    Scope --> CatalogDB
+
+    Input --> Links
+    Links --> LinkArtifacts
+    LinkArtifacts --> Explore
+    DatasetDB --> Explore
+    CatalogDB --> Explore

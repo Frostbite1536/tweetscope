@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3727.84 1312" width="3727.84" height="1312" style="--bg:#1a1b26;--fg:#a9b1d6;--line:#3d59a1;--accent:#7aa2f7;--muted:#565f89;background:var(--bg)">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3372.27 518.4" width="3372.27" height="518.4" style="--bg:#ffffff;--fg:#1f2328;--line:#d1d9e0;--accent:#0969da;--muted:#59636e;background:var(--bg)">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
   text { font-family: 'Inter', system-ui, sans-serif; }
@@ -8,8 +8,8 @@
     --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) 60%, var(--bg)));
     --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) 40%, var(--bg)));
     --_text-faint:    color-mix(in srgb, var(--fg) 25%, var(--bg));
-    --_line:          var(--line, color-mix(in srgb, var(--fg) 30%, var(--bg)));
-    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_line:          var(--line, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 85%, var(--bg)));
     --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) 3%, var(--bg)));
     --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) 20%, var(--bg)));
     --_group-fill:    var(--bg);
@@ -19,106 +19,199 @@
   }
 </style>
 <defs>
-  <marker id="arrowhead" markerWidth="8" markerHeight="4.8" refX="8" refY="2.4" orient="auto">
-    <polygon points="0 0, 8 2.4, 0 4.8" fill="var(--_arrow)" />
+  <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+    <polygon points="0 0, 8 2.5, 0 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
   </marker>
-  <marker id="arrowhead-start" markerWidth="8" markerHeight="4.8" refX="0" refY="2.4" orient="auto-start-reverse">
-    <polygon points="8 0, 0 2.4, 8 4.8" fill="var(--_arrow)" />
+  <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
+    <polygon points="8 0, 0 2.5, 8 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
   </marker>
 </defs>
-<rect x="40" y="40" width="1534.1" height="412" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
-<rect x="40" y="40" width="1534.1" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
-<text x="52" y="54" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">&quot;Frontend · React + Vite&quot;</text>
-<rect x="477.8999999999999" y="76" width="472.4" height="336" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
-<rect x="477.8999999999999" y="76" width="472.4" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
-<text x="489.8999999999999" y="90" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">&quot;Contexts&quot;</text>
-<rect x="1110.2999999999997" y="76" width="443.79999999999995" height="356" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
-<rect x="1110.2999999999997" y="76" width="443.79999999999995" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
-<text x="1122.2999999999997" y="90" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">&quot;Components&quot;</text>
-<rect x="1694.1" y="316" width="369.4000000000001" height="356" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
-<rect x="1694.1" y="316" width="369.4000000000001" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
-<text x="1706.1" y="330" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">&quot;API Clients&quot;</text>
-<rect x="2254.42" y="466" width="426.5999999999999" height="646" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
-<rect x="2254.42" y="466" width="426.5999999999999" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
-<text x="2266.42" y="480" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">&quot;Hono TypeScript API · :3000&quot;</text>
-<rect x="2900.54" y="586" width="247.8499999999999" height="476" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
-<rect x="2900.54" y="586" width="247.8499999999999" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
-<text x="2912.54" y="600" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">&quot;Python Pipeline&quot;</text>
-<rect x="3268.3899999999994" y="946" width="419.4500000000003" height="326" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
-<rect x="3268.3899999999994" y="946" width="419.4500000000003" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
-<text x="3280.3899999999994" y="960" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">&quot;Storage&quot;</text>
-<polyline points="297.9,242 317.9,242 317.9,182 497.9,182" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="297.9,242 317.9,242 317.9,332 515.775,332" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="930.3000000000001,182 950.3,182 950.3,152 1130.3,152" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="912.4250000000001,332 950.3,332 950.3,272 1180.35,272" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="930.3000000000001,182 950.3,182 950.3,212 1216.1000000000001,212" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="912.4250000000001,332 1162.475,332" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="912.4250000000001,332 950.3,332 950.3,392 1223.25,392" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="1441.15,392 1734.1,392" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="1980.6,632 2315.8700000000003,632" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="2612.42,872 2661.02,872 2661.02,662 2969.1400000000003,662" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="3108.3900000000003,1022 3478.115,1022 3478.115,1034" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<polyline points="2612.42,872 2661.02,872 2661.02,1082 3478.115,1082 3478.115,1070" fill="none" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#arrowhead)" />
-<rect x="2119.5" y="618.5" width="78.92" height="27" rx="4" ry="4" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="0.5" />
-<text x="2158.96" y="632" text-anchor="middle" dy="0.35em" font-size="11" font-weight="400" fill="var(--_text-muted)">&quot;all modes&quot;</text>
-<rect x="2737.02" y="648.5" width="107.52000000000001" height="27" rx="4" ry="4" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="0.5" />
-<text x="2790.78" y="662" text-anchor="middle" dy="0.35em" font-size="11" font-weight="400" fill="var(--_text-muted)">&quot;uv run python3&quot;</text>
-<rect x="79.99999999999999" y="224" width="217.9" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="497.9" y="164" width="432.40000000000003" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="515.775" y="314" width="396.65000000000003" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="1130.3" y="134" width="403.8" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="1180.35" y="254" width="303.70000000000005" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="1216.1000000000001" y="194" width="232.20000000000002" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="1162.475" y="314" width="339.45000000000005" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="1223.25" y="374" width="217.9" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="1734.1" y="374" width="289.40000000000003" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="1741.25" y="434" width="275.1" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="1744.8249999999998" y="494" width="267.95000000000005" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="1766.2749999999999" y="554" width="225.05" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="1777" y="614" width="203.60000000000002" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2315.8700000000003" y="614" width="303.70000000000005" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2294.42" y="674" width="346.6" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2365.92" y="734" width="203.60000000000002" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2348.045" y="794" width="239.35000000000002" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2323.0200000000004" y="854" width="289.40000000000003" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2969.1400000000003" y="644" width="110.65" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2972.715" y="704" width="103.5" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2976.29" y="764" width="96.35000000000001" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2965.565" y="824" width="117.80000000000001" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2947.69" y="884" width="153.55" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2972.715" y="944" width="103.5" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="2940.54" y="1004" width="167.85000000000002" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="3308.39" y="1034" width="339.45000000000005" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="3397.765" y="1094" width="160.70000000000002" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="3322.6899999999996" y="1154" width="310.85" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<rect x="3311.9649999999997" y="1214" width="332.3" height="36" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
-<text x="188.95" y="242" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;App.jsx\nRouter + Config&quot;</text>
-<text x="714.1" y="182" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;ScopeContext\nscopeRows · clusterMap\nclusterHierarchy&quot;</text>
-<text x="714.1" y="332" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;FilterContext\ncluster · search\nfeature · column&quot;</text>
-<text x="1332.2" y="152" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;VisualizationPane\nDeck.GL Scatter\nHulls · Labels&quot;</text>
-<text x="1332.1999999999998" y="272" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;TopicTree\nHierarchical\ncluster nav&quot;</text>
-<text x="1332.2" y="212" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;TweetFeed\nPaginated cards&quot;</text>
-<text x="1332.1999999999998" y="332" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;FeedCarousel\nMulti-column\nexpanded view&quot;</text>
-<text x="1332.2" y="392" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;ThreadView\nReply chains&quot;</text>
-<text x="1878.8" y="392" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;catalogClient\nscopes · embeddings&quot;</text>
-<text x="1878.8" y="452" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;viewClient\nscope rows · parquet&quot;</text>
-<text x="1878.7999999999997" y="512" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;graphClient\nedges · node stats&quot;</text>
-<text x="1878.8" y="572" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;queryClient\nrow fetching&quot;</text>
-<text x="1878.8" y="632" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;searchClient\nNN · FTS&quot;</text>
-<text x="2467.7200000000003" y="632" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;data.ts + catalog.ts\nscope metadata&quot;</text>
-<text x="2467.7200000000003" y="692" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;search.ts\nLanceDB Cloud +\nVoyageAI embed&quot;</text>
-<text x="2467.7200000000003" y="752" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;graph.ts\nedge queries&quot;</text>
-<text x="2467.7200000000003" y="812" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;resolve-url.ts\nt.co unwrap&quot;</text>
-<text x="2467.7200000000003" y="872" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;jobs.ts\nPython subprocess\nrunner&quot;</text>
-<text x="3024.465" y="662" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;ls-ingest&quot;</text>
-<text x="3024.465" y="722" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;ls-embed&quot;</text>
-<text x="3024.465" y="782" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;ls-umap&quot;</text>
-<text x="3024.465" y="842" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;ls-cluster&quot;</text>
-<text x="3024.465" y="902" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;toponymy_labels&quot;</text>
-<text x="3024.465" y="962" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;ls-scope&quot;</text>
-<text x="3024.465" y="1022" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;build_links_graph&quot;</text>
-<text x="3478.115" y="1052" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;Parquet\ninput · umaps\nclusters · scopes&quot;</text>
-<text x="3478.115" y="1112" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;HDF5\nembeddings&quot;</text>
-<text x="3478.115" y="1172" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;JSON\nmeta · scope config\njob status&quot;</text>
-<text x="3478.115" y="1232" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">&quot;LanceDB\nvector search\ncatalog registry&quot;</text>
+<g class="subgraph" data-id="Frontend" data-label="React frontend (`web/`)">
+  <rect x="187.82" y="121.54999999999998" width="826.7869999999999" height="267.20000000000005" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="187.82" y="121.54999999999998" width="826.7869999999999" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="199.82" y="135.54999999999998" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">React frontend (`web/`)</text>
+</g>
+<g class="subgraph" data-id="API" data-label="Hono API (`api/`)">
+  <rect x="1258.185" y="57.000000000000014" width="276.53099999999995" height="421.4" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="1258.185" y="57.000000000000014" width="276.53099999999995" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="1270.185" y="71.00000000000001" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Hono API (`api/`)</text>
+</g>
+<g class="subgraph" data-id="Storage" data-label="Storage and external services">
+  <rect x="3049.379" y="44.32500000000002" width="282.89099999999996" height="405.65" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="3049.379" y="44.32500000000002" width="282.89099999999996" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="3061.379" y="58.32500000000002" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Storage and external services</text>
+</g>
+<g class="subgraph" data-id="Pipeline" data-label="Python pipeline (`latentscope/`)">
+  <rect x="1594.716" y="40.000000000000014" width="1394.663" height="189.70000000000002" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="1594.716" y="40.000000000000014" width="1394.663" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="1606.716" y="54.000000000000014" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Python pipeline (`latentscope/`)</text>
+</g>
+<polyline class="edge" data-from="Browser" data-to="Router" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="133.82,214.5 203.82,214.49999999999994" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Router" data-to="Config" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="bootstraps" points="419.16399999999993,203.42999999999995 431.16399999999993,203.42999999999995 431.16399999999993,165.54999999999995 1131.451,165.54999999999995 1131.451,137.47499999999997 1240.1849999999997,137.47499999999997 1240.1849999999997,119.44999999999999 1290.6722499999998,119.44999999999999" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Dashboard" data-to="CatalogViews" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="datasets + scopes" points="619.4612499999998,259.9 1044.607,259.9 1044.607,222.09999999999997 1240.1849999999997,222.09999999999997 1240.1849999999997,243.10000000000002 1290.6722499999998,243.10000000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="ImportUI" data-to="Jobs" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="start/poll import jobs" points="638.048,194.99999999999994 1089.2769999999998,194.99999999999994 1089.2769999999998,186.575 1240.1849999999997,186.575 1240.1849999999997,184.34999999999997 1290.6722499999998,184.35" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Explore" data-to="CatalogViews" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="points, rows, filters" points="614.2742499999999,314.62499999999994 650.048,314.62499999999994 650.048,285.84999999999997 1056.607,285.84999999999997 1056.607,255.39999999999998 1290.6722499999998,255.4" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Explore" data-to="Search" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="semantic / keyword search" points="614.2742499999999,320.775 662.048,320.775 662.048,298.84999999999997 1056.607,298.84999999999997 1056.607,301.42499999999995 1240.1849999999997,301.42499999999995 1240.1849999999997,314.15 1290.6722499999998,314.15" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Explore" data-to="Graph" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="threads + quotes" points="614.2742499999999,326.92499999999995 674.048,326.92499999999995 674.048,311.84999999999997 1056.607,311.84999999999997 1056.607,350.525 1240.1849999999997,350.525 1240.1849999999997,379.04999999999995 1290.6722499999998,379.05" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Explore" data-to="Resolve" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="expand t.co links" points="614.2742499999999,333.075 686.048,333.075 686.048,324.84999999999997 1044.607,324.84999999999997 1044.607,399.625 1240.1849999999997,399.625 1240.1849999999997,443.94999999999993 1290.6722499999998,443.95" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="CatalogViews" data-to="CatalogDB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1511.20325,249.25 2318.2911249999997,249.25 2318.2911249999997,212.47500000000002 3125.379,212.47500000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="CatalogViews" data-to="DatasetDB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1511.20325,249.25 2318.2911249999997,249.25 2318.2911249999997,325.17500000000007 3125.379,325.17500000000007" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="CatalogViews" data-to="RawFiles" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1511.20325,249.25 2318.2911249999997,249.25 2318.2911249999997,115.22500000000002 3125.379,115.22500000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Search" data-to="DatasetDB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1494.9012500000001,314.15 2310.140125,314.15 2310.140125,325.17500000000007 3125.379,325.17500000000007" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Search" data-to="Voyage" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1494.9012500000001,314.15 2310.140125,314.15 2310.140125,413.9750000000001 3125.379,413.9750000000001" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Graph" data-to="DatasetDB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1445.25425,379.05 2554.59525,379.05 2554.59525,325.17500000000007 3125.379,325.17500000000007" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Jobs" data-to="TwitterImport" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1456.3692500000002,184.35 1576.716,184.35 1576.716,121.9 1610.716,121.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="ScopeExport" data-to="DatasetDB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="2949.379,121.90000000000002 3037.379,121.90000000000002 3037.379,325.17500000000007 3125.379,325.17500000000007" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="ScopeExport" data-to="CatalogDB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="2949.379,121.90000000000002 3037.379,121.90000000000002 3037.379,212.47500000000002 3125.379,212.47500000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Links" data-to="DatasetDB" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1983.8114999999998,195.25 2554.59525,195.25 2554.59525,325.17500000000007 3125.379,325.17500000000007" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="TwitterImport" data-to="RawFiles" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1754.924,121.90000000000002 1782.44375,121.90000000000002 1782.44375,115.22500000000002 3125.379,115.22500000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="ScopeExport" data-to="RawFiles" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="2949.379,121.90000000000002 3037.379,121.90000000000002 3037.379,115.22500000000002 3125.379,115.22500000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Router" data-to="Dashboard" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="419.16399999999993,218.19 443.16399999999993,218.19 443.16399999999993,259.9 510.8212499999999,259.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Router" data-to="ImportUI" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="419.16399999999993,210.81 443.16399999999993,210.81 443.16399999999993,195 467.16399999999993,195" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Router" data-to="Explore" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="419.16399999999993,225.57 431.16399999999993,225.57 431.16399999999993,326.925 510.8212499999999,326.925" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Explore" data-to="Providers" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="614.2742499999999,339.225 650.048,339.225 650.048,354.29999999999995 698.048,354.29999999999995" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="TwitterImport" data-to="Embed" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1754.924,121.90000000000002 1782.44375,121.90000000000002 1782.44375,121.90000000000002 1809.9634999999998,121.90000000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Embed" data-to="Umap" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="2011.9694999999997,121.90000000000002 2052.93,121.90000000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Umap" data-to="Hierarchy" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="2266.051,121.90000000000002 2314.051,121.90000000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Hierarchy" data-to="Labels" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="2476.0429999999997,121.90000000000002 2524.0429999999997,121.90000000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Labels" data-to="ScopeExport" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="2690.4809999999998,121.90000000000002 2738.4809999999998,121.90000000000002" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="TwitterImport" data-to="Links" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1754.924,121.90000000000002 1782.44375,121.90000000000002 1782.44375,195.25 1809.9634999999998,195.25" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<g class="edge-label" data-from="Router" data-to="Config" data-label="bootstraps">
+  <rect x="1139.451" y="121.47499999999997" width="68.73400000000001" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="1173.818" y="136.62499999999997" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">bootstraps</text>
+</g>
+<g class="edge-label" data-from="Dashboard" data-to="CatalogViews" data-label="datasets + scopes">
+  <rect x="1104.9989999999998" y="206.09999999999997" width="103.18600000000004" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="1156.5919999999999" y="221.24999999999997" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">datasets + scopes</text>
+</g>
+<g class="edge-label" data-from="ImportUI" data-to="Jobs" data-label="start/poll import jobs">
+  <rect x="1097.2769999999998" y="170.575" width="110.90800000000003" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="1152.7309999999998" y="185.725" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">start/poll import jobs</text>
+</g>
+<g class="edge-label" data-from="Explore" data-to="CatalogViews" data-label="points, rows, filters">
+  <rect x="1103.8110000000001" y="239.39999999999998" width="104.37400000000002" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="1155.998" y="254.54999999999998" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">points, rows, filters</text>
+</g>
+<g class="edge-label" data-from="Explore" data-to="Search" data-label="semantic / keyword search">
+  <rect x="1064.607" y="285.42499999999995" width="143.57800000000003" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="1136.396" y="300.57499999999993" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">semantic / keyword search</text>
+</g>
+<g class="edge-label" data-from="Explore" data-to="Graph" data-label="threads + quotes">
+  <rect x="1112.127" y="334.525" width="96.05800000000002" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="1160.156" y="349.67499999999995" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">threads + quotes</text>
+</g>
+<g class="edge-label" data-from="Explore" data-to="Resolve" data-label="expand t.co links">
+  <rect x="1112.127" y="383.625" width="96.05800000000004" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="1160.156" y="398.775" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">expand t.co links</text>
+</g>
+<g class="node" data-id="Browser" data-label="Browser" data-shape="rectangle">
+  <rect x="40" y="196.04999999999998" width="93.82" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="86.91" y="214.5" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Browser</text>
+</g>
+<g class="node" data-id="Router" data-label="Router + `/api/app-config` boot" data-shape="rectangle">
+  <rect x="203.82" y="196.04999999999998" width="215.34399999999994" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="311.49199999999996" y="214.5" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Router + `/api/app-config` boot</text>
+</g>
+<g class="node" data-id="Dashboard" data-label="Dashboard" data-shape="rectangle">
+  <rect x="510.8212499999999" y="241.45" width="108.64" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="565.1412499999999" y="259.9" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Dashboard</text>
+</g>
+<g class="node" data-id="ImportUI" data-label="New Collection / Import" data-shape="rectangle">
+  <rect x="467.16399999999993" y="176.54999999999998" width="170.884" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="552.6059999999999" y="195" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">New Collection / Import</text>
+</g>
+<g class="node" data-id="Explore" data-label="Explore UI" data-shape="rectangle">
+  <rect x="510.8212499999999" y="308.475" width="103.453" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="562.54775" y="326.925" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Explore UI</text>
+</g>
+<g class="node" data-id="Providers" data-label="ScopeContext + FilterContext + sidebar state" data-shape="rectangle">
+  <rect x="698.048" y="335.85" width="300.55899999999997" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="848.3275" y="354.3" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">ScopeContext + FilterContext + sidebar state</text>
+</g>
+<g class="node" data-id="Config" data-label="App config + health" data-shape="rectangle">
+  <rect x="1290.67225" y="101.00000000000001" width="150.877" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1366.11075" y="119.45000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">App config + health</text>
+</g>
+<g class="node" data-id="CatalogViews" data-label="Catalog + views + query routes" data-shape="rectangle">
+  <rect x="1290.67225" y="230.8" width="220.53099999999998" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1400.93775" y="249.25" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Catalog + views + query routes</text>
+</g>
+<g class="node" data-id="Search" data-label="Semantic + keyword search" data-shape="rectangle">
+  <rect x="1290.67225" y="295.7" width="204.229" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1392.78675" y="314.15" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Semantic + keyword search</text>
+</g>
+<g class="node" data-id="Graph" data-label="Links graph routes" data-shape="rectangle">
+  <rect x="1290.67225" y="360.6" width="154.582" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1367.96325" y="379.05" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Links graph routes</text>
+</g>
+<g class="node" data-id="Jobs" data-label="Jobs / `import_twitter`" data-shape="rectangle">
+  <rect x="1290.67225" y="165.9" width="165.697" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1373.5207500000001" y="184.35000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">Jobs / `import_twitter`</text>
+</g>
+<g class="node" data-id="Resolve" data-label="`t.co` URL resolver" data-shape="rectangle">
+  <rect x="1290.67225" y="425.5" width="153.10000000000002" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1367.22225" y="443.95" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">`t.co` URL resolver</text>
+</g>
+<g class="node" data-id="CatalogDB" data-label="Catalog LanceDB
+`system__datasets`
+`system__scopes`" data-shape="cylinder">
+  <rect x="3125.379" y="177.12500000000003" width="156.06400000000002" height="70.7" fill="var(--_node-fill)" stroke="none" />
+  <line x1="3125.379" y1="177.12500000000003" x2="3125.379" y2="247.82500000000005" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <line x1="3281.4429999999998" y1="177.12500000000003" x2="3281.4429999999998" y2="247.82500000000005" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="3203.411" cy="247.82500000000005" rx="78.03200000000001" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="3203.411" cy="177.12500000000003" rx="78.03200000000001" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="3203.411" y="212.47500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="3203.411" dy="-12.350000000000001">Catalog LanceDB</tspan><tspan x="3203.411" dy="16.900000000000002">`system__datasets`</tspan><tspan x="3203.411" dy="16.900000000000002">`system__scopes`</tspan></text>
+</g>
+<g class="node" data-id="DatasetDB" data-label="Per-dataset LanceDB
+scope rows
+graph tables" data-shape="cylinder">
+  <rect x="3125.379" y="289.82500000000005" width="169.402" height="70.7" fill="var(--_node-fill)" stroke="none" />
+  <line x1="3125.379" y1="289.82500000000005" x2="3125.379" y2="360.52500000000003" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <line x1="3294.781" y1="289.82500000000005" x2="3294.781" y2="360.52500000000003" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="3210.08" cy="360.52500000000003" rx="84.701" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <ellipse cx="3210.08" cy="289.82500000000005" rx="84.701" ry="7" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="3210.08" y="325.17500000000007" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="3210.08" dy="-12.350000000000001">Per-dataset LanceDB</tspan><tspan x="3210.08" dy="16.900000000000002">scope rows</tspan><tspan x="3210.08" dy="16.900000000000002">graph tables</tspan></text>
+</g>
+<g class="node" data-id="RawFiles" data-label="Filesystem / `DATA_URL`
+raw artifacts + images" data-shape="subroutine">
+  <rect x="3125.379" y="88.32500000000002" width="190.89099999999996" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <line x1="3133.379" y1="88.32500000000002" x2="3133.379" y2="142.12500000000003" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <line x1="3308.27" y1="88.32500000000002" x2="3308.27" y2="142.12500000000003" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="3220.8244999999997" y="115.22500000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="3220.8244999999997" dy="-3.9000000000000012">Filesystem / `DATA_URL`</tspan><tspan x="3220.8244999999997" dy="16.900000000000002">raw artifacts + images</tspan></text>
+</g>
+<g class="node" data-id="Voyage" data-label="VoyageAI" data-shape="rectangle">
+  <rect x="3125.379" y="395.5250000000001" width="99.748" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="3175.2529999999997" y="413.9750000000001" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">VoyageAI</text>
+</g>
+<g class="node" data-id="TwitterImport" data-label="`twitter_import.py`" data-shape="rectangle">
+  <rect x="1610.716" y="103.45000000000002" width="144.208" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1682.82" y="121.90000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">`twitter_import.py`</text>
+</g>
+<g class="node" data-id="Embed" data-label="`embed.py`
+contextual tweet enrichment" data-shape="rectangle">
+  <rect x="1809.9634999999998" y="95.00000000000001" width="202.00599999999997" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1910.9664999999998" y="121.90000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="1910.9664999999998" dy="-3.9000000000000012">`embed.py`</tspan><tspan x="1910.9664999999998" dy="16.900000000000002">contextual tweet enrichment</tspan></text>
+</g>
+<g class="node" data-id="Umap" data-label="`umapper.py`
+display + clustering manifolds" data-shape="rectangle">
+  <rect x="2052.93" y="95.00000000000001" width="213.12099999999995" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="2159.4905" y="121.90000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="2159.4905" dy="-3.9000000000000012">`umapper.py`</tspan><tspan x="2159.4905" dy="16.900000000000002">display + clustering manifolds</tspan></text>
+</g>
+<g class="node" data-id="Hierarchy" data-label="`build_hierarchy.py`
+PLSCAN" data-shape="rectangle">
+  <rect x="2314.051" y="95.00000000000001" width="161.99200000000002" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="2395.047" y="121.90000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="2395.047" dy="-3.9000000000000012">`build_hierarchy.py`</tspan><tspan x="2395.047" dy="16.900000000000002">PLSCAN</tspan></text>
+</g>
+<g class="node" data-id="Labels" data-label="`toponymy_labels.py`" data-shape="rectangle">
+  <rect x="2524.0429999999997" y="103.45000000000002" width="166.43800000000005" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="2607.2619999999997" y="121.90000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">`toponymy_labels.py`</text>
+</g>
+<g class="node" data-id="ScopeExport" data-label="`scope_runner.run_scope()`" data-shape="rectangle">
+  <rect x="2738.4809999999998" y="103.45000000000002" width="210.898" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="2843.93" y="121.90000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">`scope_runner.run_scope()`</text>
+</g>
+<g class="node" data-id="Links" data-label="`build_links_graph.py`" data-shape="rectangle">
+  <rect x="1809.9634999999998" y="176.8" width="173.848" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1896.8874999999998" y="195.25" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">`build_links_graph.py`</text>
+</g>
 </svg>

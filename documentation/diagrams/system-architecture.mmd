@@ -1,0 +1,69 @@
+flowchart LR
+    Browser["Browser"]
+    subgraph Frontend["React frontend (`web/`)"]
+        Router["Router + `/api/app-config` boot"]
+        Dashboard["Dashboard"]
+        ImportUI["New Collection / Import"]
+        Explore["Explore UI"]
+        Providers["ScopeContext + FilterContext + sidebar state"]
+    end
+
+    subgraph API["Hono API (`api/`)"]
+        Config["App config + health"]
+        CatalogViews["Catalog + views + query routes"]
+        Search["Semantic + keyword search"]
+        Graph["Links graph routes"]
+        Jobs["Jobs / `import_twitter`"]
+        Resolve["`t.co` URL resolver"]
+    end
+
+    subgraph Storage["Storage and external services"]
+        CatalogDB[("Catalog LanceDB<br/>`system__datasets`<br/>`system__scopes`")]
+        DatasetDB[("Per-dataset LanceDB<br/>scope rows<br/>graph tables")]
+        RawFiles[["Filesystem / `DATA_URL`<br/>raw artifacts + images"]]
+        Voyage["VoyageAI"]
+    end
+
+    subgraph Pipeline["Python pipeline (`latentscope/`)"]
+        TwitterImport["`twitter_import.py`"]
+        Embed["`embed.py`<br/>contextual tweet enrichment"]
+        Umap["`umapper.py`<br/>display + clustering manifolds"]
+        Hierarchy["`build_hierarchy.py`<br/>PLSCAN"]
+        Labels["`toponymy_labels.py`"]
+        ScopeExport["`scope_runner.run_scope()`"]
+        Links["`build_links_graph.py`"]
+    end
+
+    Browser --> Router
+    Router --> Dashboard
+    Router --> ImportUI
+    Router --> Explore
+    Explore --> Providers
+
+    Router -->|bootstraps| Config
+    Dashboard -->|datasets + scopes| CatalogViews
+    ImportUI -->|start/poll import jobs| Jobs
+    Explore -->|points, rows, filters| CatalogViews
+    Explore -->|semantic / keyword search| Search
+    Explore -->|threads + quotes| Graph
+    Explore -->|expand t.co links| Resolve
+
+    CatalogViews --> CatalogDB
+    CatalogViews --> DatasetDB
+    CatalogViews --> RawFiles
+    Search --> DatasetDB
+    Search --> Voyage
+    Graph --> DatasetDB
+    Jobs --> TwitterImport
+
+    TwitterImport --> Embed
+    Embed --> Umap
+    Umap --> Hierarchy
+    Hierarchy --> Labels
+    Labels --> ScopeExport
+    ScopeExport --> DatasetDB
+    ScopeExport --> CatalogDB
+    TwitterImport --> Links
+    Links --> DatasetDB
+    TwitterImport --> RawFiles
+    ScopeExport --> RawFiles
