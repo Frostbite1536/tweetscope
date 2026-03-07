@@ -104,7 +104,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   const { isDark: isDarkMode } = useColorMode();
   const { colorMap } = useClusterColors(clusterLabels, clusterHierarchy);
 
-  const { clusterFilter, filterActive, visibleIndexSet } = useFilter();
+  const { clusterFilter, filterActive, visibleIndexSet, filterSlots } = useFilter();
 
   const maxZoom = 40;
 
@@ -130,6 +130,12 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   const umapRef = useRef(null);
 
   const isFilterActive = filterActive;
+  const threadOnlyIsSoleActiveFilter = useMemo(() => {
+    if (!filterSlots?.thread) return false;
+    return Object.entries(filterSlots).every(([slotKey, value]) => (
+      slotKey === 'thread' ? value !== null : value === null
+    ));
+  }, [filterSlots]);
 
   // Points format: [x, y, selectionKey, activation, cluster]
   // When thread filter is active, non-matching points are hard-hidden (alpha=0)
@@ -483,6 +489,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
             showQuoteEdges={linksAvailable && vizConfig.showQuoteEdges}
             edgeWidthScale={vizConfig.edgeWidthScale}
             highlightIndices={highlightIndices}
+            treatSelectedAsNormal={threadOnlyIsSoleActiveFilter}
             maxZoom={maxZoom}
           />
         )}

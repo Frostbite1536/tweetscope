@@ -80,6 +80,16 @@ function formatTimelineRangeLabel(range) {
   return `${new Date(range[0]).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })} — ${new Date(range[1]).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
 }
 
+function getClusterSelectionKey(cluster) {
+  const clusterId = cluster?.cluster;
+  return clusterId === undefined || clusterId === null ? null : String(clusterId);
+}
+
+function findClusterIndexByKey(clusters, clusterKey) {
+  if (!clusterKey) return -1;
+  return clusters.findIndex((cluster) => getClusterSelectionKey(cluster) === clusterKey);
+}
+
 // Create a new component that wraps the main content
 function ExploreContent() {
   // Get scope-related state from ScopeContext
@@ -156,18 +166,48 @@ function ExploreContent() {
   const [selectedTopicIndex, setSelectedTopicIndex] = useState(null);
   const [expandedView, setExpandedView] = useState('directory'); // 'directory' | 'carousel'
   const topicDirData = useTopicDirectoryData(selectedTopicIndex, carouselEnabled, activeThreadMembership);
+  const prevTopicClustersRef = useRef(topicDirData.topLevelClusters);
+  const prevCarouselClustersRef = useRef(carouselData.topLevelClusters);
 
   useEffect(() => {
-    if (selectedTopicIndex == null) return;
-    if (selectedTopicIndex < topicDirData.topLevelClusters.length) return;
-    setSelectedTopicIndex(null);
-  }, [selectedTopicIndex, topicDirData.topLevelClusters.length]);
+    const previousClusters = prevTopicClustersRef.current;
+    const nextClusters = topicDirData.topLevelClusters;
+
+    if (selectedTopicIndex != null) {
+      const selectedClusterKey = getClusterSelectionKey(previousClusters[selectedTopicIndex]);
+      const nextIndex = findClusterIndexByKey(nextClusters, selectedClusterKey);
+
+      if (nextIndex >= 0) {
+        if (nextIndex !== selectedTopicIndex) {
+          setSelectedTopicIndex(nextIndex);
+        }
+      } else {
+        setSelectedTopicIndex(null);
+      }
+    }
+
+    prevTopicClustersRef.current = nextClusters;
+  }, [selectedTopicIndex, topicDirData.topLevelClusters]);
 
   useEffect(() => {
-    if (!carouselData.topLevelClusters.length) return;
-    if (focusedClusterIndex < carouselData.topLevelClusters.length) return;
-    setFocusedClusterIndex(carouselData.topLevelClusters.length - 1);
-  }, [focusedClusterIndex, carouselData.topLevelClusters.length, setFocusedClusterIndex]);
+    const previousClusters = prevCarouselClustersRef.current;
+    const nextClusters = carouselData.topLevelClusters;
+
+    if (nextClusters.length > 0) {
+      const focusedClusterKey = getClusterSelectionKey(previousClusters[focusedClusterIndex]);
+      const nextIndex = findClusterIndexByKey(nextClusters, focusedClusterKey);
+
+      if (nextIndex >= 0) {
+        if (nextIndex !== focusedClusterIndex) {
+          setFocusedClusterIndex(nextIndex);
+        }
+      } else if (focusedClusterIndex >= nextClusters.length) {
+        setFocusedClusterIndex(nextClusters.length - 1);
+      }
+    }
+
+    prevCarouselClustersRef.current = nextClusters;
+  }, [focusedClusterIndex, carouselData.topLevelClusters, setFocusedClusterIndex]);
 
   // Keep visualization-specific state
   const [hoveredIndex, setHoveredIndex] = useState(null);

@@ -223,6 +223,10 @@ function toClusterKey(value) {
   return String(value);
 }
 
+function toClusterKeyOrNull(value) {
+  return value == null ? null : String(value);
+}
+
 function buildHierarchyIndex(labels) {
   const labelIds = new Set(labels.map((label) => toClusterKey(label.cluster)));
   const childrenByParent = new Map();
@@ -288,6 +292,31 @@ function selectHierarchyLabelCut(index, targetLayer) {
 
 const EMPTY_LAYERS = [];
 
+function buildVisibleClusterIdSet(labels, pointClusterIds) {
+  if (!labels.length || !pointClusterIds.size) return new Set();
+
+  const visible = new Set();
+  const parentById = new Map();
+
+  for (const label of labels) {
+    const clusterId = toClusterKeyOrNull(label.cluster);
+    const parentId = toClusterKeyOrNull(label.parentCluster);
+    if (clusterId) {
+      parentById.set(clusterId, parentId);
+    }
+  }
+
+  for (const clusterId of pointClusterIds) {
+    let currentId = clusterId;
+    while (currentId && !visible.has(currentId)) {
+      visible.add(currentId);
+      currentId = parentById.get(currentId) ?? null;
+    }
+  }
+
+  return visible;
+}
+
 const DeckGLScatter = forwardRef(function DeckGLScatter({
   points,
   width,
@@ -310,6 +339,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
   showQuoteEdges = true,
   edgeWidthScale = 1,
   highlightIndices = null,
+  treatSelectedAsNormal = false,
 }, ref) {
   const { isDark: isDarkMode } = useColorMode();
   const { clusterLabels, clusterHierarchy, scope, scopeRows } = useScope();
@@ -453,6 +483,11 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     };
   }, [pointCount, pointOpacity]);
 
+  const highlightAlphaFloor = useMemo(
+    () => clamp(alphaScale.baseAlpha + 24, 60, 210),
+    [alphaScale.baseAlpha]
+  );
+
   // Prepare point data for ScatterplotLayer
   // Data coordinates are already in [-1, 1] range
   // points format: [x, y, selectionKey, activation, cluster]
@@ -521,6 +556,16 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     }
     return set;
   }, [points, scopeRows]);
+
+  const visiblePointClusterIdSet = useMemo(() => {
+    const set = new Set();
+    for (let i = 0; i < points.length; i++) {
+      if (points[i][2] === mapSelectionKey.hidden) continue;
+      const clusterId = toClusterKeyOrNull(points[i][4]);
+      if (clusterId) set.add(clusterId);
+    }
+    return set;
+  }, [points]);
 
   const { replyEdgeData, quoteEdgeData } = useMemo(() => {
     const reply = [];
@@ -634,15 +679,14 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     return count > 0 ? [sumX / count, sumY / count] : [0, 0];
   }
 
-  // When points are hard-hidden (thread filter), suppress labels/hulls for empty clusters.
-  // Check if any hull boundary point is visible — a fast proxy for cluster visibility.
+  // When points are hard-hidden (thread filter), keep labels/hulls for any cluster
+  // that still has visible points, including parent topics whose visible points
+  // now sit fully inside the hull after filtering.
   const effectiveLabelData = useMemo(() => {
     if (hiddenIndexSet.size === 0) return labelData;
-    return labelData.filter(l => {
-      if (!l.hull || l.hull.length === 0) return false;
-      return l.hull.some(idx => points[idx] && points[idx][2] !== mapSelectionKey.hidden);
-    });
-  }, [labelData, hiddenIndexSet, points]);
+    const visibleClusterIds = buildVisibleClusterIdSet(labelData, visiblePointClusterIdSet);
+    return labelData.filter((label) => visibleClusterIds.has(toClusterKey(label.cluster)));
+  }, [labelData, hiddenIndexSet, visiblePointClusterIdSet]);
 
   const visibleClusterIdSet = useMemo(
     () => new Set(effectiveLabelData.map((l) => String(l.cluster))),
@@ -1365,7 +1409,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
           } else if (d.selectionKey === mapSelectionKey.notSelected) {
             alpha = alphaScale.dimAlpha;
           } else if (d.selectionKey === mapSelectionKey.selected) {
-            alpha = alphaScale.selectedAlpha;
+            alpha = treatSelectedAsNormal ? alphaScale.baseAlpha : alphaScale.selectedAlpha;
           }
 
           if (featureIsSelected && d.selectionKey === mapSelectionKey.selected && d.activation > 0) {
@@ -1374,7 +1418,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
           }
 
           if (isHighlighted) {
-            alpha = Math.max(alpha, 220);
+            alpha = Math.max(alpha, highlightAlphaFloor);
           }
 
           if (isHovered) alpha = 255;
@@ -1396,7 +1440,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
         },
         updateTriggers: {
           getRadius: [hoveredPointIndex, pointRadii, featureIsSelected, highlightIndexSet, controlledViewState, currentViewState, initialZoom, maxPointRadius],
-          getFillColor: [hoveredPointIndex, featureIsSelected, alphaScale, highlightIndexSet, colorMap],
+          getFillColor: [hoveredPointIndex, featureIsSelected, alphaScale, highlightIndexSet, colorMap, treatSelectedAsNormal, highlightAlphaFloor],
           getLineColor: [hoveredPointIndex, highlightIndexSet, isDarkMode],
           getLineWidth: [hoveredPointIndex, highlightIndexSet],
         },
@@ -1501,20 +1545,22 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
     replyEdgeData,
     quoteEdgeData,
     scatterData,
-    effectiveHullData,
     activeHullData,
     placedLabels,
     labelCharacterSet,
     hoveredPointIndex,
     isDarkMode,
+    colorMap,
     featureIsSelected,
     pointRadii,
+    pointScale,
     maxPointRadius,
     alphaScale,
+    highlightAlphaFloor,
     highlightIndexSet,
-    onLabelClick,
     showClusterOutlines,
     activeClusterId,
+    treatSelectedAsNormal,
     controlledViewState,
     currentViewState,
     initialZoom,
@@ -1604,6 +1650,7 @@ DeckGLScatter.propTypes = {
     PropTypes.array,
     PropTypes.instanceOf(Set),
   ]),
+  treatSelectedAsNormal: PropTypes.bool,
 };
 
 export default DeckGLScatter;
