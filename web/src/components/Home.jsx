@@ -377,7 +377,7 @@ function Home({ appConfig = null }) {
                           scopeId={scope.id}
                           className={styles.scopeImage}
                           fallbackSrc={
-                            scope.ignore_hulls
+                            scope.ignore_hulls || !scope.cluster_id
                               ? `${apiUrl}/files/${dataset.id}/umaps/${scope.umap_id}.png`
                               : `${apiUrl}/files/${dataset.id}/clusters/${scope.cluster_id}.png`
                           }

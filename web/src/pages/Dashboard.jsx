@@ -144,7 +144,7 @@ function ScopeGrid({ datasetId, scopeList, typeLabel }) {
               scopeId={scope.id}
               className={styles.scopeImage}
               fallbackSrc={
-                scope.ignore_hulls
+                scope.ignore_hulls || !scope.cluster_id
                   ? `${apiUrl}/files/${datasetId}/umaps/${scope.umap_id}.png`
                   : `${apiUrl}/files/${datasetId}/clusters/${scope.cluster_id}.png`
               }
