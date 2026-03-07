@@ -25,12 +25,19 @@ def load_umap_meta(data_dir: str, dataset_id: str, umap_id: str) -> dict[str, An
     return _load_json(os.path.join(data_dir, dataset_id, "umaps", f"{umap_id}.json"))
 
 
-def load_cluster_meta(data_dir: str, dataset_id: str, cluster_id: str) -> dict[str, Any]:
-    return _load_json(os.path.join(data_dir, dataset_id, "clusters", f"{cluster_id}.json"))
+def load_cluster_meta(
+    data_dir: str, dataset_id: str, cluster_id: str | None
+) -> dict[str, Any] | None:
+    if not cluster_id:
+        return None
+    path = os.path.join(data_dir, dataset_id, "clusters", f"{cluster_id}.json")
+    if not os.path.exists(path):
+        return None
+    return _load_json(path)
 
 
 def load_cluster_labels_meta(
-    data_dir: str, dataset_id: str, cluster_id: str, cluster_labels_id: str
+    data_dir: str, dataset_id: str, cluster_id: str | None, cluster_labels_id: str
 ) -> tuple[str, dict[str, Any]]:
     """
     Returns (effective_cluster_labels_id, cluster_labels_meta_json).
@@ -41,4 +48,3 @@ def load_cluster_labels_meta(
     return cluster_labels_id, _load_json(
         os.path.join(data_dir, dataset_id, "clusters", f"{cluster_labels_id}.json")
     )
-

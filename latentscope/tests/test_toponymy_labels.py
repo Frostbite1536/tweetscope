@@ -40,7 +40,7 @@ def test_collapse_single_child_nodes_collapses_transitive_chain() -> None:
 
 
 def test_renumber_layers_fixes_gaps_after_collapse() -> None:
-    """After collapse removes layers 1 and 2, renumber so edges are contiguous."""
+    """After collapse removes layers 1 and 2, preserve the original depth gap."""
     # Simulate: 4-layer hierarchy where layers 1 and 2 got collapsed.
     # Node at layer 0 now points to parent at layer 3.
     labels = [
@@ -69,17 +69,17 @@ def test_renumber_layers_fixes_gaps_after_collapse() -> None:
 
     info = _renumber_layers(labels)
 
-    # Root should be at layer 1, leaves at layer 0
+    # Preserve the original 3-layer gap between root and leaves.
     by_id = {row["cluster"]: row for row in labels}
-    assert by_id["3_0"]["layer"] == 1  # root
+    assert by_id["3_0"]["layer"] == 3  # root
     assert by_id["0_0"]["layer"] == 0  # leaf
     assert by_id["0_1"]["layer"] == 0  # leaf
-    assert info["num_layers"] == 2
-    assert info["layer_counts"] == {0: 2, 1: 1}
+    assert info["num_layers"] == 4
+    assert info["layer_counts"] == {0: 2, 3: 1}
 
 
 def test_renumber_layers_handles_uneven_branches() -> None:
-    """Branches with different depths get correct layer numbers."""
+    """Branches with different original gaps keep those gaps after renumbering."""
     # Root at layer 4, one branch goes root→mid→leaf, other goes root→leaf
     labels = [
         {
@@ -115,21 +115,13 @@ def test_renumber_layers_handles_uneven_branches() -> None:
     info = _renumber_layers(labels)
     by_id = {row["cluster"]: row for row in labels}
 
-    # Max depth is 2 (root→mid→leaf_a), so root=2
-    assert by_id["root"]["layer"] == 2
-    assert by_id["mid"]["layer"] == 1
+    assert by_id["root"]["layer"] == 4
+    assert by_id["mid"]["layer"] == 2
     assert by_id["leaf_a"]["layer"] == 0
-    # shallow branch: root(2)→leaf_b(1)
-    assert by_id["leaf_b"]["layer"] == 1
+    assert by_id["leaf_b"]["layer"] == 3
 
-    # Every parent-child edge spans exactly one layer
-    for row in labels:
-        if row["parent_cluster"] is not None:
-            parent = by_id[row["parent_cluster"]]
-            assert parent["layer"] == row["layer"] + 1, (
-                f"{row['cluster']} layer {row['layer']} has parent "
-                f"{row['parent_cluster']} at layer {parent['layer']}"
-            )
+    assert info["num_layers"] == 5
+    assert info["layer_counts"] == {0: 1, 2: 1, 3: 1, 4: 1}
 
 
 def test_no_orphans_after_collapse_and_renumber() -> None:
@@ -184,7 +176,7 @@ def test_no_orphans_after_collapse_and_renumber() -> None:
 
 
 def test_collapse_and_renumber_full_pipeline() -> None:
-    """End-to-end: collapse removes single-child, renumber fixes layer gaps."""
+    """End-to-end: collapse removes single-child, renumber preserves layer gaps."""
     # 5-layer hierarchy: 0→1→2→3→4 but layers 1,2,3 are single-child chains
     # plus a second branch from layer 4 to layer 0
     labels = [
@@ -211,8 +203,8 @@ def test_collapse_and_renumber_full_pipeline() -> None:
     assert "0_1" in by_id
     assert "4_0" in by_id
 
-    # After renumber: root=1, leaves=0
-    assert by_id["4_0"]["layer"] == 1
+    # After renumber: preserve the original 4-layer gap.
+    assert by_id["4_0"]["layer"] == 4
     assert by_id["0_0"]["layer"] == 0
     assert by_id["0_1"]["layer"] == 0
 
@@ -220,3 +212,39 @@ def test_collapse_and_renumber_full_pipeline() -> None:
     assert by_id["0_0"]["parent_cluster"] == "4_0"
     assert by_id["0_1"]["parent_cluster"] == "4_0"
     assert by_id["4_0"]["parent_cluster"] is None
+    assert renumber_info["num_layers"] == 5
+
+
+def test_renumber_layers_shifts_negative_orphan_roots_to_non_negative() -> None:
+    labels = [
+        {
+            "cluster": "child",
+            "layer": 3,
+            "label": "child",
+            "parent_cluster": "high_root",
+            "children": [],
+        },
+        {
+            "cluster": "high_root",
+            "layer": 4,
+            "label": "high root",
+            "parent_cluster": None,
+            "children": ["child"],
+        },
+        {
+            "cluster": "orphan_root",
+            "layer": 0,
+            "label": "independent root",
+            "parent_cluster": None,
+            "children": [],
+        },
+    ]
+
+    info = _renumber_layers(labels)
+    by_id = {row["cluster"]: row for row in labels}
+
+    assert min(row["layer"] for row in labels) == 0
+    assert by_id["orphan_root"]["layer"] == 0
+    assert by_id["high_root"]["layer"] == 4
+    assert by_id["child"]["layer"] == 3
+    assert info["layer_counts"] == {0: 1, 3: 1, 4: 1}

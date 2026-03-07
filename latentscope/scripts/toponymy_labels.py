@@ -1,8 +1,5 @@
 """
-Generate hierarchical cluster labels using Toponymy.
-
-This script takes an existing scope and generates hierarchical topic labels
-using Toponymy's clustering and LLM naming capabilities.
+Generate hierarchical cluster labels using Toponymy naming on a precomputed hierarchy.
 
 Usage:
     python -m latentscope.scripts.toponymy_labels dataset_id scope_id \
@@ -29,8 +26,23 @@ if os.path.exists(_local_toponymy) and _local_toponymy not in _sys_paths_normali
     print(f"Using local toponymy from: {_local_toponymy}")
 
 from latentscope.util import get_data_dir
-from latentscope.util.text_enrichment import get_enriched_texts
+from latentscope.pipeline.hierarchy import PrecomputedClusterer
+from latentscope.util.text_enrichment import get_labeling_texts
 from latentscope.__version__ import __version__
+
+LABELING_METHODOLOGY_VERSION = 2
+THREAD_WINDOW_POLICY = {
+    "enabled": True,
+    "min_thread_size": 3,
+    "max_descendants": 2,
+    "max_total_chars": 900,
+    "max_segment_chars": 280,
+}
+EXEMPLAR_POLICY = {
+    "diversify_by_thread_root": True,
+    "soft_target_unique_ratio": 0.5,
+    "min_group_count_for_diversification": 3,
+}
 
 
 def main():
@@ -42,10 +54,8 @@ def main():
                         help='LLM provider for topic naming')
     parser.add_argument('--llm-model', type=str, default='gpt-5-mini',
                         help='LLM model name')
-    parser.add_argument('--min-clusters', type=int, default=2,
-                        help='Minimum number of clusters per layer')
-    parser.add_argument('--base-min-cluster-size', type=int, default=10,
-                        help='Minimum cluster size for finest layer')
+    parser.add_argument('--hierarchy-id', type=str, default=None,
+                        help='Precomputed hierarchy artifact id to use for naming')
     parser.add_argument('--output-id', type=str, default=None,
                         help='Output cluster labels id (default: auto-generated)')
     parser.add_argument('--context', type=str, default=None,
@@ -63,11 +73,15 @@ def main():
 
 def run_toponymy_labeling(
     dataset_id: str,
-    scope_id: str,
+    scope_id: str | None = None,
     llm_provider: str = "openai",
     llm_model: str = "gpt-5-mini",
-    min_clusters: int = 2,
-    base_min_cluster_size: int = 10,
+    hierarchy_id: str = None,
+    embedding_id: str | None = None,
+    umap_id: str | None = None,
+    clustering_umap_id: str | None = None,
+    cluster_id: str | None = None,
+    text_column: str = "text",
     output_id: str = None,
     context: str = None,
     sync_llm: bool = False,
@@ -75,15 +89,19 @@ def run_toponymy_labeling(
     max_concurrent_requests: int = 25,
 ):
     """
-    Generate hierarchical cluster labels using Toponymy.
+    Generate hierarchical cluster labels using Toponymy naming on a precomputed hierarchy.
 
     Args:
         dataset_id: Dataset directory name
         scope_id: Scope to generate labels for
         llm_provider: LLM provider (openai, anthropic, cohere)
         llm_model: Model name for the provider
-        min_clusters: Minimum clusters per layer
-        base_min_cluster_size: Minimum cluster size for layer 0
+        hierarchy_id: Precomputed hierarchy artifact id to reuse for naming
+        embedding_id: Embedding id when generating labels without a pre-existing scope
+        umap_id: Display UMAP id when generating labels without a pre-existing scope
+        clustering_umap_id: Clustering manifold id when generating labels without a pre-existing scope
+        cluster_id: Optional cluster lineage id for metadata when generating labels without a pre-existing scope
+        text_column: Input text column when generating labels without a pre-existing scope
         output_id: Output cluster labels id (auto-generated if None)
         context: Context description for LLM prompts
         sync_llm: If True, force synchronous LLM wrapper
@@ -93,35 +111,69 @@ def run_toponymy_labeling(
     # in log files and background task output (tqdm writes to stderr by default).
     sys.stderr = sys.stdout
 
-    from toponymy import Toponymy, ToponymyClusterer
+    from toponymy import Toponymy
     from toponymy.embedding_wrappers import VoyageAIEmbedder
 
     DATA_DIR = get_data_dir()
     dataset_path = os.path.join(DATA_DIR, dataset_id)
 
-    print(f"Loading scope {scope_id} from {dataset_path}")
+    scope_meta: dict[str, Any]
+    if scope_id is not None:
+        print(f"Loading scope {scope_id} from {dataset_path}")
+        scope_file = os.path.join(dataset_path, "scopes", f"{scope_id}.json")
+        with open(scope_file) as f:
+            scope_meta = json.load(f)
+        embedding_id = scope_meta["embedding_id"]
+        umap_id = scope_meta["umap_id"]
+        text_column = scope_meta.get("dataset", {}).get("text_column", "text")
+        hierarchy_id = hierarchy_id or scope_meta.get("hierarchy_id")
+        if cluster_id is None:
+            cluster_id = scope_meta.get("cluster_id")
+    else:
+        if not embedding_id or not umap_id:
+            raise ValueError(
+                "embedding_id and umap_id are required when scope_id is not provided"
+            )
+        scope_meta = {
+            "id": None,
+            "embedding_id": embedding_id,
+            "umap_id": umap_id,
+            "cluster_id": cluster_id,
+            "dataset": {
+                "text_column": text_column,
+            },
+        }
+        print(f"Generating labels directly from dataset lineage in {dataset_path}")
+    if hierarchy_id is None:
+        raise ValueError(
+            "hierarchy_id is required. Toponymy labeling now runs in naming-only mode on a precomputed hierarchy."
+        )
 
-    # Load scope metadata
-    scope_file = os.path.join(dataset_path, "scopes", f"{scope_id}.json")
-    with open(scope_file) as f:
-        scope_meta = json.load(f)
-
-    embedding_id = scope_meta["embedding_id"]
-    umap_id = scope_meta["umap_id"]
-    text_column = scope_meta.get("dataset", {}).get("text_column", "text")
-
-    # Load texts from input (with reference enrichment)
+    # Load texts from input with reference + thread-window enrichment.
     print("Loading texts...")
     input_df = pd.read_parquet(os.path.join(dataset_path, "input.parquet"))
     print(f"  Loaded {len(input_df)} rows")
 
-    print("Enriching texts with referenced tweet context...")
-    texts, enrich_stats = get_enriched_texts(input_df, text_column)
+    print("Building labeling texts with reference and thread context...")
+    texts, enrich_stats, thread_metadata = get_labeling_texts(
+        input_df,
+        text_column,
+        enable_thread_windows=THREAD_WINDOW_POLICY["enabled"],
+        min_thread_size=THREAD_WINDOW_POLICY["min_thread_size"],
+        max_descendants=THREAD_WINDOW_POLICY["max_descendants"],
+        max_total_chars=THREAD_WINDOW_POLICY["max_total_chars"],
+        max_segment_chars=THREAD_WINDOW_POLICY["max_segment_chars"],
+    )
     if enrich_stats["enriched_count"] > 0:
         print(f"  {enrich_stats['enriched_count']} texts enriched with "
               f"{enrich_stats['total_references_resolved']} resolved references")
     else:
         print("  No resolvable tweet references found")
+    if enrich_stats.get("thread_window_count", 0) > 0:
+        print(
+            f"  {enrich_stats['thread_window_count']} texts enriched with thread windows "
+            f"across {enrich_stats.get('thread_window_thread_count', 0)} self-threads"
+        )
 
     # Load embeddings
     print(f"Loading embeddings from {embedding_id}...")
@@ -131,24 +183,23 @@ def run_toponymy_labeling(
 
     # Load UMAP coordinates for clustering
     # Check if a dedicated clustering manifold exists (kD)
-    cluster_id = scope_meta.get("cluster_id")
-    clustering_umap_id = None
-    if cluster_id:
+    resolved_clustering_umap_id = clustering_umap_id
+    if resolved_clustering_umap_id is None and cluster_id:
         cluster_meta_file = os.path.join(dataset_path, "clusters", f"{cluster_id}.json")
         if os.path.exists(cluster_meta_file):
             with open(cluster_meta_file) as f:
                 cluster_meta = json.load(f)
-            clustering_umap_id = cluster_meta.get("clustering_umap_id")
+            resolved_clustering_umap_id = cluster_meta.get("clustering_umap_id")
 
-    if clustering_umap_id:
-        print(f"Loading clustering manifold from {clustering_umap_id}...")
-        clustering_df = pd.read_parquet(os.path.join(dataset_path, "umaps", f"{clustering_umap_id}.parquet"))
+    if resolved_clustering_umap_id:
+        print(f"Loading clustering manifold from {resolved_clustering_umap_id}...")
+        clustering_df = pd.read_parquet(os.path.join(dataset_path, "umaps", f"{resolved_clustering_umap_id}.parquet"))
         dim_cols = [c for c in clustering_df.columns if c.startswith("dim_")]
         if dim_cols:
             clusterable_vectors = clustering_df[dim_cols].values
             print(f"  Loaded {len(dim_cols)}D clustering manifold: {clusterable_vectors.shape}")
         else:
-            print(f"  WARNING: {clustering_umap_id} has no dim_* columns, falling back to display UMAP")
+            print(f"  WARNING: {resolved_clustering_umap_id} has no dim_* columns, falling back to display UMAP")
             umap_df = pd.read_parquet(os.path.join(dataset_path, "umaps", f"{umap_id}.parquet"))
             clusterable_vectors = umap_df[["x", "y"]].values
     else:
@@ -170,12 +221,25 @@ def run_toponymy_labeling(
     llm = get_llm_wrapper(llm_provider, llm_model, async_mode=use_async_llm,
                           max_concurrent_requests=max_concurrent_requests)
 
-    # Configure clusterer
-    print(f"Configuring ToponymyClusterer (min_clusters={min_clusters}, base_min_cluster_size={base_min_cluster_size})")
-    clusterer = ToponymyClusterer(
-        min_clusters=min_clusters,
-        base_min_cluster_size=base_min_cluster_size,
-        verbose=True
+    print(f"Loading precomputed hierarchy {hierarchy_id}...")
+    clusterer = PrecomputedClusterer.from_artifact(
+        dataset_path=dataset_path,
+        hierarchy_id=hierarchy_id,
+        embedding_vectors=embedding_vectors,
+        verbose=True,
+        show_progress_bar=True,
+        adaptive_exemplars=adaptive_exemplars,
+        exemplar_group_ids=thread_metadata["exemplar_group_ids"],
+        soft_exemplar_group_diversity=EXEMPLAR_POLICY["diversify_by_thread_root"],
+        exemplar_group_diversity_ratio=EXEMPLAR_POLICY["soft_target_unique_ratio"],
+        min_exemplar_group_count_for_diversification=EXEMPLAR_POLICY[
+            "min_group_count_for_diversification"
+        ],
+    )
+    hierarchy_meta = clusterer.meta_
+    print(
+        f"  Loaded {len(clusterer.cluster_layers_)} layers "
+        f"from builder={hierarchy_meta.get('builder')}"
     )
 
     # Load text embedding model for keyphrase extraction (Voyage API)
@@ -189,7 +253,6 @@ def run_toponymy_labeling(
     if context is None:
         context = f"documents from the {dataset_id} dataset"
 
-    # Create Toponymy model
     print("Creating Toponymy model...")
     topic_model = Toponymy(
         llm_wrapper=llm,
@@ -212,7 +275,11 @@ def run_toponymy_labeling(
     from toponymy.audit import flag_clusters_for_relabel, run_relabel_pass
 
     audit_info = {"flagged_before": 0, "flagged_after": 0, "relabeled": 0, "passes_run": 0}
-    flagged = flag_clusters_for_relabel(topic_model)
+    # Disable keyphrase_alignment check: it uses substring matching (do verbatim
+    # n-gram keyphrases from tweets appear in the label?) which fundamentally
+    # mismatches abstractive LLM labels.  topic_specificity is the meaningful
+    # quality signal.  threshold=-1 prevents any keyphrase-alignment flags.
+    flagged = flag_clusters_for_relabel(topic_model, keyphrase_alignment_threshold=-1.0)
     audit_info["flagged_before"] = len(flagged)
     if flagged:
         print(f"\nAudit: {len(flagged)} clusters flagged for relabeling")
@@ -227,7 +294,7 @@ def run_toponymy_labeling(
         print(f"  Relabel results: {relabel_stats['relabeled']} relabeled, {relabel_stats['passes_run']} passes")
 
         # Re-audit after relabeling
-        remaining = flag_clusters_for_relabel(topic_model)
+        remaining = flag_clusters_for_relabel(topic_model, keyphrase_alignment_threshold=-1.0)
         audit_info["flagged_after"] = len(remaining)
         print(f"  After relabel: {len(remaining)} clusters still flagged")
     else:
@@ -262,11 +329,16 @@ def run_toponymy_labeling(
         llm_provider=llm_provider,
         llm_model=llm_model,
         max_concurrent_requests=max_concurrent_requests,
-        min_clusters=min_clusters,
-        base_min_cluster_size=base_min_cluster_size,
+        hierarchy_id=hierarchy_id,
+        hierarchy_meta=hierarchy_meta,
+        context=context,
+        adaptive_exemplars=adaptive_exemplars,
         audit_info=audit_info,
         enrichment_stats=enrich_stats,
         collapse_info=collapse_info,
+        methodology_version=LABELING_METHODOLOGY_VERSION,
+        labeling_text_policy=THREAD_WINDOW_POLICY,
+        exemplar_policy=EXEMPLAR_POLICY,
     )
 
     print(f"\nSaved hierarchical labels to: clusters/{output_id}.parquet")
@@ -338,11 +410,11 @@ def _build_child_to_parent_map(cluster_tree, num_layers):
         for child_node in children_list:
             child_layer, child_idx = child_node
 
-            # Invariant: parent layer must be child layer + 1
-            if parent_layer != child_layer + 1:
+            # Invariant: parent layer must be strictly above child layer
+            if parent_layer <= child_layer:
                 violations.append(
                     f"({child_layer}_{child_idx}): parent ({parent_layer}_{parent_idx}) "
-                    f"layer {parent_layer} != expected {child_layer + 1}"
+                    f"layer {parent_layer} is not above child layer {child_layer}"
                 )
                 continue
 
@@ -465,18 +537,24 @@ def _renumber_layers(
     labels: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """
-    Renumber layers top-down so every parent-child edge spans exactly one layer.
+    Renumber layers top-down, preserving original depth gaps for cross-layer edges.
 
-    After single-child collapse, a child at original layer 0 might point to a
-    parent at original layer 3 (because layers 1-2 were collapsed away).  This
-    function assigns contiguous layer numbers starting from the roots downward:
-      roots  → max surviving depth
-      leaves → 0 (or the shallowest surviving depth on that branch)
+    After single-child collapse and PLSCAN cross-layer parents, a child at
+    original layer 0 might point to a parent at original layer 2 (skipping 1).
+    This function preserves the relative depth: a cross-layer edge that spanned
+    2 original layers still spans 2 renumbered layers. Orphan roots that started
+    below another root keep that relative depth, but any negative layers are
+    shifted upward so all persisted layers remain non-negative.
 
     Mutates ``labels`` in place and returns a summary dict.
     """
     by_id: dict[str, dict[str, Any]] = {
         str(row["cluster"]): row for row in labels
+    }
+
+    # Snapshot original layers before renumbering.
+    original_layer: dict[str, int] = {
+        str(row["cluster"]): _layer_value(row.get("layer")) for row in labels
     }
 
     # Build parent→children adjacency from surviving nodes.
@@ -490,42 +568,58 @@ def _renumber_layers(
         else:
             children_map.setdefault(str(pid), []).append(cid)
 
-    # Compute max depth from each root via DFS to determine its layer number.
+    # Compute max depth from each root via DFS, respecting original layer gaps.
     def _max_depth(node_id: str) -> int:
         children = children_map.get(node_id, [])
         if not children:
             return 0
-        return 1 + max(_max_depth(c) for c in children)
+        depths = []
+        for c in children:
+            gap = original_layer[node_id] - original_layer[c]
+            depths.append(gap + _max_depth(c))
+        return max(depths)
 
     global_max_depth = max((_max_depth(r) for r in roots), default=0)
 
-    # BFS from roots, assigning layers top-down.
+    # BFS from roots, assigning layers top-down preserving original gaps.
+    # Orphan nodes (parentless at lower original layers) keep their relative
+    # depth rather than all being promoted to the top layer.
     from collections import deque
 
+    max_original_layer = max(original_layer.values(), default=0)
     queue: deque[tuple[str, int]] = deque()
     for r in roots:
-        by_id[r]["layer"] = global_max_depth
-        queue.append((r, global_max_depth))
+        offset = max_original_layer - original_layer[r]
+        assigned_layer = global_max_depth - offset
+        by_id[r]["layer"] = assigned_layer
+        queue.append((r, assigned_layer))
 
     while queue:
         node_id, node_layer = queue.popleft()
         for child_id in children_map.get(node_id, []):
-            by_id[child_id]["layer"] = node_layer - 1
-            queue.append((child_id, node_layer - 1))
+            gap = original_layer[node_id] - original_layer[child_id]
+            by_id[child_id]["layer"] = node_layer - gap
+            queue.append((child_id, node_layer - gap))
+
+    min_assigned_layer = min((int(row["layer"]) for row in labels), default=0)
+    if min_assigned_layer < 0:
+        shift = -min_assigned_layer
+        for row in labels:
+            row["layer"] = int(row["layer"]) + shift
 
     # Compute post-collapse layer counts.
     layer_counts: dict[int, int] = {}
     for row in labels:
-        layer = row["layer"]
+        layer = int(row["layer"])
         layer_counts[layer] = layer_counts.get(layer, 0) + 1
 
     return {
-        "num_layers": global_max_depth + 1,
+        "num_layers": (max(layer_counts.keys(), default=-1) + 1) if layer_counts else 0,
         "layer_counts": layer_counts,
     }
 
 
-def build_hierarchical_labels(topic_model, clusterable_vectors, texts):
+def build_hierarchical_labels(topic_model, display_vectors, texts):
     """
     Build hierarchical cluster labels from Toponymy results.
 
@@ -581,7 +675,7 @@ def build_hierarchical_labels(topic_model, clusterable_vectors, texts):
             valid_nodes.add(node_key)
 
             # Get cluster points for hull and centroid
-            cluster_points = clusterable_vectors[point_mask]
+            cluster_points = display_vectors[point_mask]
 
             # Compute centroid
             centroid_x = float(np.mean(cluster_points[:, 0]))
@@ -686,11 +780,16 @@ def save_hierarchical_labels(
     llm_provider=None,
     llm_model=None,
     max_concurrent_requests=None,
-    min_clusters=None,
-    base_min_cluster_size=None,
+    hierarchy_id=None,
+    hierarchy_meta=None,
+    context=None,
+    adaptive_exemplars=None,
     audit_info=None,
     enrichment_stats=None,
     collapse_info=None,
+    methodology_version=None,
+    labeling_text_policy=None,
+    exemplar_policy=None,
 ):
     """Save hierarchical labels to parquet and JSON files."""
     clusters_dir = os.path.join(dataset_path, "clusters")
@@ -708,15 +807,21 @@ def save_hierarchical_labels(
         "type": "toponymy",
         "ls_version": __version__,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "scope_id": scope_meta["id"],
+        "scope_id": scope_meta.get("id"),
         "embedding_id": scope_meta["embedding_id"],
         "umap_id": scope_meta["umap_id"],
         "cluster_id": scope_meta.get("cluster_id"),
+        "hierarchy_id": hierarchy_id,
+        "hierarchy_builder": hierarchy_meta.get("builder") if hierarchy_meta else None,
+        "structure_source": "precomputed_hierarchy",
         "llm_provider": llm_provider,
         "llm_model": llm_model,
+        "context": context,
+        "adaptive_exemplars": adaptive_exemplars,
         "max_concurrent_requests": max_concurrent_requests,
-        "min_clusters": min_clusters,
-        "base_min_cluster_size": base_min_cluster_size,
+        "labeling_methodology_version": methodology_version,
+        "labeling_text_policy": labeling_text_policy,
+        "exemplar_policy": exemplar_policy,
         "num_layers_pre_collapse": len(topic_model.topic_names_),
         "layer_counts_pre_collapse": [len(names) for names in topic_model.topic_names_],
         "num_layers": (

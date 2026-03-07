@@ -34,7 +34,7 @@ def run_scope(
     dataset_id: str,
     embedding_id: str,
     umap_id: str,
-    cluster_id: str,
+    cluster_id: str | None,
     cluster_labels_id: str,
     label: str,
     description: str,
@@ -74,6 +74,9 @@ def run_scope(
     )
     scope_meta["cluster_labels_id"] = effective_labels_id
     scope_meta["cluster_labels"] = labels_meta
+    hierarchy_id = labels_meta.get("hierarchy_id")
+    if hierarchy_id:
+        scope_meta["hierarchy_id"] = hierarchy_id
 
     cluster_labels_path = os.path.join(
         data_dir, dataset_id, "clusters", f"{effective_labels_id}.parquet"
@@ -101,6 +104,7 @@ def run_scope(
         cluster_id=cluster_id,
         cluster_labels_df=cluster_labels_df,
         hierarchical=hierarchical,
+        hierarchy_id=hierarchy_id,
         scope_id=resolved_scope_id,
         overwrite_scope_id=scope_id,
     )

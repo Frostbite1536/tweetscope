@@ -8,10 +8,17 @@ def main() -> None:
     parser.add_argument("dataset_id", type=str, help="Dataset id (directory name in data folder)")
     parser.add_argument("embedding_id", type=str, help="Embedding id")
     parser.add_argument("umap_id", type=str, help="UMAP id")
-    parser.add_argument("cluster_id", type=str, help="Cluster id")
     parser.add_argument("cluster_labels_id", type=str, help="Cluster labels id")
     parser.add_argument("label", type=str, help="Label for the scope")
     parser.add_argument("description", type=str, help="Description of the scope")
+    parser.add_argument(
+        "--cluster-id",
+        "--cluster_id",
+        dest="cluster_id",
+        type=str,
+        default=None,
+        help="Optional flat cluster id. Omit for hierarchy-backed scopes.",
+    )
     parser.add_argument(
         "--scope_id", type=str, help="Scope id to overwrite existing scope", default=None
     )

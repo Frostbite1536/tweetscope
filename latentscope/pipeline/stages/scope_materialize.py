@@ -7,6 +7,10 @@ from typing import Any
 
 import pandas as pd
 
+from latentscope.pipeline.hierarchy import (
+    build_deepest_cluster_assignments,
+    load_hierarchy_artifact,
+)
 from latentscope.pipeline.contracts.scope_input import (
     SERVING_COLUMNS,
     load_contract,
@@ -22,9 +26,10 @@ def build_scope_points_df(
     umap_df: pd.DataFrame,
     data_dir: str,
     dataset_id: str,
-    cluster_id: str,
+    cluster_id: str | None,
     cluster_labels_df: pd.DataFrame,
     hierarchical: bool,
+    hierarchy_id: str | None,
     scope_id: str,
     overwrite_scope_id: str | None,
 ) -> pd.DataFrame:
@@ -32,16 +37,29 @@ def build_scope_points_df(
     umap_df["tile_index_64"] = make_tiles(umap_df["x"], umap_df["y"], 64)
     umap_df["tile_index_128"] = make_tiles(umap_df["x"], umap_df["y"], 128)
 
-    cluster_df = pd.read_parquet(
-        os.path.join(data_dir, dataset_id, "clusters", f"{cluster_id}.parquet")
-    )
-    cluster_df = cluster_df.copy()
-
     if hierarchical:
+        cluster_df = pd.DataFrame(index=umap_df.index)
         point_to_cluster, point_to_label = build_deepest_point_mappings(cluster_labels_df)
         cluster_df["cluster"] = cluster_df.index.map(point_to_cluster).fillna("unknown")
         cluster_df["label"] = cluster_df.index.map(point_to_label).fillna("Unknown")
+        if hierarchy_id:
+            artifact = load_hierarchy_artifact(
+                os.path.join(data_dir, dataset_id),
+                hierarchy_id,
+            )
+            raw_assignments = build_deepest_cluster_assignments(
+                artifact.cluster_label_layers
+            )
+            cluster_df["raw_cluster"] = pd.Series(
+                raw_assignments, index=cluster_df.index
+            ).astype("string")
     else:
+        if not cluster_id:
+            raise ValueError("cluster_id is required for non-hierarchical scope materialization")
+        cluster_df = pd.read_parquet(
+            os.path.join(data_dir, dataset_id, "clusters", f"{cluster_id}.parquet")
+        )
+        cluster_df = cluster_df.copy()
         cluster_df["label"] = cluster_df["cluster"].apply(
             lambda x: cluster_labels_df.loc[x]["label"]
         )
