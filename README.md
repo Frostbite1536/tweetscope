@@ -4,136 +4,141 @@
 
 # tweetscope
 
-**Turn your Twitter/X archive into a searchable, visual knowledge base.**
+Turn a Twitter/X archive into a searchable map of themes, threads, and quotes.
 
-Drop in your archive zip. Tweetscope embeds every tweet, maps them onto a 2D scatter plot, clusters them by topic, and labels each cluster with an LLM — so you can browse years of tweets by theme instead of scrolling chronologically.
-
-<picture>
-  <img src="documentation/screenshot-explore.png" alt="Explore view: interactive scatter plot with color-coded topic regions, hover cards, and a tweet feed sidebar">
-</picture>
-
-## Features
-
-### Browse by topic
-
-Navigate a hierarchical topic tree. Click any topic to filter the scatter plot and see matching tweets in the feed. Drill down from broad themes to fine subtopics.
+Tweetscope imports an archive, enriches tweets with surrounding context, projects the corpus into an interactive space, names clusters with hierarchical labels, and serves the result through a React UI backed by a Hono API and LanceDB.
 
 <picture>
-  <img src="documentation/screenshot-topic-directory.png" alt="Topic Directory: grid of topic cards with sub-cluster pills and filtered tweet feed">
+  <img src="documentation/screenshot-explore.png" alt="Explore view with scatter plot, filters, and tweet feed sidebar">
 </picture>
 
-### Multi-column carousel
+## What You Can Do
 
-Expand the sidebar into a full-width carousel — one column per subtopic, with engagement metrics, quote embeds, and thread chains side by side.
+- Browse a topic map instead of scrolling a timeline.
+- Search semantically and by keyword against the active scope.
+- Open thread and quote side views with reply/quote graph overlays.
+- Expand into a topic directory or multi-column carousel.
+- Scrub time with timeline playback and filter to thread-heavy regions.
+- Import likes into a sibling `-likes` dataset that is grouped with the main collection on the dashboard.
 
 <picture>
-  <img src="documentation/screenshot-carousel.png" alt="Carousel view: multi-column tweet feed organized by subtopic with quote embeds and engagement metrics">
+  <img src="documentation/screenshot-topic-directory.png" alt="Topic directory view with topic cards and filtered feed">
 </picture>
-
-### Semantic and keyword search
-
-Search your tweets by meaning (vector nearest-neighbor via VoyageAI) or by keyword (full-text search), with matching points highlighted live on the scatter plot.
-
-## How it works
-
-Your tweets flow through a six-step ML pipeline: **ingest → embed → UMAP → cluster → label → explore**. Each step writes reproducible artifacts (Parquet, HDF5, JSON). You can re-run any step with different parameters and compare results via scopes.
 
 <picture>
-  <img src="documentation/pipeline-flow.svg" alt="Data pipeline: ingest → embed → UMAP → cluster → label → scope → explore">
+  <img src="documentation/screenshot-carousel.png" alt="Carousel view with multiple topic columns and tweet cards">
 </picture>
 
-## Getting started
+## Current Architecture
+
+The frontend is a routed React/Vite app with three live screens: dashboard, new collection, and the main explore surface. It talks only to the TypeScript Hono API. The API reads catalog metadata and serving tables from LanceDB, proxies a small set of raw files, and spawns Python subprocesses for imports. The Python side materializes artifacts under `LATENT_SCOPE_DATA`, exports serving tables to LanceDB, and keeps the catalog in sync.
+
+<picture>
+  <img src="documentation/system-architecture.svg" alt="System architecture diagram showing React frontend, Hono API, Python pipeline, LanceDB, catalog tables, raw artifacts, and VoyageAI">
+</picture>
+
+Diagram source: `documentation/diagrams/system-architecture.mmd`
+
+## Pipeline
+
+The current default Twitter pipeline is no longer the old `ingest -> embed -> UMAP -> cluster -> label -> explore` path. Today it is:
+
+1. Import and normalize archive data with `twitter_import.py`
+2. Create contextual embeddings with `embed.py`
+3. Build a 2D display UMAP and a separate clustering UMAP
+4. Build a hierarchy with `build_hierarchy.py` (PLSCAN)
+5. Name the hierarchy with `toponymy_labels.py`
+6. Materialize a serving scope, validate the contract, export to LanceDB, and register it in the catalog
+7. Build reply/quote graph artifacts for thread and quote views
+
+<picture>
+  <img src="documentation/pipeline-flow.svg" alt="Pipeline flow diagram showing import, embeddings, dual UMAPs, hierarchy, Toponymy labels, scope export, LanceDB, catalog registration, and links graph artifacts">
+</picture>
+
+Diagram source: `documentation/diagrams/pipeline-flow.mmd`
+
+## Getting Started
 
 ### Prerequisites
 
-- Python 3.11+ and [uv](https://docs.astral.sh/uv/)
-- Node.js 22+ and npm
-- API keys: [VoyageAI](https://dash.voyageai.com/) (embeddings) and [OpenAI](https://platform.openai.com/) (cluster labeling)
-- A Twitter/X archive zip (request yours at https://x.com/settings/download_your_data)
+- Python 3.11+
+- `uv`
+- Node.js 22+
+- npm
+- `VOYAGE_API_KEY`
+- `OPENAI_API_KEY`
+- A writable `LATENT_SCOPE_DATA` directory
 
-### 1. Clone and install
+Note: the repo root does not currently include a checked-in Python packaging manifest, so the commands below assume the Python dependencies are already available in your active environment.
+
+### Install JavaScript dependencies
 
 ```bash
 git clone --recurse-submodules <repo-url>
 cd latent-scope
 
-# Python pipeline
-uv pip install -e .
-
-# API + frontend
 cd api && npm install && cd ..
 cd web && npm install && cd ..
 ```
 
-### 2. Configure
+### Configure the environment
 
 ```bash
 cp .env.example .env
-cp api/.env.example api/.env
 ```
 
-Edit `.env` — set your data directory and API keys:
-```
+Set at least:
+
+```bash
 LATENT_SCOPE_DATA=~/latent-scope-data
+LATENT_SCOPE_APP_MODE=studio
 VOYAGE_API_KEY=your-key
 OPENAI_API_KEY=your-key
-LATENT_SCOPE_APP_MODE=studio
-```
-
-Edit `api/.env` — set the same data directory and keys:
-```
-LATENT_SCOPE_DATA=~/latent-scope-data
-LATENT_SCOPE_APP_MODE=studio
-VOYAGE_API_KEY=your-key
 PORT=3000
 ```
 
-### 3. Import your Twitter archive
+The API dev server reads the repo-root `.env` via `api/package.json`.
+
+### Start the app
 
 ```bash
-# Place your archive in archives/ (gitignored)
-cp ~/Downloads/twitter-archive.zip archives/
-
-# Import and run the full pipeline (embed → UMAP → cluster → label → scope)
-uv run python3 -m latentscope.scripts.twitter_import my-tweets \
-  --source zip --zip_path archives/twitter-archive.zip --run_pipeline
-```
-
-### 4. Explore
-
-```bash
-# Terminal 1: start the API
+# Terminal 1
 cd api && npm run dev
 
-# Terminal 2: start the frontend
+# Terminal 2
 cd web && npm run dev
 ```
 
-Open http://localhost:5174 — select your dataset and scope to explore.
+Open `http://localhost:5174`.
 
-### Large archives
+### Import data
 
-For archives with 100k+ tweets, you can import year by year to keep memory manageable, then run the pipeline once on the full dataset. See [Progressive import](DEVELOPMENT.md#progressive-import-for-large-archives) in the development guide.
+Preferred UI flow:
+
+1. Open `/new`
+2. Upload a native X archive zip or start a Community Archive import
+3. For native archives, the browser extracts and normalizes the zip locally before upload
+4. The API runs `latentscope.scripts.twitter_import` and redirects into the new scope when the job completes
+
+Direct CLI flow:
+
+```bash
+uv run python3 -m latentscope.scripts.twitter_import my-tweets \
+  --source zip \
+  --zip_path archives/twitter-archive.zip \
+  --run_pipeline
+```
+
+For large archives, run year-by-year ingest first and then a final `--run_pipeline` pass. See the development guide for the current storage layout and pipeline details.
 
 ## Development
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for:
 
-- Architecture overview and runtime modes
-- Repository structure
-- Python pipeline reference (CLI, scripts, data contracts)
-- Hono API routes and adding new endpoints
-- Frontend contexts, hooks, and styling rules
-- Dataset directory structure and data contracts
-- Deployment guide (Vercel + Cloudflare R2)
+- Frontend route and provider architecture
+- Hono route groups and LanceDB serving model
+- Current Python import and scope-export pipeline
+- Dataset storage layout under `LATENT_SCOPE_DATA`
+- Local development commands and verification commands
 
-## Contributing
-
-```bash
-# Clone with submodules
-git clone --recurse-submodules <repo-url>
-# or after clone:
-git submodule update --init --recursive
-```
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details and dev setup.
+Deployment notes live under [`documentation/`](documentation), including [Vercel deployment](documentation/vercel-deployment.md) and [Cloudflare R2 / CDN setup](documentation/cloudflare-r2-cdn.md).
