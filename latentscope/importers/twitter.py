@@ -398,6 +398,10 @@ def _flatten_tweet(
         "display_name": display_name,
         "in_reply_to_status_id": t.get("in_reply_to_status_id_str") or t.get("in_reply_to_status_id"),
         "in_reply_to_screen_name": t.get("in_reply_to_screen_name"),
+        # NOTE: quoted_status_id is always empty in both native X archive exports
+        # and community archives (X strips this key from export data). Kept as a
+        # dormant field — if a future data source populates it, build_links_graph.py
+        # will use it as the primary quote-edge source (with URL parsing as fallback).
         "quoted_status_id": t.get("quoted_status_id_str") or t.get("quoted_status_id") or None,
         "conversation_id": t.get("conversation_id_str") or t.get("conversation_id") or None,
         "is_reply": is_reply,
