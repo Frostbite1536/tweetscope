@@ -277,6 +277,15 @@ export const jobsRoutes = new Hono()
         "cluster_samples",
         "cluster_min_samples",
         "cluster_selection_epsilon",
+        "hierarchy_min_samples",
+        "hierarchy_max_layers",
+        "hierarchy_base_min_cluster_size",
+        "hierarchy_base_n_clusters",
+        "hierarchy_layer_similarity_threshold",
+        "toponymy_provider",
+        "toponymy_model",
+        "toponymy_context",
+        "max_concurrent_requests",
         "import_batch_id",
       ];
 
@@ -289,6 +298,9 @@ export const jobsRoutes = new Hono()
       if (truthyFlag(asString(body.exclude_retweets))) argv.push("--exclude_retweets");
       if (falsyFlag(asString(body.build_links))) argv.push("--no-build_links");
       if (truthyFlag(asString(body.include_likes))) argv.push("--include_likes");
+      if (falsyFlag(asString(body.hierarchical_labels))) argv.push("--no-hierarchical_labels");
+      if (truthyFlag(asString(body.hierarchy_reproducible))) argv.push("--hierarchy_reproducible");
+      if (falsyFlag(asString(body.toponymy_adaptive_exemplars))) argv.push("--no-toponymy_adaptive_exemplars");
       const runPipeline = truthyFlag(asString(body.run_pipeline), true);
       if (runPipeline) argv.push("--run_pipeline");
       const incrementalLinks = asString(body.incremental_links);
