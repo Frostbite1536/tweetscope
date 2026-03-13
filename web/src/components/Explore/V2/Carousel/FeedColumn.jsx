@@ -155,61 +155,63 @@ function FeedColumn({
         />
 
         <div className={styles.tweetScroll}>
-          {visibleItems.map((item) => {
-            if (item.type === 'thread') {
+          <div className={styles.feedList}>
+            {visibleItems.map((item) => {
+              if (item.type === 'thread') {
+                return (
+                  <ThreadGroup
+                    key={`thread-${item.threadRootId}`}
+                    rows={item.rows}
+                    threadRootId={item.threadRootId}
+                    textColumn={dataset?.text_column}
+                    clusterMap={clusterMap}
+                    nodeStats={nodeStats}
+                    onHover={onHover}
+                    onClick={onClick}
+                    onViewThread={onViewThread}
+                    onViewQuotes={onViewQuotes}
+                    hasMissingAncestors={item.hasMissingAncestors}
+                    missingAncestorCount={item.missingAncestorCount}
+                    globalThreadSize={item.globalThreadSize}
+                    visibleCount={item.visibleCount}
+                    borderless
+                  />
+                );
+              }
+              const row = item.row;
+              if (item.hasMissingAncestors) {
+                return (
+                  <StandaloneWithAncestors
+                    key={row.ls_index ?? row.index}
+                    row={row}
+                    textColumn={dataset?.text_column}
+                    clusterMap={clusterMap}
+                    nodeStats={nodeStats}
+                    onHover={onHover}
+                    onClick={onClick}
+                    onViewThread={onViewThread}
+                    onViewQuotes={onViewQuotes}
+                    datasetId={dataset?.id}
+                    scopeId={scope?.id}
+                    dataset={dataset}
+                  />
+                );
+              }
               return (
-                <ThreadGroup
-                  key={`thread-${item.threadRootId}`}
-                  rows={item.rows}
-                  threadRootId={item.threadRootId}
-                  textColumn={dataset?.text_column}
-                  clusterMap={clusterMap}
-                  nodeStats={nodeStats}
-                  onHover={onHover}
-                  onClick={onClick}
-                  onViewThread={onViewThread}
-                  onViewQuotes={onViewQuotes}
-                  hasMissingAncestors={item.hasMissingAncestors}
-                  missingAncestorCount={item.missingAncestorCount}
-                  globalThreadSize={item.globalThreadSize}
-                  visibleCount={item.visibleCount}
-                  borderless
-                />
-              );
-            }
-            const row = item.row;
-            if (item.hasMissingAncestors) {
-              return (
-                <StandaloneWithAncestors
+                <TweetCard
                   key={row.ls_index ?? row.index}
                   row={row}
                   textColumn={dataset?.text_column}
-                  clusterMap={clusterMap}
-                  nodeStats={nodeStats}
+                  clusterInfo={clusterMap?.[row.ls_index]}
                   onHover={onHover}
                   onClick={onClick}
+                  nodeStats={nodeStats?.get(row.ls_index)}
                   onViewThread={onViewThread}
                   onViewQuotes={onViewQuotes}
-                  datasetId={dataset?.id}
-                  scopeId={scope?.id}
-                  dataset={dataset}
                 />
               );
-            }
-            return (
-              <TweetCard
-                key={row.ls_index ?? row.index}
-                row={row}
-                textColumn={dataset?.text_column}
-                clusterInfo={clusterMap?.[row.ls_index]}
-                onHover={onHover}
-                onClick={onClick}
-                nodeStats={nodeStats?.get(row.ls_index)}
-                onViewThread={onViewThread}
-                onViewQuotes={onViewQuotes}
-              />
-            );
-          })}
+            })}
+          </div>
 
           {/* Sentinel for progressive rendering */}
           {hasMoreToReveal && (

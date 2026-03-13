@@ -12,6 +12,7 @@ import { Search, ChevronDown, ArrowDownNarrowWide, ArrowUpNarrowWide } from 'luc
 import { useScope } from '../../../../contexts/ScopeContext';
 import { useClusterColors, resolveClusterColorCSS } from '../../../../hooks/useClusterColors';
 import { useColorMode } from '../../../../hooks/useColorMode';
+import { recordFeedCarouselDebug } from '../../../../lib/feedCarouselDebug';
 import SubNav from '../../../SubNav';
 import TopicCard from '../TopicDirectory/TopicCard';
 import styles from './TopicListSidebar.module.scss';
@@ -77,13 +78,28 @@ function TopicListSidebar({
 
     const cardRect = card.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
+    const startingScrollTop = list.scrollTop;
 
     if (cardRect.top < listRect.top) {
       list.scrollTop += cardRect.top - listRect.top;
+      recordFeedCarouselDebug('toc-vertical-autoscroll', {
+        direction: 'up',
+        focusedIndex,
+        label: topLevelClusters[focusedIndex]?.label ?? null,
+        fromScrollTop: startingScrollTop,
+        toScrollTop: list.scrollTop,
+      });
     } else if (cardRect.bottom > listRect.bottom) {
       list.scrollTop += cardRect.bottom - listRect.bottom;
+      recordFeedCarouselDebug('toc-vertical-autoscroll', {
+        direction: 'down',
+        focusedIndex,
+        label: topLevelClusters[focusedIndex]?.label ?? null,
+        fromScrollTop: startingScrollTop,
+        toScrollTop: list.scrollTop,
+      });
     }
-  }, [focusedIndex]);
+  }, [focusedIndex, topLevelClusters]);
 
   // Keyboard: "/" to focus search, Escape to clear
   // Disabled for overlay instance to avoid duplicate global listeners

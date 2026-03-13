@@ -963,12 +963,46 @@ function ExploreContent() {
     latestHoverAnchorIndexRef.current = null;
   }, []);
 
+  const focusCluster = useCallback(
+    (cluster) => {
+      const clusterId = cluster?.cluster;
+      if (clusterId === undefined || clusterId === null) return;
+
+      setPinnedIndex(null);
+      clearHoverState();
+      dismissThreadContext();
+      applyCluster(cluster);
+
+      const clusterObj = clusterLabels?.find(
+        (candidate) => String(candidate.cluster) === String(clusterId)
+      );
+      if (!clusterObj?.hull || clusterObj.hull.length < 3 || !scopeRows?.length) return;
+
+      const hullPoints = clusterObj.hull
+        .map((idx) => scopeRows[idx])
+        .filter((point) => point && !point.deleted);
+      if (hullPoints.length < 3) return;
+
+      const xs = hullPoints.map((point) => point.x);
+      const ys = hullPoints.map((point) => point.y);
+      const padX = (Math.max(...xs) - Math.min(...xs)) * 0.15;
+      const padY = (Math.max(...ys) - Math.min(...ys)) * 0.15;
+
+      vizRef.current?.zoomToBounds([
+        Math.min(...xs) - padX,
+        Math.min(...ys) - padY,
+        Math.max(...xs) + padX,
+        Math.max(...ys) + padY,
+      ], 500);
+    },
+    [applyCluster, clearHoverState, dismissThreadContext, clusterLabels, scopeRows]
+  );
+
   const handleFilterToCluster = useCallback(
     (cluster) => {
-      if (!cluster || cluster.cluster === undefined || cluster.cluster === null) return;
-      applyCluster(cluster);
+      focusCluster(cluster);
     },
-    [applyCluster]
+    [focusCluster]
   );
 
   const containerRef = useRef(null);
@@ -977,37 +1011,9 @@ function ExploreContent() {
   // Handle clicking a cluster label on the map: filter + zoom
   const handleLabelClick = useCallback(
     ({ cluster: clusterIndex, label }) => {
-      // Find matching cluster from clusterLabels to get hull
-      const clusterObj = clusterLabels?.find(c => c.cluster === clusterIndex);
-      if (!clusterObj) return;
-
-      setPinnedIndex(null);
-      clearHoverState();
-      dismissThreadContext();
-
-      // Filter sidebar to this cluster
-      handleFilterToCluster({ cluster: clusterIndex, label });
-
-      // Zoom to cluster bounds using hull
-      if (clusterObj.hull && clusterObj.hull.length >= 3 && scopeRows) {
-        const hullPoints = clusterObj.hull
-          .map(idx => scopeRows[idx])
-          .filter(p => p && !p.deleted);
-        if (hullPoints.length >= 3) {
-          const xs = hullPoints.map(p => p.x);
-          const ys = hullPoints.map(p => p.y);
-          const padX = (Math.max(...xs) - Math.min(...xs)) * 0.15;
-          const padY = (Math.max(...ys) - Math.min(...ys)) * 0.15;
-          vizRef.current?.zoomToBounds([
-            Math.min(...xs) - padX,
-            Math.min(...ys) - padY,
-            Math.max(...xs) + padX,
-            Math.max(...ys) + padY,
-          ], 500);
-        }
-      }
+      focusCluster({ cluster: clusterIndex, label });
     },
-    [clusterLabels, scopeRows, clearHoverState, dismissThreadContext, handleFilterToCluster]
+    [focusCluster]
   );
 
   const handleScopeChange = useCallback(
