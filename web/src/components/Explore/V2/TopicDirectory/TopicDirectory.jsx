@@ -1,7 +1,16 @@
-import { useState, useCallback, useMemo, useEffect, useRef, memo } from 'react';
+import {
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  useRef,
+  useDeferredValue,
+  memo,
+} from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, LayoutGrid, GalleryHorizontalEnd } from 'lucide-react';
 import { useScope } from '../../../../contexts/ScopeContext';
+import { sortClusterItems } from '../../../../lib/sortClusters';
 import { useClusterColors, resolveClusterColorCSS } from '../../../../hooks/useClusterColors';
 import { useColorMode } from '../../../../hooks/useColorMode';
 import TopicCard from './TopicCard';
@@ -34,75 +43,26 @@ function TopicDirectory({
   const [sortMode, setSortMode] = useState('popular');
   const searchRef = useRef(null);
   const activeCardRef = useRef(null);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const hasFeedOpen = selectedClusterIndex != null;
   const selectedCluster = hasFeedOpen ? topLevelClusters[selectedClusterIndex] : null;
 
-  // Separate unclustered from real clusters
-  const { realClusters, unclustered } = useMemo(() => {
-    const real = [];
-    let unc = null;
-    topLevelClusters.forEach((c, i) => {
-      if (String(c.cluster) === 'unknown') {
-        unc = { cluster: c, index: i };
-      } else {
-        real.push({ cluster: c, index: i });
-      }
-    });
-    return { realClusters: real, unclustered: unc };
-  }, [topLevelClusters]);
-
-  // Sort clusters
-  const sortedClusters = useMemo(() => {
-    const items = [...realClusters];
-    switch (sortMode) {
-      case 'similar': {
-        // Angle sort: compute angle of each centroid relative to global center
-        const withCentroids = items.filter(
-          ({ cluster }) => cluster.centroid_x != null && cluster.centroid_y != null
-        );
-        const noCentroids = items.filter(
-          ({ cluster }) => cluster.centroid_x == null || cluster.centroid_y == null
-        );
-        if (withCentroids.length > 0) {
-          const cx =
-            withCentroids.reduce((s, { cluster }) => s + cluster.centroid_x, 0) /
-            withCentroids.length;
-          const cy =
-            withCentroids.reduce((s, { cluster }) => s + cluster.centroid_y, 0) /
-            withCentroids.length;
-          withCentroids.sort(
-            (a, b) =>
-              Math.atan2(a.cluster.centroid_y - cy, a.cluster.centroid_x - cx) -
-              Math.atan2(b.cluster.centroid_y - cy, b.cluster.centroid_x - cx)
-          );
-          return [...withCentroids, ...noCentroids];
-        }
-        return items;
-      }
-      case 'largest':
-        return items.sort(
-          (a, b) =>
-            (b.cluster.cumulativeCount || b.cluster.count || 0) -
-            (a.cluster.cumulativeCount || a.cluster.count || 0)
-        );
-      case 'az':
-        return items.sort((a, b) =>
-          (a.cluster.label || '').localeCompare(b.cluster.label || '')
-        );
-      case 'popular':
-      default:
-        return items.sort(
-          (a, b) =>
-            (b.cluster.cumulativeLikes || 0) - (a.cluster.cumulativeLikes || 0)
-        );
-    }
-  }, [realClusters, sortMode]);
+  // Separate, sort, and extract unclustered in one pass
+  const { sortedClusters, unclustered } = useMemo(() => {
+    const items = topLevelClusters.map((c, i) => ({ cluster: c, originalIndex: i }));
+    const result = sortClusterItems(items, sortMode);
+    // sortedItems excludes unclustered (it's appended at end but also returned separately)
+    const sorted = result.sortedItems.filter(
+      (item) => String(item.cluster.cluster) !== 'unknown'
+    );
+    return { sortedClusters: sorted, unclustered: result.unclustered };
+  }, [topLevelClusters, sortMode]);
 
   // Filter clusters by search
   const filteredClusters = useMemo(() => {
-    if (!searchQuery.trim()) return sortedClusters;
-    const q = searchQuery.toLowerCase().trim();
+    if (!deferredSearchQuery.trim()) return sortedClusters;
+    const q = deferredSearchQuery.toLowerCase().trim();
     return sortedClusters.filter(({ cluster }) => {
       const labelMatch = cluster.label?.toLowerCase().includes(q);
       const descMatch = cluster.description?.toLowerCase().includes(q);
@@ -111,12 +71,17 @@ function TopicDirectory({
       );
       return labelMatch || descMatch || subMatch;
     });
-  }, [sortedClusters, searchQuery]);
+  }, [deferredSearchQuery, sortedClusters]);
 
-  const matchingIndices = useMemo(() => {
-    if (!searchQuery.trim()) return null; // null = no filter active
-    return new Set(filteredClusters.map(({ index }) => index));
-  }, [filteredClusters, searchQuery]);
+  const filteredUnclustered = useMemo(() => {
+    if (!unclustered) return null;
+    if (!deferredSearchQuery.trim()) return unclustered;
+    const q = deferredSearchQuery.toLowerCase().trim();
+    const cluster = unclustered.cluster;
+    const labelMatch = cluster.label?.toLowerCase().includes(q);
+    const descMatch = cluster.description?.toLowerCase().includes(q);
+    return labelMatch || descMatch ? unclustered : null;
+  }, [deferredSearchQuery, unclustered]);
 
   // Auto-scroll active card into view
   useEffect(() => {
@@ -228,45 +193,34 @@ function TopicDirectory({
       <div className={`${styles.main} ${hasFeedOpen ? styles.split : ''}`}>
         {/* Directory pane */}
         <div className={styles.directory}>
-          <div className={styles.grid}>
-            {sortedClusters.map(({ cluster, index }) => {
-              const isFiltered = matchingIndices !== null && !matchingIndices.has(index);
-              return (
-                <div
-                  key={cluster.cluster}
-                  ref={index === selectedClusterIndex ? activeCardRef : undefined}
-                  className={`${styles.cardWrap} ${isFiltered ? styles.filtered : ''}`}
-                >
-                  <TopicCard
-                    cluster={cluster}
-                    isActive={index === selectedClusterIndex}
-                    onClick={() => handleCardClick(index)}
-                    clusterColor={getClusterColor(cluster.cluster)}
-                    sortMode={sortMode}
-                  />
-                </div>
-              );
-            })}
+          <div className={styles.list}>
+            {filteredClusters.map(({ cluster, originalIndex }) => (
+              <TopicCard
+                key={cluster.cluster}
+                ref={originalIndex === selectedClusterIndex ? activeCardRef : undefined}
+                cluster={cluster}
+                isActive={originalIndex === selectedClusterIndex}
+                onClick={() => handleCardClick(originalIndex)}
+                clusterColor={getClusterColor(cluster.cluster)}
+                sortMode={sortMode}
+              />
+            ))}
 
             {/* Unclustered at bottom */}
-            {unclustered && (
-              <div
-                className={`${styles.cardWrap} ${styles.unclusteredWrap}`}
-                ref={unclustered.index === selectedClusterIndex ? activeCardRef : undefined}
-              >
-                <TopicCard
-                  cluster={unclustered.cluster}
-                  isActive={unclustered.index === selectedClusterIndex}
-                  isUnclustered
-                  onClick={() => handleCardClick(unclustered.index)}
-                />
-              </div>
+            {filteredUnclustered && (
+              <TopicCard
+                ref={filteredUnclustered.originalIndex === selectedClusterIndex ? activeCardRef : undefined}
+                cluster={filteredUnclustered.cluster}
+                isActive={filteredUnclustered.originalIndex === selectedClusterIndex}
+                isUnclustered
+                onClick={() => handleCardClick(filteredUnclustered.originalIndex)}
+              />
             )}
           </div>
 
           {/* Footer */}
           <div className={styles.footer}>
-            {realClusters.length} topics &middot; {totalTweets.toLocaleString()} tweets
+            {sortedClusters.length} topics &middot; {totalTweets.toLocaleString()} tweets
           </div>
         </div>
 

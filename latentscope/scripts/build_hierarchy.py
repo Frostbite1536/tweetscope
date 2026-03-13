@@ -18,7 +18,6 @@ import pandas as pd
 
 from latentscope.pipeline.hierarchy import (
     build_plscan_hierarchy,
-    compute_target_leaf_topics_from_input_df,
     next_hierarchy_id,
     save_hierarchy_artifact,
 )
@@ -41,7 +40,6 @@ def main() -> None:
     parser.add_argument("--max-layers", type=int, default=10)
     parser.add_argument("--base-min-cluster-size", type=int, default=10)
     parser.add_argument("--base-n-clusters", type=int, default=None)
-    parser.add_argument("--text-column", type=str, default="text")
     parser.add_argument("--layer-similarity-threshold", type=float, default=0.2)
     parser.add_argument("--reproducible", action="store_true")
     parser.add_argument("--quiet", action="store_true")
@@ -60,7 +58,6 @@ def build_hierarchy(
     max_layers: int = 10,
     base_min_cluster_size: int = 10,
     base_n_clusters: int | None = None,
-    text_column: str = "text",
     layer_similarity_threshold: float = 0.2,
     reproducible: bool = False,
     quiet: bool = False,
@@ -76,22 +73,6 @@ def build_hierarchy(
 
     with h5py.File(os.path.join(dataset_path, "embeddings", f"{embedding_id}.h5"), "r") as f:
         n_points = int(f["embeddings"].shape[0])
-
-    # Auto-compute base_n_clusters from corpus density when not specified.
-    if base_n_clusters is None:
-        input_path = os.path.join(dataset_path, "input.parquet")
-        if os.path.exists(input_path):
-            input_df = pd.read_parquet(input_path)
-            base_n_clusters, median_chars, reply_ratio = (
-                compute_target_leaf_topics_from_input_df(
-                    input_df,
-                    text_column=text_column,
-                    n_rows=n_points,
-                )
-            )
-            if not quiet:
-                print(f"  auto base_n_clusters={base_n_clusters} "
-                      f"(median_chars={median_chars:.0f}, reply_ratio={reply_ratio:.2f})")
 
     clustering_df = pd.read_parquet(
         os.path.join(dataset_path, "umaps", f"{clustering_umap_id}.parquet")

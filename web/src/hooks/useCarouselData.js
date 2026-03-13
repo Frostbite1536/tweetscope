@@ -3,7 +3,7 @@ import { useScope } from '@/contexts/ScopeContext';
 import { queryApi } from '@/lib/apiService';
 import { appQueryClient } from '@/query/client';
 import { queryKeys } from '@/query/keys';
-import { buildClusterFeedIndex, normalizeClusterId } from '@/lib/buildClusterFeedIndex';
+import { buildClusterFeedIndex, normalizeClusterId, EMPTY_FEED_INDEX } from '@/lib/buildClusterFeedIndex';
 import { isThreadMember } from '@/lib/threadMembership';
 
 const ROWS_PER_PAGE = 30;
@@ -30,14 +30,20 @@ export default function useCarouselData(focusedClusterIndex, enabled = true, thr
     return clusterHierarchy.children;
   }, [clusterHierarchy]);
 
+  const shouldBuildFeedIndex = enabled && allTopLevelClusters.length > 0;
+
   // Shared feed index — identity-cached at module level, no duplicate work
   const baseFeedIndex = useMemo(
-    () => buildClusterFeedIndex(allTopLevelClusters, scopeRows, clusterHierarchy),
-    [allTopLevelClusters, scopeRows, clusterHierarchy]
+    () =>
+      shouldBuildFeedIndex
+        ? buildClusterFeedIndex(allTopLevelClusters, scopeRows, clusterHierarchy)
+        : EMPTY_FEED_INDEX,
+    [shouldBuildFeedIndex, allTopLevelClusters, scopeRows, clusterHierarchy]
   );
   const { clusterToTopLevel, indicesByTopLevel: baseIndicesByTopLevel, descendantsByCluster } = baseFeedIndex;
 
   const indicesByTopLevel = useMemo(() => {
+    if (!shouldBuildFeedIndex) return EMPTY_FEED_INDEX.indicesByTopLevel;
     if (!threadMembership) return baseIndicesByTopLevel;
     const filtered = {};
     for (let i = 0; i < allTopLevelClusters.length; i++) {
@@ -46,12 +52,13 @@ export default function useCarouselData(focusedClusterIndex, enabled = true, thr
       filtered[clusterId] = indices.filter((lsIndex) => isThreadMember(threadMembership, lsIndex));
     }
     return filtered;
-  }, [allTopLevelClusters, baseIndicesByTopLevel, threadMembership]);
+  }, [allTopLevelClusters, baseIndicesByTopLevel, shouldBuildFeedIndex, threadMembership]);
 
   const topLevelClusters = useMemo(() => {
+    if (!enabled) return EMPTY_CLUSTERS;
     if (!threadMembership) return allTopLevelClusters;
     return allTopLevelClusters.filter((cluster) => (indicesByTopLevel[cluster.cluster]?.length ?? 0) > 0);
-  }, [allTopLevelClusters, indicesByTopLevel, threadMembership]);
+  }, [allTopLevelClusters, enabled, indicesByTopLevel, threadMembership]);
 
   // Fetch column data for a given column index
   const fetchColumnData = useCallback(
@@ -137,19 +144,23 @@ export default function useCarouselData(focusedClusterIndex, enabled = true, thr
     [fetchColumnData]
   );
 
-  // Lazy-load columns near the focused index (gated by enabled)
-  useEffect(() => {
-    if (!enabled || !topLevelClusters.length || !dataset) return;
+  const ensureColumnsLoaded = useCallback(
+    (columnIndices) => {
+      if (!enabled || !dataset || !Array.isArray(columnIndices)) return;
 
-    const start = Math.max(0, focusedClusterIndex - PREFETCH_RANGE);
-    const end = Math.min(topLevelClusters.length - 1, focusedClusterIndex + PREFETCH_RANGE);
+      for (const rawIndex of columnIndices) {
+        const columnIndex = Number(rawIndex);
+        if (!Number.isInteger(columnIndex) || columnIndex < 0 || columnIndex >= topLevelClusters.length) {
+          continue;
+        }
 
-    for (let i = start; i <= end; i++) {
-      if (!fetchedRef.current.has(i)) {
-        fetchedRef.current.add(i);
-        fetchColumnData(i, 0);
-      } else {
-        const cluster = topLevelClusters[i];
+        if (!fetchedRef.current.has(columnIndex)) {
+          fetchedRef.current.add(columnIndex);
+          fetchColumnData(columnIndex, 0);
+          continue;
+        }
+
+        const cluster = topLevelClusters[columnIndex];
         const indices = indicesByTopLevel[cluster?.cluster] || [];
         const pageIndices = indices.slice(0, ROWS_PER_PAGE);
         if (pageIndices.length > 0) {
@@ -161,15 +172,30 @@ export default function useCarouselData(focusedClusterIndex, enabled = true, thr
           });
         }
       }
+    },
+    [enabled, dataset, fetchColumnData, topLevelClusters, indicesByTopLevel, scope?.id]
+  );
+
+  // Lazy-load columns near the focused index (gated by enabled)
+  useEffect(() => {
+    if (!enabled || !topLevelClusters.length || !dataset) return;
+
+    const start = Math.max(0, focusedClusterIndex - PREFETCH_RANGE);
+    const end = Math.min(topLevelClusters.length - 1, focusedClusterIndex + PREFETCH_RANGE);
+    const nearbyColumnIndices = [];
+    for (let i = start; i <= end; i++) {
+      nearbyColumnIndices.push(i);
     }
-  }, [enabled, focusedClusterIndex, topLevelClusters, dataset, scope?.id, indicesByTopLevel, fetchColumnData]);
+    ensureColumnsLoaded(nearbyColumnIndices);
+  }, [enabled, focusedClusterIndex, topLevelClusters, dataset, ensureColumnsLoaded]);
 
   // Reset when hierarchy changes
   useEffect(() => {
+    if (!enabled) return;
     setColumnData({});
     setActiveSubClusters({});
     fetchedRef.current = new Set();
-  }, [topLevelClusters]);
+  }, [enabled, topLevelClusters]);
 
   // Sub-cluster filtering (client-side)
   const setSubClusterFilter = useCallback((columnIndex, subClusterId) => {
@@ -223,6 +249,7 @@ export default function useCarouselData(focusedClusterIndex, enabled = true, thr
     columnData,
     columnRowsMap,
     loadMore,
+    ensureColumnsLoaded,
     activeSubClusters,
     setSubClusterFilter,
     clusterToTopLevel,

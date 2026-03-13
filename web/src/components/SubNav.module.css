@@ -10,6 +10,15 @@
   left: 10px;
 }
 
+.embedded {
+  position: static;
+  top: auto;
+  left: auto;
+  display: flex;
+  justify-content: flex-start;
+  padding: var(--space-3) var(--space-4) var(--space-2);
+}
+
 .contextBar {
   display: inline-flex;
   align-items: center;
@@ -25,6 +34,15 @@
 
 .overlayContextBar {
   padding: 5px var(--space-2);
+}
+
+.embeddedContextBar {
+  display: inline-flex;
+  align-self: flex-start;
+  max-width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border-radius: var(--radius-full);
 }
 
 .profilePill {
@@ -66,10 +84,20 @@
   margin-left: 6px;
 }
 
+.embeddedContextBar .profilePill {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 .scopeSelectWrap {
   position: relative;
   display: inline-flex;
   align-items: center;
+}
+
+.embeddedContextBar .scopeSelectWrap {
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .scopeSelect {
@@ -161,5 +189,10 @@
 
   .scopeSelectWrap {
     display: none;
+  }
+
+  .embeddedContextBar .profilePill,
+  .embeddedContextBar .scopeSelectWrap {
+    display: inline-flex;
   }
 }

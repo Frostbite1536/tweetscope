@@ -159,7 +159,7 @@ export async function listDatasets(
       length: normalizeCount(row.row_count),
       profile: profile ? {
         username: profile.username ?? undefined,
-        display_name: profile.display_name ?? undefined,
+        display_name: profile.username ?? profile.display_name ?? undefined,
         avatar_url: profile.avatar_url ?? undefined,
         bio: profile.bio ?? undefined,
       } : undefined,

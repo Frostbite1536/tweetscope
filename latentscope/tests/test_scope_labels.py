@@ -39,8 +39,12 @@ def test_build_cluster_labels_lookup_hierarchical_adds_unknown_and_converts_list
             "count": [2, 1],
             "parent_cluster": [None, None],
             "children": [np.array([], dtype=int), np.array([], dtype=int)],
+            "display_centroid_x": [0.1, 0.2],
+            "display_centroid_y": [0.3, 0.4],
             "centroid_x": [0.0, 0.0],
             "centroid_y": [0.0, 0.0],
+            "semantic_order": [0.25, 0.75],
+            "semantic_centroid": [[1.0, 2.0], [3.0, 4.0]],
             "indices": [[0, 1], [2]],
         }
     )
@@ -55,8 +59,14 @@ def test_build_cluster_labels_lookup_hierarchical_adds_unknown_and_converts_list
     assert len(unknown_rows) == 1
     assert unknown_rows[0]["count"] == 2
     assert all("indices" not in row for row in lookup)
+    assert all("semantic_centroid" not in row for row in lookup)
     assert isinstance(lookup[0]["hull"], list)
     assert isinstance(lookup[0]["children"], list)
+    assert lookup[0]["display_centroid_x"] == 0.1
+    assert lookup[0]["display_centroid_y"] == 0.3
+    assert lookup[0]["semantic_order"] == 0.25
+    assert unknown_rows[0]["display_centroid_x"] == 0
+    assert unknown_rows[0]["display_centroid_y"] == 0
 
 
 def test_build_cluster_labels_lookup_hierarchical_no_double_collapse() -> None:
@@ -71,6 +81,8 @@ def test_build_cluster_labels_lookup_hierarchical_no_double_collapse() -> None:
             "count": [3, 3],
             "parent_cluster": ["1_0", None],
             "children": [np.array([], dtype=object), np.array(["0_0"], dtype=object)],
+            "display_centroid_x": [0.0, 0.0],
+            "display_centroid_y": [0.0, 0.0],
             "centroid_x": [0.0, 0.0],
             "centroid_y": [0.0, 0.0],
             "indices": [[0, 1, 2], [0, 1, 2]],

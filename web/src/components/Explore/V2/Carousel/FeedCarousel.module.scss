@@ -17,7 +17,7 @@
   scroll-snap-type: x mandatory;
   gap: 32px;
   padding-top: var(--space-3);
-  padding-left: 32px;
+  padding-left: 0;
   padding-right: calc((100vw - 550px) / 2);
   scroll-behavior: smooth;
 
@@ -81,4 +81,94 @@
   font-size: 14px;
   font-weight: 400;
   color: var(--text-color-text-subtle);
+}
+
+/* ── Left-edge hover recall ── */
+
+.hoverZone {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 100%;
+  z-index: 20;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Accent line on the left edge */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 3px;
+    height: 100%;
+    background: color-mix(in srgb, var(--semantic-color-semantic-info) 30%, transparent);
+    transition: width var(--transition-fast), background var(--transition-fast);
+  }
+
+  &:hover::before {
+    width: 5px;
+    background: color-mix(in srgb, var(--semantic-color-semantic-info) 60%, transparent);
+  }
+}
+
+/* Tab/pill indicator centered on the hover zone edge */
+.hoverTab {
+  position: relative;
+  z-index: 1;
+  width: 20px;
+  height: 48px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  border: 1px solid var(--glass-border-subtle);
+  border-left: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--semantic-color-semantic-info);
+  box-shadow: var(--glass-shadow);
+  pointer-events: none;
+  animation: tabSlideIn 0.3s ease forwards;
+}
+
+@keyframes tabSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.listOverlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 360px;
+  height: 100%;
+  z-index: 25;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  border-right: 1px solid var(--glass-border-subtle);
+  box-shadow: var(--glass-shadow);
+  animation: overlaySlideIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes overlaySlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }

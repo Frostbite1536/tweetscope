@@ -3,7 +3,7 @@ import { useScope } from '@/contexts/ScopeContext';
 import { queryApi } from '@/lib/apiService';
 import { appQueryClient } from '@/query/client';
 import { queryKeys } from '@/query/keys';
-import { buildClusterFeedIndex, normalizeClusterId } from '@/lib/buildClusterFeedIndex';
+import { buildClusterFeedIndex, normalizeClusterId, EMPTY_FEED_INDEX } from '@/lib/buildClusterFeedIndex';
 import { isThreadMember } from '@/lib/threadMembership';
 
 const ROWS_PER_PAGE = 30;
@@ -26,14 +26,21 @@ export default function useTopicDirectoryData(selectedClusterIndex, enabled = tr
     return clusterHierarchy.children;
   }, [clusterHierarchy]);
 
+  const shouldBuildFeedIndex =
+    enabled && allTopLevelClusters.length > 0 && (selectedClusterIndex != null || threadMembership != null);
+
   // Shared feed index — identity-cached at module level, no duplicate work
   const baseFeedIndex = useMemo(
-    () => buildClusterFeedIndex(allTopLevelClusters, scopeRows, clusterHierarchy),
-    [allTopLevelClusters, scopeRows, clusterHierarchy]
+    () =>
+      shouldBuildFeedIndex
+        ? buildClusterFeedIndex(allTopLevelClusters, scopeRows, clusterHierarchy)
+        : EMPTY_FEED_INDEX,
+    [shouldBuildFeedIndex, allTopLevelClusters, scopeRows, clusterHierarchy]
   );
   const { clusterToTopLevel, indicesByTopLevel: baseIndicesByTopLevel, descendantsByCluster } = baseFeedIndex;
 
   const indicesByTopLevel = useMemo(() => {
+    if (!shouldBuildFeedIndex) return EMPTY_FEED_INDEX.indicesByTopLevel;
     if (!threadMembership) return baseIndicesByTopLevel;
     const filtered = {};
     for (let i = 0; i < allTopLevelClusters.length; i++) {
@@ -42,12 +49,13 @@ export default function useTopicDirectoryData(selectedClusterIndex, enabled = tr
       filtered[clusterId] = indices.filter((lsIndex) => isThreadMember(threadMembership, lsIndex));
     }
     return filtered;
-  }, [allTopLevelClusters, baseIndicesByTopLevel, threadMembership]);
+  }, [allTopLevelClusters, baseIndicesByTopLevel, shouldBuildFeedIndex, threadMembership]);
 
   const topLevelClusters = useMemo(() => {
     if (!threadMembership) return allTopLevelClusters;
+    if (!shouldBuildFeedIndex) return EMPTY_CLUSTERS;
     return allTopLevelClusters.filter((cluster) => (indicesByTopLevel[cluster.cluster]?.length ?? 0) > 0);
-  }, [allTopLevelClusters, indicesByTopLevel, threadMembership]);
+  }, [allTopLevelClusters, indicesByTopLevel, shouldBuildFeedIndex, threadMembership]);
 
   // Fetch data for the selected cluster
   const fetchFeedData = useCallback(
@@ -127,10 +135,11 @@ export default function useTopicDirectoryData(selectedClusterIndex, enabled = tr
 
   // Reset when hierarchy changes
   useEffect(() => {
+    if (!enabled) return;
     setFeedData({ rows: [], page: 0, loading: false, hasMore: true });
     setActiveSubCluster(null);
     prevClusterIndexRef.current = null;
-  }, [topLevelClusters]);
+  }, [enabled, topLevelClusters]);
 
   // Sub-cluster filtering (client-side)
   const setSubClusterFilter = useCallback((subClusterId) => {

@@ -168,7 +168,7 @@ function CollectionCard({ collection }) {
   } = collection;
 
   const profile = tweetsDataset.profile || likesDataset?.profile;
-  const displayName = profile?.display_name || id;
+  const displayName = profile?.username || profile?.display_name || id;
   const username = profile?.username;
   const avatarUrl = profile?.avatar_url;
   const bio = profile?.bio;

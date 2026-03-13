@@ -619,6 +619,74 @@ def _renumber_layers(
     }
 
 
+def _compute_layer_semantic_orders(topic_model) -> dict[tuple[int, int], float]:
+    """
+    Compute a lightweight 1D semantic ordering for each cluster within a layer.
+
+    The order is derived from the layer's semantic centroid vectors in embedding
+    space and normalized to [0, 1]. It is intended for compact UI semantics such
+    as hue ordering, not for full-fidelity semantic search.
+    """
+    semantic_orders: dict[tuple[int, int], float] = {}
+
+    for layer_idx, layer in enumerate(topic_model.cluster_layers_):
+        labels = np.asarray(layer.cluster_labels)
+        unique_clusters = np.unique(labels[labels >= 0]).astype(int)
+        if unique_clusters.size == 0:
+            continue
+
+        centroids = getattr(layer, "centroid_vectors", None)
+        ordered_clusters: np.ndarray
+        if centroids is None:
+            ordered_clusters = np.sort(unique_clusters)
+        else:
+            centroids = np.asarray(centroids, dtype=np.float32)
+            valid_clusters = unique_clusters[unique_clusters < len(centroids)]
+            if valid_clusters.size == 0:
+                ordered_clusters = np.sort(unique_clusters)
+            else:
+                vectors = centroids[valid_clusters]
+                if vectors.shape[0] == 1:
+                    ordered_clusters = valid_clusters
+                else:
+                    # Normalize first so the ordering is driven by direction / semantics
+                    # rather than centroid magnitude.
+                    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+                    norms = np.where(norms > 0, norms, 1.0)
+                    normalized = vectors / norms
+                    centered = normalized - normalized.mean(axis=0, keepdims=True)
+
+                    if np.allclose(centered, 0):
+                        ordered_clusters = np.sort(valid_clusters)
+                    else:
+                        try:
+                            _u, _s, vh = np.linalg.svd(centered, full_matrices=False)
+                            axis = vh[0]
+                            dominant_idx = int(np.argmax(np.abs(axis)))
+                            if axis[dominant_idx] < 0:
+                                axis = -axis
+                            projections = centered @ axis
+                            order = np.argsort(projections, kind="mergesort")
+                            ordered_clusters = valid_clusters[order]
+                        except np.linalg.LinAlgError:
+                            ordered_clusters = np.sort(valid_clusters)
+
+                # Keep deterministic placement for any clusters whose centroid vector
+                # was unavailable for some reason, but normalize within this layer.
+                ordered_set = {int(cluster_idx) for cluster_idx in ordered_clusters.tolist()}
+                missing = [int(cluster_idx) for cluster_idx in unique_clusters if int(cluster_idx) not in ordered_set]
+                if missing:
+                    ordered_clusters = np.concatenate(
+                        [ordered_clusters, np.asarray(sorted(missing), dtype=ordered_clusters.dtype)]
+                    )
+
+        denominator = max(len(ordered_clusters) - 1, 1)
+        for rank, cluster_idx in enumerate(ordered_clusters):
+            semantic_orders[(layer_idx, int(cluster_idx))] = float(rank / denominator)
+
+    return semantic_orders
+
+
 def build_hierarchical_labels(topic_model, display_vectors, texts):
     """
     Build hierarchical cluster labels from Toponymy results.
@@ -633,7 +701,9 @@ def build_hierarchical_labels(topic_model, display_vectors, texts):
         - count: number of points in cluster
         - parent_cluster: parent cluster id (None for top layer)
         - children: list of child cluster ids
-        - centroid_x, centroid_y: cluster center coordinates
+        - display_centroid_x, display_centroid_y: cluster center coordinates in display space
+        - semantic_centroid: centroid vector in raw embedding space
+        - centroid_x, centroid_y: legacy aliases for display centroid coordinates
         - indices: list of point indices in this cluster
         collapse_info: metadata about collapsed single-child nodes
     """
@@ -644,6 +714,7 @@ def build_hierarchical_labels(topic_model, display_vectors, texts):
     cluster_tree = topic_model.clusterer.cluster_tree_
     num_layers = len(topic_model.cluster_layers_)
     max_layer = num_layers - 1
+    semantic_orders = _compute_layer_semantic_orders(topic_model)
 
     # Build deterministic child→parent map in one pass
     child_to_parent, violations = _build_child_to_parent_map(cluster_tree, num_layers)
@@ -677,9 +748,22 @@ def build_hierarchical_labels(topic_model, display_vectors, texts):
             # Get cluster points for hull and centroid
             cluster_points = display_vectors[point_mask]
 
-            # Compute centroid
-            centroid_x = float(np.mean(cluster_points[:, 0]))
-            centroid_y = float(np.mean(cluster_points[:, 1]))
+            # Compute centroid in display space for label placement and hull geometry.
+            display_centroid_x = float(np.mean(cluster_points[:, 0]))
+            display_centroid_y = float(np.mean(cluster_points[:, 1]))
+
+            # Cluster layers already carry semantic centroids in the original
+            # embedding space; keep those distinct from display coordinates.
+            semantic_centroid = None
+            if (
+                hasattr(layer, "centroid_vectors")
+                and layer.centroid_vectors is not None
+                and int(cluster_idx) < len(layer.centroid_vectors)
+            ):
+                semantic_centroid = (
+                    np.asarray(layer.centroid_vectors[int(cluster_idx)], dtype=np.float32)
+                    .tolist()
+                )
 
             # Compute convex hull
             hull_indices = []
@@ -701,6 +785,7 @@ def build_hierarchical_labels(topic_model, display_vectors, texts):
             topic_specificity = None
             if hasattr(layer, "topic_specificities") and layer.topic_specificities:
                 topic_specificity = layer.topic_specificities.get(int(cluster_idx))
+            semantic_order = semantic_orders.get((layer_idx, int(cluster_idx)))
 
             # Build cluster id
             cluster_id = f"{layer_idx}_{cluster_idx}"
@@ -729,8 +814,13 @@ def build_hierarchical_labels(topic_model, display_vectors, texts):
                 "count": len(indices),
                 "parent_cluster": parent_cluster,
                 "children": children,
-                "centroid_x": centroid_x,
-                "centroid_y": centroid_y,
+                "display_centroid_x": display_centroid_x,
+                "display_centroid_y": display_centroid_y,
+                # Backward-compatible aliases for older consumers.
+                "centroid_x": display_centroid_x,
+                "centroid_y": display_centroid_y,
+                "semantic_centroid": semantic_centroid,
+                "semantic_order": semantic_order,
                 "indices": indices,
                 "topic_specificity": topic_specificity,
             })

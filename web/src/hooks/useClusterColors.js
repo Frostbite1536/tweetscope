@@ -6,38 +6,6 @@ import {
 } from '@/lib/clusterColors';
 
 /**
- * Find the tree depth whose node count is closest to (but ideally >= )
- * the target count. This is where we assign hue columns.
- */
-function findBestHueLayer(roots, targetCount) {
-  let current = roots;
-  let bestDepth = 0;
-  let bestNodes = current;
-  let bestScore = Math.abs(current.length - targetCount);
-
-  for (let depth = 1; depth < 10; depth += 1) {
-    const next = [];
-    for (const node of current) {
-      if (node.children && node.children.length > 0) {
-        next.push(...node.children);
-      }
-    }
-    if (next.length === 0) break;
-
-    const score = Math.abs(next.length - targetCount);
-    // Prefer layers >= targetCount, but accept fewer if closer
-    if (score < bestScore || (next.length >= targetCount && bestNodes.length < targetCount)) {
-      bestScore = score;
-      bestDepth = depth;
-      bestNodes = next;
-    }
-    current = next;
-  }
-
-  return { depth: bestDepth, nodes: bestNodes };
-}
-
-/**
  * 32-bit stable hash (FNV-1a) for deterministic hue assignment.
  */
 function stableHash32(value) {
@@ -62,91 +30,190 @@ function stableNodeIdentity(node) {
   return normalizeLabel(node?.label);
 }
 
-/**
- * Deterministic top-level hue allocator.
- * - Stable across sibling order changes.
- * - Tries to avoid collisions when root count <= hue count.
- * - `persistentCacheKey` can be used as a stable salt/version key.
- */
-export function assignTopLevelHuesStable(topLevelNodes, hueCount, persistentCacheKey = '') {
-  if (!Array.isArray(topLevelNodes) || topLevelNodes.length === 0 || hueCount <= 0) {
-    return new Map();
-  }
-
-  const ordered = topLevelNodes
-    .map((node) => {
-      const nodeId = String(node?.cluster ?? stableNodeIdentity(node));
-      const hash = stableHash32(`${persistentCacheKey}:${stableNodeIdentity(node)}`);
-      return { nodeId, hash };
-    })
-    .sort((a, b) => (a.hash - b.hash) || a.nodeId.localeCompare(b.nodeId));
-
-  const next = new Map();
-  const used = new Set();
-
-  for (const entry of ordered) {
-    const preferred = entry.hash % hueCount;
-    let hueIdx = preferred;
-
-    if (topLevelNodes.length <= hueCount) {
-      const step = ((entry.hash >>> 5) % Math.max(hueCount - 1, 1)) + 1;
-      while (used.has(hueIdx)) {
-        hueIdx = (hueIdx + step) % hueCount;
-      }
-      used.add(hueIdx);
-    }
-
-    next.set(entry.nodeId, hueIdx);
-  }
-
-  return next;
+function toFiniteNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
 }
 
-/**
- * Recursively collect all ancestor cluster IDs going up from a depth.
- * (Walk upward by finding parents of the hue-layer nodes.)
- */
-function assignAncestorColors(roots, colorMap, seedClusterToHue, toneCount) {
-  const clusterToHue = new Map(seedClusterToHue);
+function getNodeLayer(node) {
+  return toFiniteNumber(node?.layer) ?? 0;
+}
 
-  // Walk the full tree and assign ancestors the hue of their first hue-layer descendant
-  function walkUp(node) {
+function getNodeSemanticOrder(node) {
+  return toFiniteNumber(node?.semantic_order);
+}
+
+function getNodeDisplayCentroid(node) {
+  const x = toFiniteNumber(node?.display_centroid_x ?? node?.centroid_x);
+  const y = toFiniteNumber(node?.display_centroid_y ?? node?.centroid_y);
+  if (x === null || y === null) return null;
+  return [x, y];
+}
+
+function clampInt(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function collectTreeNodes(roots) {
+  const nodeMap = new Map();
+
+  const visit = (node) => {
+    if (!node) return;
     const nodeId = String(node.cluster);
-    if (clusterToHue.has(nodeId)) return clusterToHue.get(nodeId);
-
+    if (nodeMap.has(nodeId)) return;
+    nodeMap.set(nodeId, node);
     if (node.children && node.children.length > 0) {
-      // Take the hue of the first child that has one
-      for (const child of node.children) {
-        const childHue = walkUp(child);
-        if (childHue !== undefined) {
-          clusterToHue.set(nodeId, childHue);
-          // Assign a muted middle tone for ancestor nodes
-          const toneIdx = Math.floor(toneCount / 2);
-          if (!colorMap.has(nodeId)) {
-            colorMap.set(nodeId, {
-              light: FLEXOKI_CLUSTER_TONES_LIGHT[toneIdx][childHue],
-              dark: FLEXOKI_CLUSTER_TONES_DARK[toneIdx][childHue],
-            });
-          }
-          return childHue;
-        }
-      }
+      node.children.forEach(visit);
     }
-    return undefined;
+  };
+
+  roots.forEach(visit);
+  return nodeMap;
+}
+
+function findBestHueLayer(nodes, targetCount) {
+  const byLayer = new Map();
+  nodes.forEach((node) => {
+    const layer = getNodeLayer(node);
+    const current = byLayer.get(layer) ?? [];
+    current.push(node);
+    byLayer.set(layer, current);
+  });
+
+  let bestLayer = null;
+  let bestNodes = [];
+  let bestScore = Number.POSITIVE_INFINITY;
+  let bestHasEnough = false;
+
+  Array.from(byLayer.entries())
+    .sort((a, b) => b[0] - a[0])
+    .forEach(([layer, layerNodes]) => {
+      const count = layerNodes.length;
+      const score = Math.abs(count - targetCount);
+      const hasEnough = count >= targetCount;
+      if (
+        bestLayer === null ||
+        score < bestScore ||
+        (score === bestScore && hasEnough && !bestHasEnough) ||
+        (score === bestScore && hasEnough === bestHasEnough && layer > bestLayer)
+      ) {
+        bestLayer = layer;
+        bestNodes = layerNodes;
+        bestScore = score;
+        bestHasEnough = hasEnough;
+      }
+    });
+
+  return { layer: bestLayer, nodes: bestNodes };
+}
+
+function orderHueNodes(nodes) {
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    return [];
   }
 
-  for (const root of roots) {
-    walkUp(root);
+  const semanticReady = nodes.filter((node) => getNodeSemanticOrder(node) !== null);
+  if (semanticReady.length === nodes.length) {
+    return [...nodes].sort((a, b) => {
+      const orderDiff = getNodeSemanticOrder(a) - getNodeSemanticOrder(b);
+      if (orderDiff !== 0) return orderDiff;
+      return stableNodeIdentity(a).localeCompare(stableNodeIdentity(b));
+    });
   }
+
+  const geometricReady = nodes.filter((node) => getNodeDisplayCentroid(node) !== null);
+  if (geometricReady.length === nodes.length) {
+    const cx =
+      geometricReady.reduce((sum, node) => sum + getNodeDisplayCentroid(node)[0], 0) /
+      geometricReady.length;
+    const cy =
+      geometricReady.reduce((sum, node) => sum + getNodeDisplayCentroid(node)[1], 0) /
+      geometricReady.length;
+
+    return [...nodes].sort((a, b) => {
+      const [ax, ay] = getNodeDisplayCentroid(a);
+      const [bx, by] = getNodeDisplayCentroid(b);
+      const angleDiff = Math.atan2(ay - cy, ax - cx) - Math.atan2(by - cy, bx - cx);
+      if (angleDiff !== 0) return angleDiff;
+      return stableNodeIdentity(a).localeCompare(stableNodeIdentity(b));
+    });
+  }
+
+  return [...nodes]
+    .map((node) => {
+      const nodeId = String(node?.cluster ?? stableNodeIdentity(node));
+      const hash = stableHash32(stableNodeIdentity(node));
+      return { node, nodeId, hash };
+    })
+    .sort((a, b) => (a.hash - b.hash) || a.nodeId.localeCompare(b.nodeId))
+    .map((entry) => entry.node);
+}
+
+function spreadOrderedNodesAcrossHues(orderedNodes, hueCount) {
+  const hueByCluster = new Map();
+  const total = orderedNodes.length;
+  if (total === 0 || hueCount <= 0) return hueByCluster;
+
+  orderedNodes.forEach((entry, idx) => {
+    const node = entry?.node ?? entry;
+    const nodeId = String(node.cluster);
+    let hueIdx = 0;
+    if (total === 1) {
+      hueIdx = 0;
+    } else if (total <= hueCount) {
+      hueIdx = Math.round((idx * (hueCount - 1)) / (total - 1));
+    } else {
+      hueIdx = Math.min(hueCount - 1, Math.floor((idx * hueCount) / total));
+    }
+    hueByCluster.set(nodeId, hueIdx);
+  });
+
+  return hueByCluster;
+}
+
+function toneIndexForNode(node, hueLayer, toneCount) {
+  const baseTone = Math.min(3, toneCount - 1);
+  const layer = getNodeLayer(node);
+  const specificity = toFiniteNumber(node?.topic_specificity);
+  const specificityShift =
+    specificity === null
+      ? 0
+      : specificity >= 0.75
+        ? 1
+        : specificity <= 0.3
+          ? -1
+          : 0;
+
+  if (layer < hueLayer) {
+    return clampInt(baseTone + (hueLayer - layer) + Math.max(0, specificityShift), 0, toneCount - 1);
+  }
+
+  if (layer > hueLayer) {
+    return clampInt(baseTone - (layer - hueLayer), 0, toneCount - 1);
+  }
+
+  return clampInt(baseTone + specificityShift, 0, toneCount - 1);
+}
+
+function setNodeColor(colorMap, hueByCluster, node, hueLayer, toneCount) {
+  const nodeId = String(node.cluster);
+  const hueIdx = hueByCluster.get(nodeId);
+  if (hueIdx === undefined) return;
+  const toneIdx = toneIndexForNode(node, hueLayer, toneCount);
+  colorMap.set(nodeId, {
+    light: FLEXOKI_CLUSTER_TONES_LIGHT[toneIdx][hueIdx],
+    dark: FLEXOKI_CLUSTER_TONES_DARK[toneIdx][hueIdx],
+  });
 }
 
 /**
  * Hierarchy-aware cluster color assignment.
  *
- * Finds the tree layer closest to 8 nodes (the number of Flexoki hue
- * columns) and assigns hues there. Children below that layer get tonal
- * variations within their ancestor's hue. Ancestors above get their
- * first child's hue at a middle tone.
+ * Finds the hierarchy layer whose node count is closest to the available
+ * Flexoki hue count, orders that layer semantically when possible, and
+ * assigns hues there. Descendants inherit hue family with tone derived from
+ * depth/specificity. Ancestors receive the averaged hue family of their
+ * colored descendants.
  *
  * When no hierarchy is available, returns null -> callers use the default
  * index-based Flexoki palette.
@@ -165,79 +232,59 @@ export function useClusterColors(clusterLabels, clusterHierarchy) {
     const realRoots = roots.filter((root) => String(root.cluster) !== 'unknown');
     if (realRoots.length === 0) return { colorMap: null };
 
-    // Stable top-level hue anchors (independent of likes/count ordering).
-    const stableSalt = `${clusterHierarchy?.totalClusters ?? ''}:${clusterLabels?.length ?? 0}`;
-    const topLevelHueMap = assignTopLevelHuesStable(realRoots, hueCount, stableSalt);
+    const colorMap = new Map();
+    const allRealNodes = Array.from(collectTreeNodes(realRoots).values()).filter(
+      (node) => String(node.cluster) !== 'unknown'
+    );
+    if (allRealNodes.length === 0) return { colorMap: null };
 
-    // Build node -> top-level root mapping so deeper hue-layer nodes inherit
-    // the same hue family as their top-level ancestor.
-    const nodeToTopRoot = new Map();
-    const indexTopRoot = (node, topRootId) => {
+    const { layer: hueLayer, nodes: rawHueNodes } = findBestHueLayer(allRealNodes, hueCount);
+    if (hueLayer === null || rawHueNodes.length === 0) return { colorMap: null };
+
+    const orderedHueNodes = orderHueNodes(rawHueNodes);
+    const hueByCluster = spreadOrderedNodesAcrossHues(orderedHueNodes, hueCount);
+
+    // First pass: assign hue families from the selected semantic layer downward.
+    const assignDescendantColors = (node, inheritedHue) => {
       const nodeId = String(node.cluster);
-      nodeToTopRoot.set(nodeId, topRootId);
+      const ownHue = hueByCluster.get(nodeId);
+      const activeHue = ownHue ?? inheritedHue;
+
+      if (activeHue !== undefined) {
+        hueByCluster.set(nodeId, activeHue);
+        setNodeColor(colorMap, hueByCluster, node, hueLayer, toneCount);
+      }
+
       if (node.children && node.children.length > 0) {
-        for (const child of node.children) {
-          indexTopRoot(child, topRootId);
-        }
+        node.children.forEach((child) => assignDescendantColors(child, activeHue));
       }
     };
-    for (const root of realRoots) {
-      const rootId = String(root.cluster);
-      indexTopRoot(root, rootId);
-    }
 
-    // Find the best layer for hue assignment (closest to 8 nodes).
-    const { nodes: hueNodes } = findBestHueLayer(realRoots, hueCount);
+    realRoots.forEach((root) => assignDescendantColors(root, undefined));
 
-    const colorMap = new Map();
-    const hueByCluster = new Map();
-    const hueUsage = new Map();
-
-    // Assign hue-layer nodes using stable top-level anchors.
-    hueNodes.forEach((node, idx) => {
+    // Second pass: assign ancestors from the mean of their colored descendants.
+    const assignAncestorColors = (node) => {
       const nodeId = String(node.cluster);
-      const topRootId = nodeToTopRoot.get(nodeId) ?? nodeId;
-      const fallbackHue = idx % hueCount;
-      const hueIdx = topLevelHueMap.get(topRootId) ?? fallbackHue;
+      if (node.children && node.children.length > 0) {
+        const childHues = node.children
+          .map((child) => assignAncestorColors(child))
+          .filter((value) => value !== undefined);
 
-      const toneOffset = hueUsage.get(hueIdx) ?? 0;
-      hueUsage.set(hueIdx, toneOffset + 1);
-
-      // Hue-layer nodes get the canonical mid tone (row 3 = scale 600 light).
-      const baseTone = (3 + toneOffset) % toneCount;
-
-      hueByCluster.set(nodeId, hueIdx);
-      colorMap.set(nodeId, {
-        light: FLEXOKI_CLUSTER_TONES_LIGHT[baseTone][hueIdx],
-        dark: FLEXOKI_CLUSTER_TONES_DARK[baseTone][hueIdx],
-      });
-
-      // Assign all descendants: spread across tone rows within same hue.
-      const descendants = [];
-      function collectAll(n) {
-        if (n.children) {
-          for (const child of n.children) {
-            descendants.push(child);
-            collectAll(child);
-          }
+        if (!hueByCluster.has(nodeId) && childHues.length > 0) {
+          const hueIdx = Math.round(
+            childHues.reduce((sum, value) => sum + value, 0) / childHues.length
+          );
+          hueByCluster.set(nodeId, clampInt(hueIdx, 0, hueCount - 1));
         }
       }
-      collectAll(node);
 
-      descendants.forEach((desc, descIdx) => {
-        const descId = String(desc.cluster);
-        // Spread across tones, skipping the parent's tone for distinction.
-        const toneIdx = (descIdx + (descIdx >= baseTone ? 1 : 0)) % toneCount;
-        hueByCluster.set(descId, hueIdx);
-        colorMap.set(descId, {
-          light: FLEXOKI_CLUSTER_TONES_LIGHT[toneIdx][hueIdx],
-          dark: FLEXOKI_CLUSTER_TONES_DARK[toneIdx][hueIdx],
-        });
-      });
-    });
+      if (hueByCluster.has(nodeId)) {
+        setNodeColor(colorMap, hueByCluster, node, hueLayer, toneCount);
+      }
+      return hueByCluster.get(nodeId);
+    };
 
-    // Assign ancestors above the hue layer.
-    assignAncestorColors(roots, colorMap, hueByCluster, toneCount);
+    realRoots.forEach(assignAncestorColors);
 
     return { colorMap };
   }, [clusterLabels, clusterHierarchy]);

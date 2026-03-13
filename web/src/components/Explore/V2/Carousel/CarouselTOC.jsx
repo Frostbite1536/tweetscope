@@ -1,6 +1,64 @@
 import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import styles from './CarouselTOC.module.scss';
 
+const CarouselTOCGroup = memo(function CarouselTOCGroup({
+  cluster,
+  index,
+  isFocused,
+  isHovered,
+  onClickCluster,
+  onClickSubCluster,
+  onHoverStart,
+  onHoverEnd,
+}) {
+  const handleClusterClick = useCallback(() => {
+    onClickCluster(index);
+  }, [index, onClickCluster]);
+
+  const handleMouseEnter = useCallback(() => {
+    onHoverStart(index);
+  }, [index, onHoverStart]);
+
+  return (
+    <div
+      className={styles.tocGroup}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={onHoverEnd}
+    >
+      {isHovered && cluster.description && (
+        <div className={styles.tooltip}>{cluster.description}</div>
+      )}
+
+      <button
+        className={`${styles.tocItem} ${isFocused ? styles.active : ''}`}
+        onClick={handleClusterClick}
+      >
+        <span className={styles.tocLabel}>{cluster.label}</span>
+        <span className={styles.tocCount}>{cluster.count || cluster.cumulativeCount || 0}</span>
+      </button>
+
+      {cluster.children?.length > 0 && (isFocused || isHovered) && (
+        <div className={styles.subList}>
+          {cluster.children.map((sub) => (
+            <div key={sub.cluster}>
+              <button
+                className={styles.subItem}
+                onClick={() => {
+                  onClickCluster(index);
+                  if (onClickSubCluster) onClickSubCluster(index, sub.cluster);
+                }}
+              >
+                <span className={styles.subLabel}>{sub.label}</span>
+                <span className={styles.subCount}>{sub.count || 0}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
 function CarouselTOC({
   topLevelClusters,
   focusedIndex,
@@ -11,6 +69,9 @@ function CarouselTOC({
   const hoverTimeoutRef = useRef(null);
 
   const handleMouseEnter = useCallback((index) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
     hoverTimeoutRef.current = setTimeout(() => {
       setHoveredIndex(index);
     }, 800);
@@ -39,46 +100,17 @@ function CarouselTOC({
     <div className={styles.toc} role="navigation" aria-label="Topic navigation">
       <div className={styles.tocList}>
         {topLevelClusters.map((cluster, index) => (
-          <div
+          <CarouselTOCGroup
             key={cluster.cluster}
-            className={styles.tocGroup}
-            onMouseEnter={() => handleMouseEnter(index)}
-            onMouseLeave={handleMouseLeave}
-          >
-            {/* Hover tooltip */}
-            {hoveredIndex === index && cluster.description && (
-              <div className={styles.tooltip}>{cluster.description}</div>
-            )}
-
-            {/* Top-level cluster */}
-            <button
-              className={`${styles.tocItem} ${index === focusedIndex ? styles.active : ''}`}
-              onClick={() => onClickCluster(index)}
-            >
-              <span className={styles.tocLabel}>{cluster.label}</span>
-              <span className={styles.tocCount}>{cluster.count || cluster.cumulativeCount || 0}</span>
-            </button>
-
-            {/* Sub-clusters (indented) — only render for focused/hovered cluster */}
-            {cluster.children?.length > 0 && (index === focusedIndex || index === hoveredIndex) && (
-              <div className={styles.subList}>
-                {cluster.children.map((sub) => (
-                  <div key={sub.cluster}>
-                    <button
-                      className={styles.subItem}
-                      onClick={() => {
-                        onClickCluster(index);
-                        if (onClickSubCluster) onClickSubCluster(index, sub.cluster);
-                      }}
-                    >
-                      <span className={styles.subLabel}>{sub.label}</span>
-                      <span className={styles.subCount}>{sub.count || 0}</span>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            cluster={cluster}
+            index={index}
+            isFocused={index === focusedIndex}
+            isHovered={index === hoveredIndex}
+            onClickCluster={onClickCluster}
+            onClickSubCluster={onClickSubCluster}
+            onHoverStart={handleMouseEnter}
+            onHoverEnd={handleMouseLeave}
+          />
         ))}
       </div>
     </div>

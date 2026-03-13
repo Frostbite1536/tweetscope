@@ -166,10 +166,38 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    const roots = labels
-      .filter((label) => Number(label.layer ?? 0) === maxLayer || label.parent_cluster === null || label.parent_cluster === undefined)
+    const topLayerRoots = labels
+      .filter((label) => Number(label.layer ?? 0) === maxLayer)
       .map((label) => labelMap.get(String(label.cluster)))
       .filter((node): node is ClusterTreeNode => Boolean(node));
+
+    let roots = topLayerRoots;
+    if (roots.length === 0) {
+      roots = labels
+        .filter((label) => label.parent_cluster === null || label.parent_cluster === undefined)
+        .map((label) => labelMap.get(String(label.cluster)))
+        .filter((node): node is ClusterTreeNode => Boolean(node));
+    } else {
+      const reachable = new Set<string>();
+      const markReachable = (node: ClusterTreeNode) => {
+        const nodeId = String(node.cluster);
+        if (reachable.has(nodeId)) return;
+        reachable.add(nodeId);
+        node.children.forEach(markReachable);
+      };
+      roots.forEach(markReachable);
+
+      const orphanRoots = labels
+        .filter((label) => label.parent_cluster === null || label.parent_cluster === undefined)
+        .map((label) => labelMap.get(String(label.cluster)))
+        .filter((node): node is ClusterTreeNode => {
+          if (!node) return false;
+          return !reachable.has(String(node.cluster));
+        });
+      if (orphanRoots.length > 0) {
+        roots = [...roots, ...orphanRoots];
+      }
+    }
 
     const computeCumulativeMetrics = (node: ClusterTreeNode) => {
       let cumulativeLikes = Number(node.likes ?? 0);

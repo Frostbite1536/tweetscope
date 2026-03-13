@@ -219,6 +219,13 @@ function calculateBaseAlpha(pointCount) {
   return clamp(Math.round(value), 40, 180);
 }
 
+function getDisplayCentroid(label) {
+  const x = label?.display_centroid_x ?? label?.centroid_x;
+  const y = label?.display_centroid_y ?? label?.centroid_y;
+  if (x === undefined || y === undefined) return null;
+  return [x, y];
+}
+
 function toClusterKey(value) {
   return String(value);
 }
@@ -636,9 +643,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
         likes: label.likes ?? 0,
         cumulativeCount: label.cumulativeCount ?? label.count ?? 0,
         cumulativeLikes: label.cumulativeLikes ?? label.likes ?? 0,
-        position: label.centroid_x !== undefined && label.centroid_y !== undefined
-          ? [label.centroid_x, label.centroid_y]
-          : computeCentroidFromHull(label.hull, scopeRows),
+        position: getDisplayCentroid(label) ?? computeCentroidFromHull(label.hull, scopeRows),
         hull: label.hull,
         parentCluster: label.parent_cluster,
         children: label.children || [],

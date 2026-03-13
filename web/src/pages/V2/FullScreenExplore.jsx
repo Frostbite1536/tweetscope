@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronsRight, GalleryHorizontalEnd, LayoutGrid, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { ChevronsRight, GalleryHorizontalEnd, PanelRightClose, PanelRightOpen } from 'lucide-react';
 
 import './Explore.css';
 import { apiService, queryApi } from '../../lib/apiService';
@@ -12,7 +12,6 @@ import VisualizationPane from '../../components/Explore/V2/VisualizationPane';
 import TweetFeed from '../../components/Explore/V2/TweetFeed';
 import FilterActions from '../../components/Explore/V2/FilterActions';
 import FeedCarousel from '../../components/Explore/V2/Carousel/FeedCarousel';
-import TopicDirectory from '../../components/Explore/V2/TopicDirectory/TopicDirectory';
 import { HoverProvider } from '../../contexts/HoverContext';
 import { ClusterColorProvider } from '../../contexts/ClusterColorContext';
 import ThreadView from '../../components/Explore/V2/ThreadView/ThreadView';
@@ -23,7 +22,6 @@ import { FilterProvider, useFilter } from '../../contexts/FilterContext';
 import useDebounce from '../../hooks/useDebounce';
 import useSidebarState, { SIDEBAR_MODES } from '../../hooks/useSidebarState';
 import useCarouselData from '../../hooks/useCarouselData';
-import useTopicDirectoryData from '../../hooks/useTopicDirectoryData';
 import useTimelineData from '../../hooks/useTimelineData';
 import useNodeStats from '../../hooks/useNodeStats';
 import { useClusterColors } from '../../hooks/useClusterColors';
@@ -156,40 +154,17 @@ function ExploreContent() {
     closeThread,
   } = useSidebarState();
 
-  // Carousel data hook — only enabled in expanded mode
-  const carouselEnabled = sidebarMode === SIDEBAR_MODES.EXPANDED;
-  // Pass thread membership to carousel/directory hooks only when active
+  // Expanded sidebar data hook
+  const expandedSidebarOpen = sidebarMode === SIDEBAR_MODES.EXPANDED;
+  // Pass thread membership to carousel hook only when active
   const activeThreadMembership = threadsOnlyActive ? threadMembership : null;
-  const carouselData = useCarouselData(focusedClusterIndex, carouselEnabled, activeThreadMembership);
+  const carouselData = useCarouselData(focusedClusterIndex, expandedSidebarOpen, activeThreadMembership);
 
-  // Topic directory data hook — also for expanded mode
-  const [selectedTopicIndex, setSelectedTopicIndex] = useState(null);
-  const [expandedView, setExpandedView] = useState('directory'); // 'directory' | 'carousel'
-  const topicDirData = useTopicDirectoryData(selectedTopicIndex, carouselEnabled, activeThreadMembership);
-  const prevTopicClustersRef = useRef(topicDirData.topLevelClusters);
   const prevCarouselClustersRef = useRef(carouselData.topLevelClusters);
+  const lastExpandedTopLevelClustersRef = useRef(carouselData.topLevelClusters);
 
   useEffect(() => {
-    const previousClusters = prevTopicClustersRef.current;
-    const nextClusters = topicDirData.topLevelClusters;
-
-    if (selectedTopicIndex != null) {
-      const selectedClusterKey = getClusterSelectionKey(previousClusters[selectedTopicIndex]);
-      const nextIndex = findClusterIndexByKey(nextClusters, selectedClusterKey);
-
-      if (nextIndex >= 0) {
-        if (nextIndex !== selectedTopicIndex) {
-          setSelectedTopicIndex(nextIndex);
-        }
-      } else {
-        setSelectedTopicIndex(null);
-      }
-    }
-
-    prevTopicClustersRef.current = nextClusters;
-  }, [selectedTopicIndex, topicDirData.topLevelClusters]);
-
-  useEffect(() => {
+    if (!expandedSidebarOpen) return;
     const previousClusters = prevCarouselClustersRef.current;
     const nextClusters = carouselData.topLevelClusters;
 
@@ -207,7 +182,14 @@ function ExploreContent() {
     }
 
     prevCarouselClustersRef.current = nextClusters;
-  }, [focusedClusterIndex, carouselData.topLevelClusters, setFocusedClusterIndex]);
+  }, [expandedSidebarOpen, focusedClusterIndex, carouselData.topLevelClusters, setFocusedClusterIndex]);
+
+  useEffect(() => {
+    if (!expandedSidebarOpen) return;
+    if (carouselData.topLevelClusters.length > 0) {
+      lastExpandedTopLevelClustersRef.current = carouselData.topLevelClusters;
+    }
+  }, [carouselData.topLevelClusters, expandedSidebarOpen]);
 
   // Keep visualization-specific state
   const [hoveredIndex, setHoveredIndex] = useState(null);
@@ -1203,15 +1185,8 @@ function ExploreContent() {
     const graphViewState = vizRef.current?.getViewState?.();
     startTransition(() => {
       toggleExpand(graphViewState);
-      setSelectedTopicIndex(null); // Reset topic selection when leaving expanded mode
     });
   }, [toggleExpand]);
-
-  const handleExpandedViewChange = useCallback((view) => {
-    startTransition(() => {
-      setExpandedView(view);
-    });
-  }, []);
 
   const handleToggleCollapse = useCallback(() => {
     toggleCollapse();
@@ -1225,7 +1200,7 @@ function ExploreContent() {
 
     if (prevMode === SIDEBAR_MODES.EXPANDED && sidebarMode === SIDEBAR_MODES.NORMAL) {
       // Returning from expanded — zoom to focused cluster
-      const cluster = carouselData.topLevelClusters[focusedClusterIndex];
+      const cluster = lastExpandedTopLevelClustersRef.current[focusedClusterIndex];
       if (cluster?.hull && cluster.hull.length >= 3 && scopeRows?.length) {
         const hullPoints = cluster.hull
           .map((idx) => scopeRows[idx])
@@ -1252,7 +1227,7 @@ function ExploreContent() {
         }
       }
     }
-  }, [sidebarMode, focusedClusterIndex, carouselData.topLevelClusters, scopeRows]);
+  }, [sidebarMode, focusedClusterIndex, scopeRows]);
 
   const sidebarPaneStyle = useMemo(() => {
     if (isExpanded) {
@@ -1324,6 +1299,14 @@ function ExploreContent() {
     };
   }, [isCollapsed, isExpanded, isDesktopSidebarLayout, clampedSidebarWidth]);
 
+  const expandedSubNavProps = useMemo(() => ({
+    dataset,
+    scope,
+    scopes,
+    onScopeChange: handleScopeChange,
+    onBack: handleToggleExpand,
+  }), [dataset, scope, scopes, handleScopeChange, handleToggleExpand]);
+
   if (scopeError || scopeRowsError) {
     return (
       <>
@@ -1345,15 +1328,16 @@ function ExploreContent() {
 
   return (
     <>
-      <SubNav
-        user={userId}
-        dataset={dataset}
-        scope={scope}
-        scopes={scopes}
-        onScopeChange={handleScopeChange}
-        onBack={isExpanded ? handleToggleExpand : undefined}
-        overlay={isExpanded}
-      />
+      {!isExpanded && (
+        <SubNav
+          user={userId}
+          dataset={dataset}
+          scope={scope}
+          scopes={scopes}
+          onScopeChange={handleScopeChange}
+          overlay={false}
+        />
+      )}
       <ClusterColorProvider colorMap={colorMap}>
         <HoverProvider hoveredIndex={hoveredIndex}>
           <div className="page-container">
@@ -1545,69 +1529,27 @@ function ExploreContent() {
                 />
               )}
 
-              {/* Expanded mode: Directory or Carousel */}
+              {/* Expanded mode: Carousel with integrated topic list */}
               {isExpanded && (
                 <div className="carousel-enter" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-                  {expandedView === 'directory' ? (
-                    <TopicDirectory
-                      topLevelClusters={topicDirData.topLevelClusters}
-                      feedData={topicDirData.feedData}
-                      loadMore={topicDirData.loadMore}
-                      activeSubCluster={topicDirData.activeSubCluster}
-                      setSubClusterFilter={topicDirData.setSubClusterFilter}
-                      selectedClusterIndex={selectedTopicIndex}
-                      onSelectCluster={setSelectedTopicIndex}
-                      onBack={handleToggleExpand}
-                      dataset={dataset}
-                      clusterMap={clusterMap}
-                      nodeStats={nodeStats}
-                      onHover={undefined}
-                      onClick={undefined}
-                      onViewThread={handleViewThread}
-                      onViewQuotes={handleViewQuotes}
-                      expandedView={expandedView}
-                      onToggleView={handleExpandedViewChange}
-                    />
-                  ) : (
-                    <>
-                      <div className="carousel-top-bar">
-                        <div className="carousel-top-bar-right">
-                          <div className="expanded-view-toggle">
-                            <button
-                              className={`expanded-view-toggle-btn ${expandedView === 'directory' ? 'active' : ''}`}
-                              onClick={() => handleExpandedViewChange('directory')}
-                              title="Topic directory"
-                            >
-                              <LayoutGrid size={14} />
-                            </button>
-                            <button
-                              className={`expanded-view-toggle-btn ${expandedView === 'carousel' ? 'active' : ''}`}
-                              onClick={() => handleExpandedViewChange('carousel')}
-                              title="Feed carousel"
-                            >
-                              <GalleryHorizontalEnd size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      <FeedCarousel
-                        topLevelClusters={carouselData.topLevelClusters}
-                        columnData={carouselData.columnData}
-                        columnRowsMap={carouselData.columnRowsMap}
-                        loadMore={carouselData.loadMore}
-                        activeSubClusters={carouselData.activeSubClusters}
-                        setSubClusterFilter={carouselData.setSubClusterFilter}
-                        dataset={dataset}
-                        clusterMap={clusterMap}
-                        focusedClusterIndex={focusedClusterIndex}
-                        onFocusedIndexChange={setFocusedClusterIndex}
-                        onHover={undefined}
-                        onClick={undefined}
-                        nodeStats={nodeStats}
-                        onViewQuotes={handleViewQuotes}
-                      />
-                    </>
-                  )}
+                  <FeedCarousel
+                    topLevelClusters={carouselData.topLevelClusters}
+                    columnData={carouselData.columnData}
+                    columnRowsMap={carouselData.columnRowsMap}
+                    loadMore={carouselData.loadMore}
+                    ensureColumnsLoaded={carouselData.ensureColumnsLoaded}
+                    activeSubClusters={carouselData.activeSubClusters}
+                    setSubClusterFilter={carouselData.setSubClusterFilter}
+                    dataset={dataset}
+                    clusterMap={clusterMap}
+                    focusedClusterIndex={focusedClusterIndex}
+                    onFocusedIndexChange={setFocusedClusterIndex}
+                    onHover={undefined}
+                    onClick={undefined}
+                    nodeStats={nodeStats}
+                    onViewQuotes={handleViewQuotes}
+                    subNavProps={expandedSubNavProps}
+                  />
                 </div>
               )}
             </div>

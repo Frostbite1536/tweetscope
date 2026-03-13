@@ -1,0 +1,218 @@
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+upsert_dataset_meta(patio11-ca-smoke): done
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+RUNNING: embedding-001
+MODEL ID voyage-context-3
+Resolved model alias 'voyage-context-3' -> 'voyageai-voyage-context-3'
+MODEL <latentscope.models.providers.voyageai.VoyageContextEmbedProvider object at 0x103bf42d0>
+loading voyage-context-3
+get key /Users/sheikmeeran/latent-scope
+Building reference text enrichment map...
+  2 tweets enriched with 2 resolved references
+Building self-thread groups for contextual embedding...
+  188 groups: 85 threads, 103 standalone, avg len 2.66, max len 60
+Batching groups for API calls...
+  1 API batches
+Embedding 500 rows in 1 contextual batches...
+  Contextual parallelism: workers=24, rpm=2000, tpm=3000000, headroom=0.9
+  0%|          | 0/1 [00:00<?, ?it/s]100%|██████████| 1/1 [00:10<00:00, 10.86s/it]100%|██████████| 1/1 [00:10<00:00, 10.88s/it]
+done with embedding-001
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+RUNNING: umap-001
+loading embeddings
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+reducing 1024 embeddings to 2 dimensions (display)
+OMP: Info #276: omp_set_nested routine deprecated, please use omp_set_max_active_levels instead.
+UMAP(angular_rp_forest=True, metric='cosine', n_neighbors=25, verbose=True)
+Sun Feb 22 02:58:16 2026 Construct fuzzy simplicial set
+Sun Feb 22 02:58:16 2026 Finding Nearest Neighbors
+Sun Feb 22 02:58:18 2026 Finished Nearest Neighbor Search
+Sun Feb 22 02:58:19 2026 Construct embedding
+Epochs completed:   0%|            0/500 [00:00]Epochs completed:   0%|            1/500 [00:00]Epochs completed:  54%| █████▎     268/500 [00:00]Epochs completed: 100%| ██████████ 500/500 [00:00]
+	completed  0  /  500 epochs
+	completed  50  /  500 epochs
+	completed  100  /  500 epochs
+	completed  150  /  500 epochs
+	completed  200  /  500 epochs
+	completed  250  /  500 epochs
+	completed  300  /  500 epochs
+	completed  350  /  500 epochs
+	completed  400  /  500 epochs
+	completed  450  /  500 epochs
+Sun Feb 22 02:58:20 2026 Finished embedding
+writing normalized umap umap-001
+wrote /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/umaps/umap-001.parquet
+POINT SIZE 26.094379124341003 for 500 points
+done with umap-001
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+RUNNING: umap-002
+loading embeddings
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+reducing 1024 embeddings to 10 dimensions (cluster)
+UMAP(angular_rp_forest=True, metric='cosine', min_dist=0.0, n_components=10, n_neighbors=25, verbose=True)
+Sun Feb 22 02:58:20 2026 Construct fuzzy simplicial set
+Sun Feb 22 02:58:21 2026 Finding Nearest Neighbors
+Sun Feb 22 02:58:21 2026 Finished Nearest Neighbor Search
+Sun Feb 22 02:58:21 2026 Construct embedding
+Epochs completed:   0%|            0/500 [00:00]Epochs completed:  54%| █████▎     268/500 [00:00]Epochs completed: 100%| ██████████ 500/500 [00:00]
+	completed  0  /  500 epochs
+	completed  50  /  500 epochs
+	completed  100  /  500 epochs
+	completed  150  /  500 epochs
+	completed  200  /  500 epochs
+	completed  250  /  500 epochs
+	completed  300  /  500 epochs
+	completed  350  /  500 epochs
+	completed  400  /  500 epochs
+	completed  450  /  500 epochs
+Sun Feb 22 02:58:21 2026 Finished embedding
+writing raw clustering manifold umap-002 (10D)
+wrote /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/umaps/umap-002.parquet
+done with umap-002
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+RUNNING: cluster-001
+Clustering on 10D manifold from umap-002
+n_clusters: 26
+noise points assigned to clusters: 98
+   cluster  raw_cluster
+0       20           20
+1       20           20
+2       20           20
+3       18           -1
+4       18           -1
+wrote /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/clusters/cluster-001.parquet
+POINT SIZE 26.094379124341003 for 500 points
+  0%|          | 0/26 [00:00<?, ?it/s]100%|██████████| 26/26 [00:00<00:00, 7484.17it/s]
+[2026-02-21T22:58:21Z WARN  lance::dataset::write::insert] No existing dataset at /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/lancedb/patio11-ca-smoke__c81be817-d3bb-4108-9b85-e778865fe470.lance, it will be created
+done with cluster-001
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+DATA DIR /Users/sheikmeeran/latent-scope-data
+RUNNING: scopes-001
+exporting to lancedb
+Exporting scope scopes-001 to LanceDB database in /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke
+Loading scope from /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/scopes
+Loading embeddings from /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/embeddings/embedding-001.h5
+Converting embeddings to numpy arrays (500, 1024)
+Creating table 'patio11-ca-smoke__c81be817-d3bb-4108-9b85-e778865fe470'
+Creating ANN index for embeddings on table 'patio11-ca-smoke__c81be817-d3bb-4108-9b85-e778865fe470'
+Partitioning into 22 partitions (500 rows), 64 sub-vectors
+Creating index for cluster on table 'patio11-ca-smoke__c81be817-d3bb-4108-9b85-e778865fe470'
+Table 'patio11-ca-smoke__c81be817-d3bb-4108-9b85-e778865fe470' created successfully
+upsert_scope_meta(patio11-ca-smoke:scopes-001): done
+upsert_dataset_meta(patio11-ca-smoke): done
+wrote scope scopes-001
+Using local toponymy from: /Users/sheikmeeran/latent-scope/toponymy
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+Loading scope scopes-001 from /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke
+Loading texts...
+  Loaded 500 rows
+Enriching texts with referenced tweet context...
+  2 texts enriched with 2 resolved references
+Loading embeddings from embedding-001...
+  Loaded embeddings: (500, 1024)
+Loading clustering manifold from umap-002...
+  Loaded 10D clustering manifold: (500, 10)
+  Clusterable vectors shape: (500, 10)
+Loading display UMAP from umap-001...
+  Display vectors shape: (500, 2)
+Configuring LLM: openai/gpt-5-mini
+  LLM mode: async (max_concurrent=8)
+Configuring ToponymyClusterer (min_clusters=2, base_min_cluster_size=10)
+Loading Voyage embedder for keyphrase extraction...
+Creating Toponymy model...
+
+Fitting Toponymy model (this may take a while)...
+Layer 0 found 20 clusters
+Layer 1 found 7 clusters
+
+Selecting facility_location exemplars:   0%|          | 0/20 [00:00<?, ?cluster/s][A
+                                                                                  [Aembedding texts:   0%|          | 0/19 [00:00<?, ?it/s]embedding texts:   5%|▌         | 1/19 [00:02<00:41,  2.28s/it]embedding texts:  11%|█         | 2/19 [00:04<00:39,  2.34s/it]embedding texts:  16%|█▌        | 3/19 [00:06<00:36,  2.26s/it]embedding texts:  21%|██        | 4/19 [00:09<00:33,  2.26s/it]embedding texts:  26%|██▋       | 5/19 [00:11<00:31,  2.27s/it]embedding texts:  32%|███▏      | 6/19 [00:13<00:29,  2.27s/it]embedding texts:  37%|███▋      | 7/19 [00:16<00:27,  2.32s/it]embedding texts:  42%|████▏     | 8/19 [00:18<00:24,  2.22s/it]embedding texts:  47%|████▋     | 9/19 [00:20<00:21,  2.18s/it]embedding texts:  53%|█████▎    | 10/19 [00:22<00:19,  2.22s/it]embedding texts:  58%|█████▊    | 11/19 [00:24<00:17,  2.23s/it]embedding texts:  63%|██████▎   | 12/19 [00:26<00:15,  2.19s/it]embedding texts:  68%|██████▊   | 13/19 [00:29<00:13,  2.21s/it]embedding texts:  74%|███████▎  | 14/19 [00:31<00:11,  2.24s/it]embedding texts:  79%|███████▉  | 15/19 [00:33<00:09,  2.26s/it]embedding texts:  84%|████████▍ | 16/19 [00:36<00:06,  2.29s/it]embedding texts:  89%|████████▉ | 17/19 [00:38<00:04,  2.30s/it]embedding texts:  95%|█████████▍| 18/19 [00:40<00:02,  2.23s/it]embedding texts: 100%|██████████| 19/19 [00:42<00:00,  2.05s/it]embedding texts: 100%|██████████| 19/19 [00:42<00:00,  2.21s/it]
+Building topic names by layer:   0%|          | 0/2 [00:00<?, ?layer/s]
+Generating informative keyphrases:   0%|          | 0/20 [00:00<?, ?cluster/s][A
+Generating informative keyphrases:   5%|▌         | 1/20 [00:00<00:12,  1.58cluster/s][A
+Generating informative keyphrases:  35%|███▌      | 7/20 [00:00<00:01, 12.20cluster/s][A
+Generating informative keyphrases:  60%|██████    | 12/20 [00:00<00:00, 19.85cluster/s][A
+Generating informative keyphrases:  90%|█████████ | 18/20 [00:00<00:00, 27.68cluster/s][A
+                                                                                       [A
+Generating prompts for layer 0:   0%|          | 0/20 [00:00<?, ?topic/s][A
+                                                                         [ABuilding topic names by layer:  50%|█████     | 1/2 [00:10<00:10, 10.62s/layer]
+Selecting central exemplars:   0%|          | 0/7 [00:00<?, ?cluster/s][A
+                                                                       [A
+Generating informative keyphrases:   0%|          | 0/7 [00:00<?, ?cluster/s][A
+Generating informative keyphrases:  86%|████████▌ | 6/7 [00:00<00:00, 55.76cluster/s][A
+                                                                                     [A
+Selecting facility_location subtopics:   0%|          | 0/7 [00:00<?, ?cluster/s][A
+                                                                                 [A
+Generating prompts for layer 1:   0%|          | 0/7 [00:00<?, ?topic/s][A
+                                                                        [ABuilding topic names by layer: 100%|██████████| 2/2 [00:14<00:00,  6.41s/layer]Building topic names by layer: 100%|██████████| 2/2 [00:14<00:00,  7.04s/layer]
+/Users/sheikmeeran/latent-scope/toponymy/toponymy/llm_wrappers.py:394: UserWarning: Failed to generate topic name with specificity with AsyncOpenAINamer: list index out of range
+  warn(
+[2026-02-21T22:59:43Z WARN  lance::dataset::write::insert] No existing dataset at /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/lancedb/patio11-ca-smoke__a9746822-5132-4c70-a3c3-fa7c134f7090.lance, it will be created
+[2026-02-21T22:59:43Z WARN  lance::dataset::write::insert] No existing dataset at /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/lancedb/patio11-ca-smoke__edges.lance, it will be created
+[2026-02-21T22:59:43Z WARN  lance::dataset::write::insert] No existing dataset at /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/lancedb/patio11-ca-smoke__node_stats.lance, it will be created
+
+Audit: 10 clusters flagged for relabeling
+  Layer 0 cluster 3: no_keyphrase_alignment
+  Layer 0 cluster 7: no_keyphrase_alignment
+  Layer 0 cluster 10: no_keyphrase_alignment
+  Layer 0 cluster 14: no_keyphrase_alignment
+  Layer 0 cluster 16: no_keyphrase_alignment
+  Layer 0 cluster 18: no_keyphrase_alignment
+  Layer 1 cluster 2: no_keyphrase_alignment
+  Layer 1 cluster 3: no_keyphrase_alignment
+  Layer 1 cluster 5: no_keyphrase_alignment
+  Layer 1 cluster 6: no_keyphrase_alignment
+  Relabel results: 8 relabeled, 2 passes
+  After relabel: 9 clusters still flagged
+
+Extracting hierarchical cluster structure...
+WARNING: 7 hierarchy violations found:
+  - (0_0): parent (2_0) layer 2 != expected 1
+  - (0_1): parent (2_0) layer 2 != expected 1
+  - (0_2): parent (2_0) layer 2 != expected 1
+  - (0_3): parent (2_0) layer 2 != expected 1
+  - (0_6): parent (2_0) layer 2 != expected 1
+  - (0_13): parent (2_0) layer 2 != expected 1
+  - (0_14): parent (2_0) layer 2 != expected 1
+WARNING: orphan node 0_0 (layer 0) has no parent
+WARNING: orphan node 0_1 (layer 0) has no parent
+WARNING: orphan node 0_2 (layer 0) has no parent
+WARNING: orphan node 0_3 (layer 0) has no parent
+WARNING: orphan node 0_6 (layer 0) has no parent
+WARNING: orphan node 0_13 (layer 0) has no parent
+WARNING: orphan node 0_14 (layer 0) has no parent
+
+Generated 27 cluster labels across 2 layers:
+  Layer 0: 20 topics
+  Layer 1: 7 topics
+
+Saved hierarchical labels to: clusters/toponymy-001.parquet
+Metadata saved to: clusters/toponymy-001.json
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+DATA DIR /Users/sheikmeeran/latent-scope-data
+RUNNING: scopes-001
+exporting to lancedb
+Exporting scope scopes-001 to LanceDB database in /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke
+Loading scope from /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/scopes
+Loading embeddings from /Users/sheikmeeran/latent-scope-data/patio11-ca-smoke/embeddings/embedding-001.h5
+Converting embeddings to numpy arrays (500, 1024)
+Creating table 'patio11-ca-smoke__a9746822-5132-4c70-a3c3-fa7c134f7090'
+Creating ANN index for embeddings on table 'patio11-ca-smoke__a9746822-5132-4c70-a3c3-fa7c134f7090'
+Partitioning into 22 partitions (500 rows), 64 sub-vectors
+Creating index for cluster on table 'patio11-ca-smoke__a9746822-5132-4c70-a3c3-fa7c134f7090'
+Table 'patio11-ca-smoke__a9746822-5132-4c70-a3c3-fa7c134f7090' created successfully
+upsert_scope_meta(patio11-ca-smoke:scopes-001): done
+upsert_dataset_meta(patio11-ca-smoke): done
+wrote scope scopes-001
+upsert_dataset_meta(patio11-ca-smoke): done
+Loading environment variables from: /Users/sheikmeeran/latent-scope/.env
+LanceDB: wrote 478 edges to 'patio11-ca-smoke__edges' with indexes
+LanceDB: wrote 500 node stats to 'patio11-ca-smoke__node_stats' with indexes
+IMPORTED_ROWS: 500
+IMPORTED_TWEET_ROWS: 500
+DATASET_ID: patio11-ca-smoke
+FINAL_SCOPE: scopes-001
+real 120.26
+user 40.62
+sys 10.87

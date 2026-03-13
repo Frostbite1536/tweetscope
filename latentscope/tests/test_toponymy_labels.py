@@ -1,7 +1,10 @@
 from latentscope.scripts.toponymy_labels import (
     _collapse_single_child_nodes,
     _renumber_layers,
+    build_hierarchical_labels,
 )
+import pytest
+import numpy as np
 
 
 def test_collapse_single_child_nodes_collapses_transitive_chain() -> None:
@@ -248,3 +251,137 @@ def test_renumber_layers_shifts_negative_orphan_roots_to_non_negative() -> None:
     assert by_id["high_root"]["layer"] == 4
     assert by_id["child"]["layer"] == 3
     assert info["layer_counts"] == {0: 1, 3: 1, 4: 1}
+
+
+def test_build_hierarchical_labels_separates_display_and_semantic_centroids() -> None:
+    class FakeLayer:
+        def __init__(self) -> None:
+            self.cluster_labels = np.array([0, 0, 0], dtype=np.int32)
+            self.centroid_vectors = np.array([[10.0, 20.0, 30.0]], dtype=np.float32)
+            self.topic_specificities = {}
+
+    class FakeClusterer:
+        cluster_tree_ = {}
+
+    class FakeTopicModel:
+        clusterer = FakeClusterer()
+        cluster_layers_ = [FakeLayer()]
+        topic_names_ = [["Example topic"]]
+
+    display_vectors = np.array(
+        [
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+
+    labels, collapse_info = build_hierarchical_labels(
+        FakeTopicModel(),
+        display_vectors,
+        texts=["a", "b", "c"],
+    )
+
+    assert collapse_info["collapsed_count"] == 0
+    assert len(labels) == 1
+
+    row = labels[0]
+    assert row["display_centroid_x"] == pytest.approx(1 / 3)
+    assert row["display_centroid_y"] == pytest.approx(1 / 3)
+    assert row["centroid_x"] == row["display_centroid_x"]
+    assert row["centroid_y"] == row["display_centroid_y"]
+    assert row["semantic_centroid"] == pytest.approx([10.0, 20.0, 30.0])
+    assert row["semantic_order"] == pytest.approx(0.0)
+
+
+def test_build_hierarchical_labels_assigns_semantic_order_within_layer() -> None:
+    class FakeLayer:
+        def __init__(self) -> None:
+            self.cluster_labels = np.array([0, 0, 1, 1, 2, 2], dtype=np.int32)
+            self.centroid_vectors = np.array(
+                [
+                    [-1.0, 0.0],
+                    [0.0, 0.0],
+                    [1.0, 0.0],
+                ],
+                dtype=np.float32,
+            )
+            self.topic_specificities = {}
+
+    class FakeClusterer:
+        cluster_tree_ = {}
+
+    class FakeTopicModel:
+        clusterer = FakeClusterer()
+        cluster_layers_ = [FakeLayer()]
+        topic_names_ = [["Left", "Center", "Right"]]
+
+    display_vectors = np.array(
+        [
+            [0.0, 0.0],
+            [0.1, 0.0],
+            [1.0, 0.0],
+            [1.1, 0.0],
+            [2.0, 0.0],
+            [2.1, 0.0],
+        ],
+        dtype=np.float32,
+    )
+
+    labels, _collapse_info = build_hierarchical_labels(
+        FakeTopicModel(),
+        display_vectors,
+        texts=["a", "b", "c", "d", "e", "f"],
+    )
+
+    by_cluster = {row["cluster"]: row for row in labels}
+    assert by_cluster["0_0"]["semantic_order"] == pytest.approx(0.0)
+    assert by_cluster["0_1"]["semantic_order"] == pytest.approx(0.5)
+    assert by_cluster["0_2"]["semantic_order"] == pytest.approx(1.0)
+
+
+def test_build_hierarchical_labels_normalizes_missing_semantic_centroids_within_layer() -> None:
+    class FakeLayer:
+        def __init__(self) -> None:
+            self.cluster_labels = np.array([0, 0, 1, 1, 2, 2], dtype=np.int32)
+            # Cluster 2 intentionally has no centroid vector entry.
+            self.centroid_vectors = np.array(
+                [
+                    [-1.0, 0.0],
+                    [1.0, 0.0],
+                ],
+                dtype=np.float32,
+            )
+            self.topic_specificities = {}
+
+    class FakeClusterer:
+        cluster_tree_ = {}
+
+    class FakeTopicModel:
+        clusterer = FakeClusterer()
+        cluster_layers_ = [FakeLayer()]
+        topic_names_ = [["Left", "Right", "Missing"]]
+
+    display_vectors = np.array(
+        [
+            [0.0, 0.0],
+            [0.1, 0.0],
+            [1.0, 0.0],
+            [1.1, 0.0],
+            [2.0, 0.0],
+            [2.1, 0.0],
+        ],
+        dtype=np.float32,
+    )
+
+    labels, _collapse_info = build_hierarchical_labels(
+        FakeTopicModel(),
+        display_vectors,
+        texts=["a", "b", "c", "d", "e", "f"],
+    )
+
+    by_cluster = {row["cluster"]: row for row in labels}
+    assert by_cluster["0_0"]["semantic_order"] == pytest.approx(0.0)
+    assert by_cluster["0_1"]["semantic_order"] == pytest.approx(0.5)
+    assert by_cluster["0_2"]["semantic_order"] == pytest.approx(1.0)

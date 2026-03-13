@@ -549,23 +549,6 @@ def _run_pipeline_for_dataset(
     )
     clustering_umap_id = _latest_id(os.path.join(dataset_dir, "umaps"), r"umap-\d+\.json")
 
-    # 3) Clustering (on kD manifold)
-    # Auto-compute base_n_clusters from corpus density when not explicitly set.
-    if hierarchical_labels and hierarchy_base_n_clusters is None:
-        from latentscope.pipeline.hierarchy import compute_target_leaf_topics_from_input_df
-        input_path = os.path.join(dataset_dir, "input.parquet")
-        if os.path.exists(input_path):
-            input_df = pd.read_parquet(input_path)
-            hierarchy_base_n_clusters, median_chars, reply_ratio = (
-                compute_target_leaf_topics_from_input_df(
-                    input_df,
-                    text_column=text_column,
-                    n_rows=len(input_df),
-                )
-            )
-            print(f"  auto base_n_clusters={hierarchy_base_n_clusters} "
-                  f"(median_chars={median_chars:.0f}, reply_ratio={reply_ratio:.2f})")
-
     hierarchy_id: str | None = None
     if hierarchical_labels:
         hierarchy_id = _find_matching_hierarchy_id(
@@ -589,7 +572,6 @@ def _run_pipeline_for_dataset(
                 max_layers=hierarchy_max_layers,
                 base_min_cluster_size=hierarchy_base_min_cluster_size,
                 base_n_clusters=hierarchy_base_n_clusters,
-                text_column=text_column,
                 layer_similarity_threshold=hierarchy_layer_similarity_threshold,
                 reproducible=hierarchy_reproducible,
                 quiet=False,

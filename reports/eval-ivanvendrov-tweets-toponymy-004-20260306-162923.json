@@ -1,0 +1,76 @@
+{
+  "timestamp": "2026-03-06T16:29:23.805275",
+  "dataset_id": "ivanvendrov-tweets",
+  "scope_id": "scopes-002",
+  "cluster_labels_id": "toponymy-004",
+  "structure": {
+    "num_layers": 3,
+    "clusters_per_layer": {
+      "0": 41,
+      "1": 8,
+      "2": 2
+    },
+    "total_clusters": 51,
+    "invalid_parent_refs": 0,
+    "orphan_nodes": 14,
+    "wrong_layer_parents": 6,
+    "parent_issues": [
+      "0_0 (layer 0): no parent",
+      "0_1 (layer 0): no parent",
+      "0_2 (layer 0): no parent",
+      "0_3 (layer 0): no parent",
+      "0_4 (layer 0): no parent",
+      "0_5 (layer 0): no parent",
+      "0_6 (layer 0): no parent",
+      "0_7 (layer 0): no parent",
+      "0_8 (layer 0): no parent",
+      "0_9 (layer 0): no parent",
+      "0_14 (layer 0): no parent",
+      "0_15 (layer 0): no parent",
+      "0_16 (layer 0): parent 2_2 is layer 2, expected 1",
+      "0_17 (layer 0): parent 2_1 is layer 2, expected 1",
+      "0_19 (layer 0): parent 2_2 is layer 2, expected 1",
+      "0_23 (layer 0): parent 2_1 is layer 2, expected 1",
+      "0_27 (layer 0): parent 2_2 is layer 2, expected 1",
+      "0_29 (layer 0): parent 2_1 is layer 2, expected 1",
+      "1_1 (layer 1): no parent",
+      "1_2 (layer 1): no parent"
+    ],
+    "layer_contiguity_gaps": [],
+    "total_rows": 1349,
+    "deepest_assigned": 659,
+    "layer0_assigned": 659,
+    "unknown_count_metadata": 0,
+    "unknown_count_actual": 313,
+    "coverage_gap": 377,
+    "unknown_count_mismatch": true,
+    "duplicate_assignments": 0
+  },
+  "labels": {
+    "duplicates_per_layer": {
+      "0": {
+        "total_clusters": 41,
+        "duplicate_labels": {},
+        "duplicate_rate": 0.0
+      },
+      "1": {
+        "total_clusters": 8,
+        "duplicate_labels": {},
+        "duplicate_rate": 0.0
+      },
+      "2": {
+        "total_clusters": 2,
+        "duplicate_labels": {},
+        "duplicate_rate": 0.0
+      }
+    },
+    "generic_labels": 0,
+    "meaningful_labels": 51,
+    "label_quality": "toponymy",
+    "label_length_min": 19,
+    "label_length_max": 87,
+    "label_length_mean": 60.7
+  },
+  "health_score": 40,
+  "issues_count": 4
+}

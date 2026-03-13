@@ -1,171 +1,165 @@
-.card {
+.row {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: var(--space-3) var(--space-4);
-  overflow: hidden;
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  border: 1px solid var(--glass-border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--glass-glow);
+  padding: var(--space-4) var(--space-5);
+  border: none;
+  border-bottom: 1px solid var(--glass-border-subtle);
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
   text-align: left;
   width: 100%;
+  outline: none;
+  overflow: hidden;
   transition:
-    transform var(--transition-fast),
-    box-shadow var(--transition-fast),
     background var(--transition-fast),
     border-color var(--transition-fast);
 
-  /* Glass refraction highlight */
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.18) 0%,
-      rgba(255, 255, 255, 0.04) 40%,
-      transparent 100%
-    );
-    opacity: 1;
-    pointer-events: none;
-    transition: opacity var(--transition-fast);
-  }
-
-  /* Color wash — tinted light refraction */
+  /* Color wash — tinted haze from cluster color */
   &::after {
     content: '';
     position: absolute;
-    top: -40px;
-    left: -40px;
-    width: 140px;
-    height: 140px;
+    top: -20px;
+    left: -20px;
+    width: 100px;
+    height: 100px;
     background: radial-gradient(
       circle,
-      color-mix(in srgb, var(--card-color, transparent) 12%, transparent) 0%,
-      color-mix(in srgb, var(--card-color, transparent) 6%, transparent) 35%,
+      color-mix(in srgb, var(--row-color, transparent) 14%, transparent) 0%,
+      color-mix(in srgb, var(--row-color, transparent) 6%, transparent) 40%,
       transparent 70%
     );
     border-radius: 50%;
     pointer-events: none;
-    filter: blur(16px);
+    filter: blur(12px);
   }
 
   &:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--glass-glow);
-    background: color-mix(in srgb, var(--card-color, transparent) 5%, var(--glass-bg));
+    background: var(--interactions---secondary-color-interaction-secondary-hover);
   }
 
   &.active {
-    background: color-mix(in srgb, var(--card-color, var(--interactions---primary-color-interaction-primary)) 8%, var(--glass-bg));
-    border-color: color-mix(in srgb, var(--card-color, var(--interactions---primary-color-interaction-primary)) 25%, var(--glass-border-subtle));
-    box-shadow:
-      var(--glass-glow),
-      inset 0 0 20px color-mix(in srgb, var(--card-color, var(--interactions---primary-color-interaction-primary)) 8%, transparent);
+    background: var(--glass-bg);
   }
 
   &.unclustered {
-    opacity: 0.55;
-    box-shadow: none;
+    opacity: 0.5;
 
-    &::before {
-      opacity: 0.5;
+    &::after {
+      display: none;
     }
 
     &:hover {
-      opacity: 0.8;
-      box-shadow: var(--glass-glow);
+      opacity: 0.75;
     }
   }
 }
 
-.header {
+.line1 {
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
   min-width: 0;
 }
 
+.colorDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--row-color, var(--borders-color-border-2));
+  align-self: center;
+}
+
 .label {
   flex: 1;
   font-family: 'Instrument Sans', system-ui, sans-serif;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--text-color-text-main);
   line-height: 1.3;
   min-width: 0;
-
 }
 
-.count {
+.metric {
   font-family: 'Instrument Sans', system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 400;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-color-text-subtle);
-  opacity: 0.7;
+  opacity: 0.85;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .metricIcon {
   display: inline-block;
   vertical-align: middle;
   margin-right: 2px;
-  opacity: 0.45;
+  opacity: 0.6;
 }
 
-.subs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  min-width: 0;
-  max-height: 2.8em;
-  overflow: hidden;
-  transition: max-height var(--transition-fast);
-}
-
-.subs.expanded {
-  max-height: none;
-}
-
-.sub {
+.line2 {
   font-family: 'Instrument Sans', system-ui, sans-serif;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--text-color-text-subtle);
-  opacity: 0.7;
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  min-width: 0;
+  padding-left: 0;
+  opacity: 0.7;
 }
 
-.dot {
-  margin: 0 var(--space-1);
-  opacity: 0.4;
+/* ── Expanded subcluster list ── */
+
+.subList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
 }
 
-.moreToggle {
-  display: inline;
+.subItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  padding-left: var(--space-8);
+  padding-right: var(--space-3);
   background: none;
   border: none;
-  padding: 0;
-  margin-top: 2px;
   cursor: pointer;
-  font-family: 'Instrument Sans', system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-color-text-subtle);
-  opacity: 0.6;
-  transition: opacity var(--transition-fast);
+  text-align: left;
+  border-radius: var(--radius-xs);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
 
   &:hover {
-    opacity: 1;
+    background: color-mix(in srgb, var(--row-color, transparent) 12%, var(--glass-bg));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--row-color, transparent) 16%, transparent);
   }
+}
+
+.subLabel {
+  flex: 1;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-color-text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.subCount {
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-color-text-subtle);
+  opacity: 0.5;
+  flex-shrink: 0;
 }

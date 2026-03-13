@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useRef, useEffect } from 'react';
+import { memo, forwardRef } from 'react';
 import { Heart } from 'lucide-react';
 import styles from './TopicCard.module.scss';
 
@@ -29,73 +29,65 @@ function getMetric(cluster, sortMode) {
   }
 }
 
-function TopicCard({ cluster, isActive, isUnclustered, onClick, clusterColor, sortMode }) {
+const TopicCard = forwardRef(function TopicCard(
+  { cluster, isActive, isUnclustered, onClick, clusterColor, sortMode, isExpanded, onClickSubCluster },
+  ref
+) {
   const subClusters = cluster.children || [];
-  const subsRef = useRef(null);
-  const [isOverflowing, setIsOverflowing] = useState(false);
-  const [isSubsExpanded, setIsSubsExpanded] = useState(false);
-
-  useEffect(() => {
-    const el = subsRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      setIsOverflowing(el.scrollHeight > el.clientHeight + 2);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const handleToggleSubs = useCallback((e) => {
-    e.stopPropagation();
-    setIsSubsExpanded((prev) => !prev);
-  }, []);
-
   const metric = getMetric(cluster, sortMode);
+
+  // Line 2: description if available, otherwise dot-separated subclusters
+  const secondaryText = cluster.description
+    ? cluster.description
+    : subClusters.map((sub) => sub.label).join(' \u00b7 ');
 
   return (
     <button
-      className={`${styles.card} ${isActive ? styles.active : ''} ${isUnclustered ? styles.unclustered : ''}`}
+      ref={ref}
+      className={`${styles.row} ${isActive ? styles.active : ''} ${isUnclustered ? styles.unclustered : ''}`}
       onClick={onClick}
-      style={{
-        '--card-color': clusterColor || 'transparent',
-      }}
+      style={{ '--row-color': clusterColor || 'transparent' }}
     >
-      <div className={styles.header}>
+      <div className={styles.line1}>
+        {!isUnclustered && <span className={styles.colorDot} />}
         <span className={styles.label}>{cluster.label}</span>
         {metric && (
-          <span className={styles.count}>
-            {metric.icon === 'heart' && <Heart size={10} className={styles.metricIcon} />}
+          <span className={styles.metric}>
+            {metric.icon === 'heart' && <Heart size={12} className={styles.metricIcon} />}
             {metric.value}
           </span>
         )}
       </div>
-      {subClusters.length > 0 && (
-        <>
-          <div
-            ref={subsRef}
-            className={`${styles.subs} ${isSubsExpanded ? styles.expanded : ''}`}
-          >
-            {subClusters.map((sub, i) => (
-              <span key={sub.cluster} className={styles.sub}>
-                {i > 0 && <span className={styles.dot}>&middot;</span>}
-                {sub.label}
-              </span>
-            ))}
-          </div>
-          {(isOverflowing || isSubsExpanded) && (
+      {isExpanded && subClusters.length > 0 ? (
+        <div className={styles.subList}>
+          {subClusters.map((sub) => (
             <span
-              className={styles.moreToggle}
-              onClick={handleToggleSubs}
+              key={sub.cluster}
               role="button"
-              tabIndex={-1}
+              tabIndex={0}
+              className={styles.subItem}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClickSubCluster?.(sub.cluster);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onClickSubCluster?.(sub.cluster);
+                }
+              }}
             >
-              {isSubsExpanded ? 'show less' : 'more...'}
+              <span className={styles.subLabel}>{sub.label}</span>
+              <span className={styles.subCount}>{compactNumber(sub.count || 0)}</span>
             </span>
-          )}
-        </>
+          ))}
+        </div>
+      ) : (
+        secondaryText && <div className={styles.line2}>{secondaryText}</div>
       )}
     </button>
   );
-}
+});
 
 export default memo(TopicCard);

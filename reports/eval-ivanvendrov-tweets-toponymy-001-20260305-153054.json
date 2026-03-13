@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-03-05T15:30:54.209333",
+  "dataset_id": "ivanvendrov-tweets",
+  "scope_id": "scopes-001",
+  "cluster_labels_id": "toponymy-001",
+  "structure": {
+    "num_layers": 3,
+    "clusters_per_layer": {
+      "0": 41,
+      "1": 12,
+      "2": 3
+    },
+    "total_clusters": 56,
+    "invalid_parent_refs": 0,
+    "orphan_nodes": 20,
+    "wrong_layer_parents": 0,
+    "parent_issues": [
+      "0_0 (layer 0): no parent",
+      "0_1 (layer 0): no parent",
+      "0_2 (layer 0): no parent",
+      "0_3 (layer 0): no parent",
+      "0_4 (layer 0): no parent",
+      "0_5 (layer 0): no parent",
+      "0_6 (layer 0): no parent",
+      "0_8 (layer 0): no parent",
+      "0_9 (layer 0): no parent",
+      "0_11 (layer 0): no parent",
+      "0_14 (layer 0): no parent",
+      "0_15 (layer 0): no parent",
+      "0_16 (layer 0): no parent",
+      "0_17 (layer 0): no parent",
+      "0_19 (layer 0): no parent",
+      "0_22 (layer 0): no parent",
+      "0_23 (layer 0): no parent",
+      "0_29 (layer 0): no parent",
+      "1_0 (layer 1): no parent",
+      "1_1 (layer 1): no parent"
+    ],
+    "total_rows": 1349,
+    "layer0_assigned": 659,
+    "unknown_count_metadata": 0,
+    "unknown_count_actual": 690,
+    "coverage_gap": 0,
+    "unknown_count_mismatch": true,
+    "duplicate_assignments": 0
+  },
+  "labels": {
+    "duplicates_per_layer": {
+      "0": {
+        "total_clusters": 41,
+        "duplicate_labels": {},
+        "duplicate_rate": 0.0
+      },
+      "1": {
+        "total_clusters": 12,
+        "duplicate_labels": {},
+        "duplicate_rate": 0.0
+      },
+      "2": {
+        "total_clusters": 3,
+        "duplicate_labels": {},
+        "duplicate_rate": 0.0
+      }
+    },
+    "generic_labels": 0,
+    "meaningful_labels": 56,
+    "label_quality": "toponymy",
+    "label_length_min": 12,
+    "label_length_max": 116,
+    "label_length_mean": 85.0
+  },
+  "health_score": 70,
+  "issues_count": 2
+}

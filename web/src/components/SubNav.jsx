@@ -9,14 +9,18 @@ function deriveCollectionLabel(dataset) {
   return `${name}'s ${isLikes ? 'likes' : 'tweets'}`;
 }
 
-const SubNav = ({ dataset, scope, scopes, onScopeChange, onBack, overlay = false }) => {
-  const subHeaderClassName = overlay
-    ? `${styles.subHeaderContainer} ${styles.overlay}`
-    : styles.subHeaderContainer;
+const SubNav = ({ dataset, scope, scopes, onScopeChange, onBack, overlay = false, embedded = false }) => {
+  const subHeaderClassName = embedded
+    ? `${styles.subHeaderContainer} ${styles.embedded}`
+    : overlay
+      ? `${styles.subHeaderContainer} ${styles.overlay}`
+      : styles.subHeaderContainer;
 
-  const contextBarClassName = overlay
-    ? `${styles.contextBar} ${styles.overlayContextBar}`
-    : styles.contextBar;
+  const contextBarClassName = embedded
+    ? `${styles.contextBar} ${styles.embeddedContextBar}`
+    : overlay
+      ? `${styles.contextBar} ${styles.overlayContextBar}`
+      : styles.contextBar;
 
   if (!dataset) {
     return (
@@ -88,6 +92,7 @@ SubNav.propTypes = {
   onScopeChange: PropTypes.func,
   onBack: PropTypes.func,
   overlay: PropTypes.bool,
+  embedded: PropTypes.bool,
 };
 
 export default SubNav;

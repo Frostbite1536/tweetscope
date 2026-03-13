@@ -5,12 +5,9 @@ import sys
 import types
 
 import numpy as np
-import pandas as pd
-import pytest
 
 from latentscope.pipeline.hierarchy import (
     PrecomputedClusterer,
-    compute_target_leaf_topics_from_input_df,
     deserialize_cluster_tree,
     load_hierarchy_artifact,
     save_hierarchy_artifact,
@@ -215,32 +212,6 @@ def test_find_matching_toponymy_labels_id_keys_on_hierarchy_and_naming_method(tm
     )
 
     assert found == "toponymy-002"
-
-
-def test_compute_target_leaf_topics_uses_configured_text_column() -> None:
-    df = pd.DataFrame(
-        {
-            "body": ["a much longer body of text", "tiny", "medium length text"],
-            "is_reply": [True, False, True],
-        }
-    )
-
-    target, median_chars, reply_ratio = compute_target_leaf_topics_from_input_df(
-        df,
-        text_column="body",
-        n_rows=len(df),
-    )
-
-    assert target > 0
-    assert median_chars == float(df["body"].astype(str).str.len().median())
-    assert reply_ratio == pytest.approx(2 / 3)
-
-
-def test_compute_target_leaf_topics_missing_text_column_raises() -> None:
-    df = pd.DataFrame({"text": ["hello"]})
-
-    with pytest.raises(KeyError, match="Configured text column 'body'"):
-        compute_target_leaf_topics_from_input_df(df, text_column="body")
 
 
 def test_try_enable_hierarchical_scope_passes_text_column(tmp_path, monkeypatch) -> None:

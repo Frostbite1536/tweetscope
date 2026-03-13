@@ -61,10 +61,17 @@ export interface NodeStatsEntry {
 
 export interface ClusterLabel extends JsonRecord {
   cluster: string | number;
+  label?: string;
   parent_cluster?: string | number | null;
   layer?: number;
   count?: number;
   likes?: number;
+  topic_specificity?: number | null;
+  semantic_order?: number | null;
+  display_centroid_x?: number;
+  display_centroid_y?: number;
+  centroid_x?: number;
+  centroid_y?: number;
   children?: ClusterLabel[];
   cumulativeLikes?: number;
   cumulativeCount?: number;

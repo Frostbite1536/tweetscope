@@ -39,7 +39,11 @@ def _build_hierarchical_lookup(
 
     unknown_count = max(0, int(umap_row_count) - len(assigned_indices))
 
-    df = full_df.drop(columns=[col for col in ["indices"] if col in full_df.columns])
+    # Keep the served scope lookup lightweight. Full semantic centroid vectors are
+    # useful in the cluster-label artifact, but too large for every served scope JSON.
+    df = full_df.drop(
+        columns=[col for col in ["indices", "semantic_centroid"] if col in full_df.columns]
+    )
 
     if "hull" in df.columns:
         df["hull"] = df["hull"].apply(lambda x: x.tolist() if hasattr(x, "tolist") else x)
@@ -61,6 +65,8 @@ def _build_hierarchical_lookup(
             "count": unknown_count,
             "parent_cluster": None,
             "children": [],
+            "display_centroid_x": 0,
+            "display_centroid_y": 0,
             "centroid_x": 0,
             "centroid_y": 0,
         }

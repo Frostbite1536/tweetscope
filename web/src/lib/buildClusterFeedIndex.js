@@ -1,5 +1,12 @@
 import { getLikesCount } from './engagement';
 
+/** Shared empty sentinel — avoids allocating new objects per hook instance. */
+export const EMPTY_FEED_INDEX = {
+  clusterToTopLevel: {},
+  indicesByTopLevel: {},
+  descendantsByCluster: new Map(),
+};
+
 /**
  * Normalize cluster ID to a string (or null).
  */
