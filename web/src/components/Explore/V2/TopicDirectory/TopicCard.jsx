@@ -66,6 +66,13 @@ const TopicCard = forwardRef(function TopicCard(
               role="button"
               tabIndex={0}
               className={styles.subItem}
+              onMouseDown={(e) => {
+                // Pointer clicks should activate the filter without moving focus
+                // onto the sticky ToC row. If the focused subcluster becomes
+                // offscreen when the sticky ToC collapses, the browser can
+                // auto-scroll the horizontal carousel back to reveal it.
+                e.preventDefault();
+              }}
               onClick={(e) => {
                 e.stopPropagation();
                 onClickSubCluster?.(sub.cluster);

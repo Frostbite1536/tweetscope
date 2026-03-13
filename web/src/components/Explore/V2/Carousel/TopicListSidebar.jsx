@@ -18,6 +18,7 @@ import TopicCard from '../TopicDirectory/TopicCard';
 import styles from './TopicListSidebar.module.scss';
 
 function TopicListSidebar({
+  containerRef,
   topLevelClusters,
   focusedIndex,
   onClickCluster,
@@ -27,8 +28,10 @@ function TopicListSidebar({
   sortDirection = 'desc',
   onSortDirectionToggle,
   disableKeyboardShortcuts = false,
-  isSticky = false,
+  isStickyShell = false,
+  isStickyVisible = false,
   onMouseEnter,
+  onMouseMove,
   onMouseLeave,
   subNavProps,
 }) {
@@ -147,8 +150,14 @@ function TopicListSidebar({
 
   return (
     <div
-      className={`${styles.container}${isSticky ? ` ${styles.sticky}` : ''}`}
+      ref={containerRef}
+      className={[
+        styles.container,
+        isStickyShell ? styles.stickyShell : '',
+        isStickyVisible ? styles.stickyVisible : '',
+      ].filter(Boolean).join(' ')}
       onMouseEnter={onMouseEnter}
+      onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
     >
       {subNavProps && <SubNav {...subNavProps} embedded />}
@@ -232,6 +241,10 @@ function TopicListSidebar({
 }
 
 TopicListSidebar.propTypes = {
+  containerRef: PropTypes.oneOfType([
+    PropTypes.func,
+    PropTypes.shape({ current: PropTypes.any }),
+  ]),
   topLevelClusters: PropTypes.array.isRequired,
   focusedIndex: PropTypes.number,
   onClickCluster: PropTypes.func.isRequired,
@@ -241,8 +254,10 @@ TopicListSidebar.propTypes = {
   sortDirection: PropTypes.oneOf(['asc', 'desc']),
   onSortDirectionToggle: PropTypes.func,
   disableKeyboardShortcuts: PropTypes.bool,
-  isSticky: PropTypes.bool,
+  isStickyShell: PropTypes.bool,
+  isStickyVisible: PropTypes.bool,
   onMouseEnter: PropTypes.func,
+  onMouseMove: PropTypes.func,
   onMouseLeave: PropTypes.func,
   subNavProps: PropTypes.shape({
     dataset: PropTypes.object,

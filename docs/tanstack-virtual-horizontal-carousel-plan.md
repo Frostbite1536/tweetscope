@@ -244,6 +244,119 @@ Reason:
 
 `rangeExtractor` is useful if you later want sticky headers inside the virtualized range itself. The Sticky example shows that pattern, but it is not the cleanest model for this sidebar.
 
+## Long-Term Sticky ToC Architecture
+
+The cleanest long-term version is to stop letting sticky-ToC visibility mutate the
+horizontal strip's layout at all.
+
+Current pain point:
+
+- the same DOM subtree is both a real in-flow item in the horizontal strip and a
+  sticky overlay surface
+- when its sticky/revealed state changes, the browser can reinterpret snap
+  positions, focus visibility, and layout in ways that fight the carousel scroll
+  target
+
+Current mitigation in `FeedCarousel` / `TopicListSidebar`:
+
+- once the user has scrolled away from the strip start, the sticky ToC shell now
+  stays mounted and sticky
+- reveal/hide only changes whether that shell is visually exposed (`opacity` /
+  pointer hit testing), instead of toggling the sticky positioning itself
+- this preserves current UX while removing the visible "move left, then force
+  back" artifact that happened when collapsing the sticky ToC after a subcluster
+  click
+
+Recommended long-term invariant:
+
+- keep the horizontal geometry stable regardless of whether the sticky ToC is
+  visually shown, hidden, pinned, or hover-revealed
+
+That can be achieved by:
+
+- keeping a stable left gutter in the carousel's scroll math for the ToC region
+- rendering the visible sticky ToC as a separate visual layer that does not
+  mount/unmount or change the effective width of the horizontal track
+- toggling the sticky ToC with `visibility`, `opacity`, `transform`, and
+  `pointer-events`, rather than by changing whether the strip has an in-flow
+  ToC item occupying that space
+
+### Risks And How To Resolve Them
+
+1. Start-of-strip semantics
+
+- Risk: if the ToC is no longer the first real in-flow snap item, `scrollLeft = 0`
+  may stop meaning "ToC fully visible + first topic selected".
+- Resolution: define an explicit stable left offset for the column track:
+  `tocWidth + tocGap + leadingCenterSpacer`. In a TanStack version, this belongs
+  in `scrollMargin` / `paddingStart`, not in conditional DOM shape.
+
+2. Focus and keyboard order
+
+- Risk: moving the sticky ToC into a separate layer can accidentally duplicate
+  focusable controls or change tab order.
+- Resolution: keep one logical ToC control tree. If the visible layer is
+  decoupled from the strip, hide/show the same mounted subtree instead of
+  remounting a second copy. Pointer-triggered subcluster clicks should continue
+  to avoid stealing focus; keyboard activation should still work.
+
+3. Hover-reveal and pinned mode
+
+- Risk: if the hover zone and sticky ToC are separate layers, pointer transitions
+  can flicker or produce false leave/enter boundaries.
+- Resolution: make the left-edge hover zone, sticky shell, and interactive ToC
+  region part of one pointer model with explicit containment checks and a stable
+  mounted root element.
+
+4. Vertical ToC autoscroll
+
+- Risk: auto-scrolling the active card into view inside the ToC can accidentally
+  couple back into horizontal scroll if the ToC remains inside the strip.
+- Resolution: once the sticky ToC is visually decoupled, vertical list scrolling
+  happens inside its own overflow container and should not affect the horizontal
+  track at all.
+
+5. Resize / responsive changes
+
+- Risk: viewport width, ToC width, and center offset changes can invalidate the
+  assumed left gutter and break centering.
+- Resolution: continue measuring the scroll container and ToC width with
+  `ResizeObserver`, then feed the updated offsets into the virtualizer.
+
+6. Thread overlay / z-index layering
+
+- Risk: a separate sticky ToC layer may conflict with thread overlay hit-testing.
+- Resolution: keep the thread overlay above the sticky ToC, and keep the sticky
+  ToC above the hover recall zone and the carousel content.
+
+### User Behavior Run-Through
+
+If the long-term approach is implemented correctly, the user-visible behavior
+should remain exactly the same:
+
+- Expanded entry: opening carousel mode still starts with the ToC fully visible
+  and the first sorted topic selected.
+- Horizontal scroll away from start: the ToC scrolls out, then becomes available
+  via the left-edge recall affordance.
+- Hover reveal: moving into the recall zone reveals the sticky ToC without
+  changing carousel geometry.
+- Pinned interaction: clicking a cluster, subcluster, or sort control keeps the
+  sticky ToC visible through the resulting horizontal scroll.
+- Exit after action: moving out of the sticky ToC hides it without changing the
+  horizontal position reached by that action.
+- First-topic return: clicking the first topic from a scrolled/sticky state still
+  returns to the true start with the full ToC visible.
+- Search and sort: filtering the ToC list or changing sort mode/direction only
+  changes ToC contents and intended carousel target, not the underlying layout
+  contract.
+- Keyboard access: tabbing into the ToC, activating a subcluster with keyboard,
+  and leaving focus inside the ToC should not cause horizontal resets.
+- Thread overlay: opening/closing thread overlay remains independent of sticky
+  ToC visibility.
+
+This architecture is better because those behaviors become direct consequences of
+stable geometry rather than needing scroll-preservation repair logic.
+
 ## CSS / Layout Changes
 
 Required cleanup during migration:
@@ -326,11 +439,22 @@ Browser checks:
 
 - open expanded mode from start of strip
 - click a far-away topic once and confirm one-step landing
+- click the first topic from a scrolled/sticky state and confirm the strip returns fully to `scrollLeft: 0` with the ToC completely visible
 - click a far-away subtopic once and confirm one-step landing + filter application
 - change sort mode and sort direction, confirm focus and centering remain correct
 - hover-reveal ToC, pinned ToC, and sticky ToC all still behave correctly
+- while the pointer remains inside the sticky ToC, clicking a cluster, subcluster, or sort control must keep the ToC visible through scroll completion
+- after a ToC action, moving the pointer out of the sticky ToC before scroll completion must still allow the ToC to unpin/hide
+- clicking a sticky-ToC subcluster and then moving the pointer out must not reset the horizontal strip to the first column because of focus/scroll coupling
 - open thread overlay from a mounted column and close it
 - verify load-more still works in mounted columns
+
+Checked-in CLI regression:
+
+- `tools/verify_feed_carousel_playwright.sh`
+- runs against the local app with `/opt/homebrew/bin/playwright-cli`
+- covers sticky-ToC subcluster click + mouse-leave reset, sticky hover/pin
+  persistence, first-topic return to true start, and sort-toggle while hovered
 
 Regression target:
 

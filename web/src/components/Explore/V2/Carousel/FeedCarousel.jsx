@@ -42,8 +42,10 @@ function FeedCarousel({
   subNavProps,
 }) {
   const containerRef = useRef(null);
+  const tocContainerRef = useRef(null);
   const scrollRafRef = useRef(null);
   const pendingColumnScrollRef = useRef(null);
+  const lastToCPointerRef = useRef({ x: null, y: null });
   const latestScrollLeftRef = useRef(0);
   const [carouselGeometry, setCarouselGeometry] = useState({
     paddingLeft: 0,
@@ -63,39 +65,97 @@ function FeedCarousel({
   const isHoveringStickyToCRef = useRef(false);
   const isPinnedAfterToCActionRef = useRef(false);
   const isProgrammaticScrollRef = useRef(false);
+  const shouldHideToCAfterProgrammaticScrollRef = useRef(false);
   const programmaticScrollTimerRef = useRef(null);
   const programmaticScrollReasonRef = useRef(null);
   const programmaticTargetLeftRef = useRef(null);
 
-  const isToCSticky = isListScrolledOff && (isToCRevealed || isPinnedAfterToCAction);
+  // Keep the sticky shell mounted for the whole "scrolled away from start"
+  // state. Only the shell's visual exposure changes; otherwise hiding the ToC
+  // can perturb browser scroll/focus behavior and jerk the carousel sideways.
+  const isToCStickyShell = isListScrolledOff;
+  const isToCStickyVisible = isListScrolledOff && (isToCRevealed || isPinnedAfterToCAction);
+
+  const clearLastToCPointer = useCallback(() => {
+    lastToCPointerRef.current = { x: null, y: null };
+  }, []);
+
+  const updateLastToCPointer = useCallback((event) => {
+    if (!event) return;
+    lastToCPointerRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+  }, []);
+
+  const isPointerWithinStickyToC = useCallback(() => {
+    const tocEl = tocContainerRef.current;
+    if (!tocEl || typeof document === 'undefined') return false;
+    if (tocEl.matches(':hover')) return true;
+
+    const { x, y } = lastToCPointerRef.current;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+
+    const hoveredEl = document.elementFromPoint(x, y);
+    return Boolean(hoveredEl && tocEl.contains(hoveredEl));
+  }, []);
 
   const revealToC = useCallback(() => {
     setIsToCRevealed(true);
   }, []);
 
   const clearToCReveal = useCallback(() => {
+    if (tocContainerRef.current?.contains(document.activeElement)) {
+      // Once the sticky ToC is no longer visually exposed, any focused control
+      // inside it becomes an offscreen target. Browsers may then auto-scroll
+      // the horizontal strip back toward the start to reveal that focused
+      // element, so blur it before collapsing the sticky shell.
+      document.activeElement.blur();
+    }
+    clearLastToCPointer();
+    shouldHideToCAfterProgrammaticScrollRef.current = false;
     isHoveringStickyToCRef.current = false;
     isPinnedAfterToCActionRef.current = false;
     setIsPinnedAfterToCAction(false);
     setIsToCRevealed(false);
-  }, []);
+  }, [clearLastToCPointer]);
 
   const pinToCAfterAction = useCallback(() => {
+    shouldHideToCAfterProgrammaticScrollRef.current = false;
     isPinnedAfterToCActionRef.current = true;
     setIsPinnedAfterToCAction(true);
     setIsToCRevealed(true);
   }, []);
 
-  const handleToCMouseEnter = useCallback(() => {
+  const handleToCMouseEnter = useCallback((event) => {
+    updateLastToCPointer(event);
     if (!latestScrollLeftRef.current || latestScrollLeftRef.current <= 50) return;
     isHoveringStickyToCRef.current = true;
     setIsToCRevealed(true);
-  }, []);
+  }, [updateLastToCPointer]);
 
-  const handleToCMouseLeave = useCallback(() => {
+  const handleToCMouseMove = useCallback((event) => {
+    updateLastToCPointer(event);
     if (!latestScrollLeftRef.current || latestScrollLeftRef.current <= 50) return;
+    isHoveringStickyToCRef.current = true;
+  }, [updateLastToCPointer]);
+
+  const handleToCMouseLeave = useCallback((event) => {
+    if (!latestScrollLeftRef.current || latestScrollLeftRef.current <= 50) return;
+    if (isProgrammaticScrollRef.current) {
+      // Keep the sticky ToC mounted until the click-driven horizontal scroll
+      // settles. Clearing reveal immediately changes the strip's snap/layout
+      // state mid-flight, which can cause the browser to re-snap back to the
+      // first column.
+      clearLastToCPointer();
+      shouldHideToCAfterProgrammaticScrollRef.current = true;
+      isHoveringStickyToCRef.current = false;
+      isPinnedAfterToCActionRef.current = false;
+      setIsPinnedAfterToCAction(false);
+      return;
+    }
     clearToCReveal();
-  }, [clearToCReveal]);
+  }, [clearLastToCPointer, clearToCReveal]);
 
   const handleSortChange = useCallback(
     (nextSortMode) => {
@@ -116,23 +176,36 @@ function FeedCarousel({
       programmaticScrollTimerRef.current = null;
     }
 
+    // Preserve the sticky ToC after a programmatic click-driven scroll if the
+    // pointer is still physically over it, even if React enter/leave state
+    // momentarily lags during the rerender/scroll sequence.
+    const hoveredStickyToC = isHoveringStickyToCRef.current || isPointerWithinStickyToC();
+    const shouldHideToCAfterProgrammaticScroll =
+      shouldHideToCAfterProgrammaticScrollRef.current;
+    shouldHideToCAfterProgrammaticScrollRef.current = false;
     isProgrammaticScrollRef.current = false;
     recordFeedCarouselDebug('programmatic-scroll-end', {
       source,
       reason: programmaticScrollReasonRef.current,
       targetLeft: programmaticTargetLeftRef.current,
       scrollLeft,
-      hoveredStickyToC: isHoveringStickyToCRef.current,
+      hoveredStickyToC,
       pinnedAfterToCAction: isPinnedAfterToCActionRef.current,
+      shouldHideToCAfterProgrammaticScroll,
     });
     programmaticScrollReasonRef.current = null;
     programmaticTargetLeftRef.current = null;
 
-    if (!isHoveringStickyToCRef.current) {
-      isPinnedAfterToCActionRef.current = false;
-      setIsPinnedAfterToCAction(false);
+    if (hoveredStickyToC) {
+      isHoveringStickyToCRef.current = true;
+      setIsToCRevealed(true);
+      return;
     }
-  }, []);
+
+    if (!hoveredStickyToC) {
+      clearToCReveal();
+    }
+  }, [clearToCReveal, isPointerWithinStickyToC]);
 
   const beginProgrammaticScroll = useCallback((reason = 'unknown', targetLeft = null) => {
     isProgrammaticScrollRef.current = true;
@@ -294,7 +367,10 @@ function FeedCarousel({
   }, []);
 
   useEffect(() => {
-    if (!isListScrolledOff) {
+    // Reset sticky-ToC reveal state when the user is genuinely back at the
+    // strip start. Do not clear it while a click-driven scroll is leaving the
+    // start, otherwise the ToC can collapse before the sticky shell takes over.
+    if (!isListScrolledOff && !isProgrammaticScrollRef.current) {
       clearToCReveal();
     }
   }, [clearToCReveal, isListScrolledOff]);
@@ -305,6 +381,10 @@ function FeedCarousel({
     const viewportHeight = window.innerHeight;
 
     const handlePointerMove = (event) => {
+      // Don't collapse the sticky ToC while a click-triggered horizontal scroll
+      // is still settling. Changing reveal state here mutates the strip layout
+      // and can force the browser to re-snap to the start.
+      if (isProgrammaticScrollRef.current) return;
       if (isHoveringStickyToCRef.current || isPinnedAfterToCActionRef.current) return;
       if (event.clientX > LIST_WIDTH || event.clientY < 0 || event.clientY > viewportHeight) {
         setIsToCRevealed(false);
@@ -405,6 +485,9 @@ function FeedCarousel({
 
   const getScrollTargetForColumn = useCallback(
     (sortedIndex) => {
+      if (sortedIndex <= 0) {
+        return 0;
+      }
       const contentBefore = carouselGeometry.paddingLeft + LIST_WIDTH + GAP + spacerWidth;
       const effectiveWidth = COLUMN_WIDTH + GAP;
       const columnStart = contentBefore + sortedIndex * effectiveWidth;
@@ -414,10 +497,15 @@ function FeedCarousel({
   );
 
   const scrollToStart = useCallback(
-    ({ behavior = 'auto' } = {}) => {
+    ({ behavior = 'auto', reason = 'unknown' } = {}) => {
       if (!containerRef.current) return;
 
-      beginProgrammaticScroll('initial-start', 0);
+      recordFeedCarouselDebug('scroll-to-start', {
+        reason,
+        behavior,
+        currentLeft: containerRef.current.scrollLeft,
+      });
+      beginProgrammaticScroll(reason, 0);
 
       latestScrollLeftRef.current = 0;
       setIsListScrolledOff(false);
@@ -476,6 +564,15 @@ function FeedCarousel({
     (sortedIndex, options = {}) => {
       if (!containerRef.current) return;
 
+      if (sortedIndex <= 0) {
+        pendingColumnScrollRef.current = null;
+        scrollToStart({
+          ...options,
+          behavior: options.behavior ?? 'smooth',
+        });
+        return;
+      }
+
       const { start, end } = visibleWindowRangeRef.current;
       const targetOutsideWindow = sortedIndex < start || sortedIndex > end;
 
@@ -488,7 +585,7 @@ function FeedCarousel({
       pendingColumnScrollRef.current = null;
       performScrollToColumn(sortedIndex, options);
     },
-    [performScrollToColumn]
+    [performScrollToColumn, scrollToStart]
   );
 
   useLayoutEffect(() => {
@@ -644,6 +741,7 @@ function FeedCarousel({
     <div className={styles.wrapper}>
       <div ref={containerRef} className={styles.carousel} onScroll={handleScroll}>
         <TopicListSidebar
+          containerRef={tocContainerRef}
           topLevelClusters={sortedClusters}
           focusedIndex={sortedFocusedIndex}
           onClickCluster={handleListClusterClick}
@@ -652,8 +750,10 @@ function FeedCarousel({
           onSortChange={handleSortChange}
           sortDirection={sortDirection}
           onSortDirectionToggle={handleSortDirectionToggle}
-          isSticky={isToCSticky}
+          isStickyShell={isToCStickyShell}
+          isStickyVisible={isToCStickyVisible}
           onMouseEnter={handleToCMouseEnter}
+          onMouseMove={handleToCMouseMove}
           onMouseLeave={handleToCMouseLeave}
           subNavProps={subNavProps}
         />
@@ -724,7 +824,7 @@ function FeedCarousel({
       </div>
 
       {/* Left-edge hover zone with visible tab indicator */}
-      {!isToCSticky && isListScrolledOff && (
+      {!isToCStickyVisible && isListScrolledOff && (
         <div
           className={styles.hoverZone}
           onMouseEnter={revealToC}

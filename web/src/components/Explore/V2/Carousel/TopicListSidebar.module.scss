@@ -11,15 +11,27 @@
   /* Make the ToC itself the first valid snap target so expanded mode can open
      at the true start of the strip instead of snapping to a centered column. */
   scroll-snap-align: start;
+}
 
-  &.sticky {
-    position: sticky;
-    left: 0;
-    z-index: 20;
-    background: var(--glass-bg-solid);
-    border-right: 1px solid var(--glass-border-subtle);
-    box-shadow: var(--glass-shadow);
-  }
+.stickyShell {
+  position: sticky;
+  left: 0;
+  z-index: 20;
+}
+
+.stickyVisible {
+  background: var(--glass-bg-solid);
+  border-right: 1px solid var(--glass-border-subtle);
+  box-shadow: var(--glass-shadow);
+}
+
+.stickyShell:not(.stickyVisible) {
+  /* Keep the sticky positioning stable once the strip has scrolled away from
+     the start. Hiding the shell visually instead of moving it offscreen keeps
+     focused controls from triggering a horizontal "scroll back to reveal me"
+     correction when the pointer exits. */
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ── Top bar ── */
