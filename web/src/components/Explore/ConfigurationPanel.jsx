@@ -74,22 +74,14 @@ const ConfigurationPanel = ({
         {/* ── Show / Hide ── */}
         <div className={styles.section}>
           <span className={styles.sectionLabel}>Show</span>
-          <label className={styles.inlineToggle}>
-            <input
-              type="checkbox"
-              checked={showClusterOutlines}
-              onChange={toggleShowClusterOutlines}
-            />
-            <span>Topic Borders</span>
-          </label>
-          {timelineHasDates && (
+          {threadsOnlyAvailable && (
             <label className={styles.inlineToggle}>
               <input
                 type="checkbox"
-                checked={showTimeline}
-                onChange={toggleShowTimeline}
+                checked={threadsOnlyActive}
+                onChange={onToggleThreadsOnly}
               />
-              <span>Timeline</span>
+              <span>Show Threads Only</span>
             </label>
           )}
           {linksAvailable && (
@@ -112,14 +104,22 @@ const ConfigurationPanel = ({
               </label>
             </>
           )}
-          {threadsOnlyAvailable && (
+          <label className={styles.inlineToggle}>
+            <input
+              type="checkbox"
+              checked={showClusterOutlines}
+              onChange={toggleShowClusterOutlines}
+            />
+            <span>Topic Borders</span>
+          </label>
+          {timelineHasDates && (
             <label className={styles.inlineToggle}>
               <input
                 type="checkbox"
-                checked={threadsOnlyActive}
-                onChange={onToggleThreadsOnly}
+                checked={showTimeline}
+                onChange={toggleShowTimeline}
               />
-              <span>Show Threads Only</span>
+              <span>Timeline <span className={styles.betaBadge}>beta</span></span>
             </label>
           )}
         </div>

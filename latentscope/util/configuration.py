@@ -2,6 +2,22 @@ import os
 import sys
 from dotenv import load_dotenv, set_key
 
+_TRUTHY_ENV = {"1", "true", "yes", "on"}
+_FALSY_ENV = {"0", "false", "no", "off"}
+
+
+def _env_flag(name, default=False):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    text = raw.strip().lower()
+    if text in _TRUTHY_ENV:
+        return True
+    if text in _FALSY_ENV:
+        return False
+    return default
+
+
 def get_data_dir():
     print("Loading environment variables from:", os.path.join(os.getcwd(), '.env'))
     load_dotenv()
@@ -38,6 +54,14 @@ def get_key(key, env_file=".env"):
     print("get key", os.getcwd())
     load_dotenv(env_file)
     return os.getenv(key)
+
+
+def cloud_lancedb_enabled(env_file=".env"):
+    load_dotenv(env_file)
+    if _env_flag("LATENT_SCOPE_DISABLE_CLOUD_LANCEDB", default=False):
+        return False
+    return bool(os.getenv("LANCEDB_URI") and os.getenv("LANCEDB_API_KEY"))
+
 
 def get_supported_api_keys():
     return [

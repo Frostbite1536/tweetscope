@@ -19,7 +19,7 @@
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-3);
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--overlay-tint-subtle);
   border: 1px solid var(--glass-border-subtle);
   border-radius: var(--radius-full);
   font-family: 'Instrument Sans', system-ui, sans-serif;
@@ -28,45 +28,19 @@
   color: var(--text-color-text-subtle);
   cursor: pointer;
   white-space: nowrap;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
   flex-shrink: 0;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.08);
+    background: var(--loading-border);
     color: var(--text-color-text-main);
   }
 
   &.active {
-    background: rgba(36, 131, 123, 0.12);
-    border-color: rgba(36, 131, 123, 0.25);
+    background: var(--accent-tint-pill);
+    border-color: var(--accent-tint-pill-border);
     color: var(--interactions---primary-color-interaction-primary);
     font-weight: 600;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    background: rgba(255, 255, 255, 0.06);
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    &.active {
-      background: rgba(36, 131, 123, 0.18);
-      border-color: rgba(36, 131, 123, 0.3);
-    }
-  }
-
-  :global(:root[data-theme="dark"]) & {
-    background: rgba(255, 255, 255, 0.06);
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    &.active {
-      background: rgba(36, 131, 123, 0.18);
-      border-color: rgba(36, 131, 123, 0.3);
-    }
   }
 }
 
@@ -80,28 +54,12 @@
   font-size: 10px;
   font-weight: 600;
   padding: 1px 6px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--overlay-tint-subtle);
   border-radius: var(--radius-full);
   color: var(--text-color-text-subtle);
 
   .active & {
-    background: rgba(36, 131, 123, 0.15);
+    background: var(--accent-tint-pill);
     color: var(--interactions---primary-color-interaction-primary);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    background: rgba(255, 255, 255, 0.08);
-
-    .active & {
-      background: rgba(36, 131, 123, 0.22);
-    }
-  }
-
-  :global(:root[data-theme="dark"]) & {
-    background: rgba(255, 255, 255, 0.08);
-
-    .active & {
-      background: rgba(36, 131, 123, 0.22);
-    }
   }
 }

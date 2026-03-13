@@ -246,10 +246,32 @@ def batch_thread_groups(groups, tokenizer, params):
     Returns:
         list of list of ThreadGroup dicts (each inner list = one API call)
     """
-    max_groups = int(params.get("max_inputs_per_batch", 1000))
-    max_tokens = int(params.get("max_total_tokens", 120000))
-    max_chunks = int(params.get("max_total_chunks", 16000))
-    max_tokens_per_group = int(params.get("max_tokens_per_group", 32000))
+    def _int_env_override(name, default):
+        raw = os.getenv(name)
+        if raw in (None, ""):
+            return int(default)
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            print(f"Warning: invalid env override {name}={raw}, falling back")
+            return int(default)
+
+    max_groups = _int_env_override(
+        "LS_EMBED_MAX_INPUTS_PER_BATCH",
+        params.get("max_inputs_per_batch", 1000),
+    )
+    max_tokens = _int_env_override(
+        "LS_EMBED_MAX_TOTAL_TOKENS",
+        params.get("max_total_tokens", 120000),
+    )
+    max_chunks = _int_env_override(
+        "LS_EMBED_MAX_TOTAL_CHUNKS",
+        params.get("max_total_chunks", 16000),
+    )
+    max_tokens_per_group = _int_env_override(
+        "LS_EMBED_MAX_TOKENS_PER_GROUP",
+        params.get("max_tokens_per_group", 32000),
+    )
 
     # Pre-compute token counts for each group
     for g in groups:

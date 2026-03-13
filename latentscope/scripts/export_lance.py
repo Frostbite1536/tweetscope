@@ -3,6 +3,8 @@
 import json
 import os
 
+from latentscope.util import cloud_lancedb_enabled
+
 
 def export_lance(directory, dataset, scope_id, metric="cosine", partitions=None, cloud=False):
     import lancedb
@@ -62,7 +64,7 @@ def export_lance(directory, dataset, scope_id, metric="cosine", partitions=None,
     _create_table(db, table_name)
 
     # Cloud export
-    if cloud:
+    if cloud and cloud_lancedb_enabled():
         cloud_uri = os.environ.get("LANCEDB_URI")
         cloud_key = os.environ.get("LANCEDB_API_KEY")
         if not cloud_uri or not cloud_key:

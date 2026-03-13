@@ -1,6 +1,8 @@
 .panel {
   position: absolute;
   width: 280px;
+  bottom: 54px;
+  left: 0;
   background: var(--glass-bg);
   backdrop-filter: blur(20px) saturate(150%);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
@@ -9,14 +11,13 @@
   box-shadow: var(--glass-shadow), var(--glass-glow);
   padding: var(--space-3) var(--space-4);
   z-index: 1000;
-  transform: translateY(0px);
-  transition: transform 0.3s ease, opacity 0.2s ease;
-  top: 10px;
   opacity: 0;
+  transform: translateY(8px);
   pointer-events: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 
   &.open {
-    transform: translateY(-120%);
+    transform: translateY(0);
     opacity: 1;
     pointer-events: auto;
   }
@@ -170,6 +171,20 @@
   &:hover {
     color: var(--text-color-text-main);
   }
+}
+
+.betaBadge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--semantic-color-semantic-info);
+  background: var(--accent-tint-pill);
+  border: 1px solid var(--accent-tint-pill-border);
+  border-radius: var(--radius-full);
+  padding: 1px 5px;
+  margin-left: 2px;
+  vertical-align: middle;
 }
 
 .themeCycler {

@@ -287,9 +287,13 @@ def extract_tweets_and_profile(username: str, output_file: str = None, year: int
         print(f"  Filtered to year {year}: {len(tweets)} tweets (from {original_count})")
 
     result = {
+        'archive_format': 'x_native_extracted_v1',
         'profile': profile,
         'tweets': tweets,
+        'likes': [],
         'tweet_count': len(tweets),
+        'likes_count': 0,
+        'total_count': len(tweets),
     }
 
     if year:

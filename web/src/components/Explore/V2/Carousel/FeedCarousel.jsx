@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, memo } from 'react';
 import PropTypes from 'prop-types';
-import { motion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import TopicListSidebar from './TopicListSidebar';
 import FeedColumn from './FeedColumn';
@@ -16,11 +15,6 @@ const VISIBLE_COLUMN_RADIUS = 3;
 const PROGRAMMATIC_SCROLL_TOLERANCE = 8;
 const DEFAULT_VIEWPORT_WIDTH = typeof window === 'undefined' ? COLUMN_WIDTH : window.innerWidth;
 
-// Hoisted to avoid new object refs on every render
-const MOTION_INITIAL = { opacity: 0, y: 20 };
-const MOTION_ANIMATE = { opacity: 1, y: 0 };
-const MOTION_TRANSITION = { duration: 0.25 };
-const MOTION_STYLE = { flexShrink: 0 };
 const EMPTY_TWEETS = [];
 
 function FeedCarousel({
@@ -786,13 +780,7 @@ function FeedCarousel({
           }
 
           return (
-            <motion.div
-              key={cluster.cluster}
-              initial={MOTION_INITIAL}
-              animate={MOTION_ANIMATE}
-              transition={MOTION_TRANSITION}
-              style={MOTION_STYLE}
-            >
+            <div key={cluster.cluster} style={{ flexShrink: 0 }}>
               <FeedColumn
                 columnIndex={originalIdx}
                 cluster={cluster}
@@ -813,7 +801,7 @@ function FeedCarousel({
                 onViewThread={handleOpenThreadOverlay}
                 onViewQuotes={onViewQuotes}
               />
-            </motion.div>
+            </div>
           );
         })}
 

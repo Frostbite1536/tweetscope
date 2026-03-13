@@ -10,6 +10,8 @@
   margin-top: var(--space-2);
 
   .tweetContainer {
+    min-height: 225px;
+
     // Twitter embed iframe styling
     :global(.twitter-tweet) {
       margin: 0 !important;

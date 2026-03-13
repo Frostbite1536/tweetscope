@@ -51,23 +51,7 @@
 
   background: linear-gradient(
     to left,
-    rgba(255, 252, 240, 0.6),
-    transparent
-  );
-
-  @media (prefers-color-scheme: dark) {
-    background: linear-gradient(
-      to left,
-      rgba(28, 27, 26, 0.6),
-      transparent
-    );
-  }
-}
-
-:global(:root[data-theme="dark"]) .fadeRight {
-  background: linear-gradient(
-    to left,
-    rgba(28, 27, 26, 0.6),
+    var(--fade-bg),
     transparent
   );
 }

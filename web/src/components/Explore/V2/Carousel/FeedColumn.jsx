@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect, memo } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { groupRowsByThread } from '../../../../lib/groupRowsByThread';
 import { EMBED_PRIORITY } from '../../../../lib/embedScheduler';
 import { useScope } from '../../../../contexts/ScopeContext';
@@ -219,15 +220,18 @@ function FeedColumn({
           )}
 
           {loading && (
-            <div className={styles.loadingRow}>
+            <div className={styles.loadMoreWrap}>
               <div className={styles.spinner} />
             </div>
           )}
 
           {hasMore && !loading && (
-            <button className={styles.loadMoreBtn} onClick={handleLoadMore}>
-              Load more
-            </button>
+            <div className={styles.loadMoreWrap}>
+              <button className={styles.loadMoreBtn} onClick={handleLoadMore}>
+                <ChevronDown size={14} />
+                Load more tweets
+              </button>
+            </div>
           )}
 
           {!loading && tweets.length === 0 && !hasMore && (

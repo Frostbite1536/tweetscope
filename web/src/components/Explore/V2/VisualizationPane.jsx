@@ -8,7 +8,7 @@ import ConnectionBadges from './ConnectionBadges';
 import { useScope } from '../../../contexts/ScopeContext';
 import { useFilter } from '../../../contexts/FilterContext';
 
-import { Heart, Repeat2, X } from 'lucide-react';
+import { Heart, Repeat2, X, Settings } from 'lucide-react';
 import { mapSelectionKey } from '../../../lib/colors';
 import {
   getLikesRawValue,
@@ -23,7 +23,6 @@ import ConfigurationPanel from '../ConfigurationPanel';
 import TimelineControls from './TimelineControls';
 import TwitterEmbed from './TweetFeed/TwitterEmbed';
 import { EMBED_PRIORITY } from '../../../lib/embedScheduler';
-import { Button } from 'react-element-forge';
 import useHoverCardPlacement from './useHoverCardPlacement';
 
 const DATE_COLUMN_NAMES = ['created_at', 'date', 'timestamp', 'time', 'posted_at', 'published_at'];
@@ -436,14 +435,13 @@ const VisualizationPane = forwardRef(function VisualizationPane({
     // <div style={{ width, height }} ref={umapRef}>
     <div ref={umapRef} style={{ width: '100%', height: '100%' }}>
       <div className={styles.configToggleContainer}>
-        <Button
-          className={styles['configToggle']}
+        <button
+          className={`${styles.configToggle} ${isPanelOpen ? styles.configToggleActive : ''}`}
           onClick={() => setIsPanelOpen(!isPanelOpen)}
           aria-label="Toggle configuration panel"
-          icon={'settings'}
-          size="small"
-          // color="#333"
-        />
+        >
+          <Settings size={20} />
+        </button>
 
         <ConfigurationPanel
           isOpen={isPanelOpen}

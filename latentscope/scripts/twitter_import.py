@@ -473,6 +473,7 @@ def _register_catalog(
 def _run_pipeline_for_dataset(
     *,
     dataset_id: str,
+    dataset_kind: str,
     data_dir: str,
     text_column: str,
     source_label: str,
@@ -577,7 +578,7 @@ def _run_pipeline_for_dataset(
                 quiet=False,
             )
 
-    scope_label = f"{dataset_id} Twitter"
+    scope_label = "Liked Tweets" if dataset_kind == "likes" else "Posted Tweets"
     scope_description = f"Imported from {source_label} and auto-processed."
     cluster_id: str | None = None
     cluster_labels_id: str
@@ -839,6 +840,7 @@ def run_import(
         else:
             pipeline_result = _run_pipeline_for_dataset(
                 dataset_id=dataset_id,
+                dataset_kind="tweets",
                 do_build_links=build_links,
                 incremental_links=incremental_links,
                 changed_tweet_ids=upsert_summary["changed_tweet_ids"],
@@ -875,6 +877,7 @@ def run_import(
         if run_pipeline:
             likes_pipeline = _run_pipeline_for_dataset(
                 dataset_id=likes_dataset_id,
+                dataset_kind="likes",
                 do_build_links=False,  # no links graph for likes
                 incremental_links=False,
                 **pipeline_params,

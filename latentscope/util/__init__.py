@@ -1,4 +1,12 @@
-from .configuration import get_data_dir, update_data_dir, get_key, get_supported_api_keys, set_openai_key, set_voyage_key
+from .configuration import (
+    cloud_lancedb_enabled,
+    get_data_dir,
+    get_key,
+    get_supported_api_keys,
+    set_openai_key,
+    set_voyage_key,
+    update_data_dir,
+)
 
 
 def calculate_point_size(num_points, min_size=10, max_size=30, base_num_points=100):

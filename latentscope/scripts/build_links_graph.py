@@ -15,7 +15,7 @@ from urllib.parse import urlsplit, urlunsplit
 import pandas as pd
 
 from latentscope.__version__ import __version__
-from latentscope.util import get_data_dir
+from latentscope.util import cloud_lancedb_enabled, get_data_dir
 
 STATUS_URL_RE = re.compile(
     r"https?://(?:www\.)?(?:x\.com|twitter\.com)/(?:i/web/)?(?:[A-Za-z0-9_]+/)?status/(?P<tweet_id>\d+)",
@@ -470,7 +470,7 @@ def _get_cloud_db():
 
     cloud_uri = os.environ.get("LANCEDB_URI")
     cloud_key = os.environ.get("LANCEDB_API_KEY")
-    if cloud_uri and cloud_key:
+    if cloud_lancedb_enabled() and cloud_uri and cloud_key:
         return lancedb.connect(cloud_uri, api_key=cloud_key)
     return None
 

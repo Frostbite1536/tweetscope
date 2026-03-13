@@ -1,6 +1,6 @@
 import { useState, useId, memo } from 'react';
 import PropTypes from 'prop-types';
-import { ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import TweetCard from './TweetCard';
 import styles from './ThreadGroup.module.scss';
 
@@ -79,17 +79,17 @@ function ThreadGroup({
       role="group"
       aria-label={`Thread of ${groupLabelCount} tweets`}
     >
-      {/* Missing ancestors banner */}
+      {/* Missing ancestors rule */}
       {hasMissingAncestors && (
         <button
-          className={styles.ancestorBanner}
+          className={`${styles.threadRule} ${styles.threadRuleTop}`}
           onClick={handleLoadAncestors}
           type="button"
         >
-          <ChevronUp size={13} />
+          <ChevronUp size={12} />
           <span>
             {missingAncestorCount > 0
-              ? `${missingAncestorCount} earlier tweet${missingAncestorCount === 1 ? '' : 's'} in this thread`
+              ? `${missingAncestorCount} earlier tweet${missingAncestorCount === 1 ? '' : 's'}`
               : 'Show earlier context'}
           </span>
         </button>
@@ -150,24 +150,23 @@ function ThreadGroup({
         </div>
       )}
 
-      {/* Expand/collapse bar */}
+      {/* Expand/collapse rule */}
       {canShowRepliesAction && (
         <button
-          className={`${styles.expandBar} ${expanded ? styles.expandBarExpanded : ''}`}
+          className={`${styles.threadRule} ${styles.threadRuleBottom} ${expanded ? styles.expandBarExpanded : ''}`}
           onClick={handleRepliesAction}
           type="button"
           aria-expanded={hasLocalReplies ? expanded : undefined}
           aria-controls={hasLocalReplies ? repliesId : undefined}
         >
-          <MessageSquare size={13} />
           <span>
             {expanded
               ? 'Hide replies'
               : (stableReplyCount
-                ? `Show replies (${stableReplyCount} in thread)`
-                : `${remainingCount} more tweet${remainingCount === 1 ? '' : 's'} in this thread`)}
+                ? `${stableReplyCount} replies`
+                : `${remainingCount} more reply${remainingCount === 1 ? '' : 'ies'}`)}
           </span>
-          <ChevronDown size={13} className={styles.expandChevron} />
+          <ChevronDown size={12} className={styles.expandChevron} />
         </button>
       )}
     </div>

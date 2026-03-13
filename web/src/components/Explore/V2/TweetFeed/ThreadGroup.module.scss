@@ -22,37 +22,61 @@
   }
 }
 
-// "N earlier tweets in this thread" banner — shown when thread root is not visible.
-// Visually mirrors expandBar but at the top, pointing upward.
-.ancestorBanner {
+// Rule-with-label style for thread indicators.
+// Thin line with centered text overlaid — like an <hr> with annotation.
+.threadRule {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-2) var(--space-4);
-  text-align: left;
-  background: color-mix(in srgb, var(--semantic-color-semantic-info) 6%, transparent);
+  background: transparent;
   border: none;
-  border-radius: var(--radius-md) var(--radius-md) 0 0; // rounded top, flat bottom
-  border-bottom: 1px solid var(--borders-color-border-3);
-
   cursor: pointer;
+  position: relative;
   font-family: 'Instrument Sans', system-ui, sans-serif;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-color-text-subtle);
-  transition: background var(--transition-fast), color var(--transition-fast);
+  opacity: 0.6;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+
+  // Rule line behind text
+  &::before {
+    content: '';
+    position: absolute;
+    left: var(--space-4);
+    right: var(--space-4);
+    top: 50%;
+    height: 1px;
+    background: var(--borders-color-border-3);
+    z-index: 0;
+  }
+
+  // Text and icons sit above the line with bg gap
+  span, svg {
+    position: relative;
+    z-index: 1;
+    background: var(--glass-bg-solid);
+    padding: 0 var(--space-1);
+  }
 
   &:hover {
-    background: color-mix(in srgb, var(--semantic-color-semantic-info) 12%, transparent);
-    color: var(--semantic-color-semantic-info);
+    opacity: 1;
+    color: var(--text-color-text-main);
   }
 
   svg {
     flex-shrink: 0;
-    opacity: 0.7;
   }
+}
+
+.threadRuleTop {
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.threadRuleBottom {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 
 // Connector line from ancestor banner down to root avatar top.
@@ -125,7 +149,7 @@
   }
 
   &:hover::before {
-    background: color-mix(in srgb, var(--semantic-color-semantic-info) 70%, transparent);
+    background: color-mix(in srgb, var(--semantic-color-semantic-info) 40%, transparent);
   }
 }
 
@@ -134,41 +158,13 @@
 .threadReply {
   position: relative;
   z-index: 1;
-  border-top: 1px solid var(--borders-color-border-3);
   min-width: 0;
-}
-
-.expandBar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-2) var(--space-4);
-  background: color-mix(in srgb, var(--semantic-color-semantic-info) 6%, transparent);
-  border: none;
-  border-radius: 0 0 var(--radius-md) var(--radius-md); // flat top, rounded bottom
-  border-top: 1px solid var(--borders-color-border-3);
-
-  cursor: pointer;
-  font-family: 'Instrument Sans', system-ui, sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-color-text-subtle);
-  transition: background var(--transition-fast), color var(--transition-fast);
-
-  &:hover {
-    background: color-mix(in srgb, var(--semantic-color-semantic-info) 12%, transparent);
-    color: var(--text-color-text-main);
-  }
-
-  svg {
-    flex-shrink: 0;
-    opacity: 0.7;
-  }
 }
 
 .expandChevron {
   margin-left: auto;
+  background: var(--glass-bg-solid);
+  padding-left: var(--space-1);
   transition: transform var(--transition-fast);
 }
 

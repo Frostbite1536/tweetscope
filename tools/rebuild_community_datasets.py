@@ -267,11 +267,13 @@ def purge_cloud_state(
         if table_name not in catalog_tables:
             continue
         table = catalog_db.open_table(table_name)
-        df = table.to_pandas()
-        if "dataset_id" not in df.columns:
-            continue
-        match_count = int(df["dataset_id"].astype(str).isin(purge_dataset_ids).sum())
-        print(f"cloud catalog: {table_name} matching rows={match_count}")
+        try:
+            match_count = len(table.search().where(where).limit(10_000).to_list())
+        except Exception as err:
+            print(f"cloud catalog: {table_name} matching rows=unknown ({err})")
+            match_count = None
+        else:
+            print(f"cloud catalog: {table_name} matching rows={match_count}")
         if execute and match_count:
             table.delete(where)
 

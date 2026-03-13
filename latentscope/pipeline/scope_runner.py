@@ -26,7 +26,7 @@ from latentscope.pipeline.stages.scope_meta import (
     load_umap_meta,
 )
 from latentscope.scripts.export_lance import export_lance
-from latentscope.util import get_data_dir
+from latentscope.util import cloud_lancedb_enabled, get_data_dir
 
 
 def run_scope(
@@ -127,7 +127,7 @@ def run_scope(
     with open(json_path, "w") as f:
         json.dump(scope_meta, f, indent=2)
 
-    cloud = bool(os.environ.get("LANCEDB_URI") and os.environ.get("LANCEDB_API_KEY"))
+    cloud = cloud_lancedb_enabled()
     print(f"exporting to lancedb (cloud={cloud})")
     export_lance(data_dir, dataset_id, resolved_scope_id, cloud=cloud)
 

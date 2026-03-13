@@ -31,13 +31,22 @@
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--borders-color-border-3);
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
   position: relative;
   min-width: 0;
   overflow: hidden;
 
   &:hover {
     background: var(--interactions---secondary-color-interaction-secondary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-elev-0);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: none;
+    background: var(--interactions---secondary-color-interaction-secondary-active);
+    transition-duration: 0.05s;
   }
 }
 
@@ -164,10 +173,10 @@
   cursor: pointer;
   margin-top: var(--space-1);
   display: inline-block;
-  transition: opacity var(--transition-fast);
+  transition: color var(--transition-fast);
 
   &:hover {
-    opacity: 0.8;
+    color: var(--interactions---primary-color-interaction-primary-hover);
   }
 }
 
@@ -194,11 +203,11 @@
   object-fit: cover;
   border-radius: var(--radius-md);
   border: 1px solid var(--glass-border-subtle);
-  transition: transform var(--transition-fast), opacity var(--transition-fast);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 
   &:hover {
     transform: scale(1.02);
-    opacity: 0.95;
+    box-shadow: var(--shadow-elev-0);
   }
 }
 
@@ -225,11 +234,13 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--text-color-text-subtle);
-  transition: background var(--transition-fast), border-color var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 
   &:hover {
     background: var(--interactions---secondary-color-interaction-secondary-hover);
     border-color: var(--borders-color-border-2);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-elev-0);
   }
 }
 
@@ -331,5 +342,12 @@
 
   &:hover {
     background: color-mix(in srgb, var(--semantic-color-semantic-info) 16%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweetCard, .quotedTweetCard, .mediaImage {
+    transition-duration: 0.01ms !important;
+    transform: none !important;
   }
 }

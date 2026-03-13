@@ -15,6 +15,17 @@
     --glass-shadow-hover: var(--shadow-elev-2);
     --glass-glow: 0 0 0 1px rgba(255, 252, 240, 0.6) inset;
 
+    /* Micro-elevation & overlay tints — Flexoki base colors at opacity */
+    --shadow-elev-0: 0 1px 4px rgba(40, 39, 38, 0.06);
+    --scrollbar-thumb: rgba(40, 39, 38, 0.12);
+    --scrollbar-thumb-hover: rgba(40, 39, 38, 0.2);
+    --loading-border: rgba(40, 39, 38, 0.08);
+    --overlay-tint-subtle: rgba(40, 39, 38, 0.04);
+    --accent-tint-hover: color-mix(in srgb, var(--semantic-color-semantic-info) 10%, transparent);
+    --accent-tint-pill: color-mix(in srgb, var(--semantic-color-semantic-info) 12%, transparent);
+    --accent-tint-pill-border: color-mix(in srgb, var(--semantic-color-semantic-info) 25%, transparent);
+    --fade-bg: rgba(255, 252, 240, 0.6);
+
     /* Spacing Scale (4px base) */
     --space-1: 4px;
     --space-2: 8px;
@@ -111,6 +122,16 @@
         --glass-shadow-hover: var(--shadow-elev-2);
         --glass-glow: 0 0 0 1px rgba(242, 240, 229, 0.08) inset;
 
+        --shadow-elev-0: 0 1px 5px rgba(16, 15, 15, 0.24);
+        --scrollbar-thumb: rgba(242, 240, 229, 0.12);
+        --scrollbar-thumb-hover: rgba(242, 240, 229, 0.2);
+        --loading-border: rgba(242, 240, 229, 0.1);
+        --overlay-tint-subtle: rgba(242, 240, 229, 0.04);
+        --accent-tint-hover: color-mix(in srgb, var(--semantic-color-semantic-info) 14%, transparent);
+        --accent-tint-pill: color-mix(in srgb, var(--semantic-color-semantic-info) 18%, transparent);
+        --accent-tint-pill-border: color-mix(in srgb, var(--semantic-color-semantic-info) 30%, transparent);
+        --fade-bg: rgba(28, 27, 26, 0.6);
+
         --borders-color-border-1: #403e3c;
         --borders-color-border-2: #575653;
         --borders-color-border-3: #57565333;
@@ -177,6 +198,16 @@
         --glass-shadow: var(--shadow-elev-1);
         --glass-shadow-hover: var(--shadow-elev-2);
         --glass-glow: 0 0 0 1px rgba(255, 252, 240, 0.6) inset;
+
+        --shadow-elev-0: 0 1px 4px rgba(40, 39, 38, 0.06);
+        --scrollbar-thumb: rgba(40, 39, 38, 0.12);
+        --scrollbar-thumb-hover: rgba(40, 39, 38, 0.2);
+        --loading-border: rgba(40, 39, 38, 0.08);
+        --overlay-tint-subtle: rgba(40, 39, 38, 0.04);
+        --accent-tint-hover: color-mix(in srgb, var(--semantic-color-semantic-info) 10%, transparent);
+        --accent-tint-pill: color-mix(in srgb, var(--semantic-color-semantic-info) 12%, transparent);
+        --accent-tint-pill-border: color-mix(in srgb, var(--semantic-color-semantic-info) 25%, transparent);
+        --fade-bg: rgba(255, 252, 240, 0.6);
 
         --borders-color-border-1: #cecdc3;
         --borders-color-border-2: #b7b5ac;
@@ -246,6 +277,16 @@
         --glass-shadow: var(--shadow-elev-1);
         --glass-shadow-hover: var(--shadow-elev-2);
         --glass-glow: 0 0 0 1px rgba(242, 240, 229, 0.08) inset;
+
+        --shadow-elev-0: 0 1px 5px rgba(16, 15, 15, 0.24);
+        --scrollbar-thumb: rgba(242, 240, 229, 0.12);
+        --scrollbar-thumb-hover: rgba(242, 240, 229, 0.2);
+        --loading-border: rgba(242, 240, 229, 0.1);
+        --overlay-tint-subtle: rgba(242, 240, 229, 0.04);
+        --accent-tint-hover: color-mix(in srgb, var(--semantic-color-semantic-info) 14%, transparent);
+        --accent-tint-pill: color-mix(in srgb, var(--semantic-color-semantic-info) 18%, transparent);
+        --accent-tint-pill-border: color-mix(in srgb, var(--semantic-color-semantic-info) 30%, transparent);
+        --fade-bg: rgba(28, 27, 26, 0.6);
 
         --borders-color-border-1: #403e3c;
         --borders-color-border-2: #575653;
