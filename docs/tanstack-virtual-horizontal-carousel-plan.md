@@ -357,6 +357,51 @@ should remain exactly the same:
 This architecture is better because those behaviors become direct consequences of
 stable geometry rather than needing scroll-preservation repair logic.
 
+## Observed Column Jank Before Migration
+
+Recent browser traces on `datasets/defenderofbasic/explore/scopes-001` exposed
+two separate sources of post-click visual instability in the current carousel:
+
+1. Window churn amplified by column enter animation
+
+- A far ToC jump shifts the current visible window quickly.
+- Newly mounted columns were wrapped in a Framer Motion enter animation with
+  `y: 20` and opacity fade-in.
+- During the jump, multiple columns appeared with wrapper transforms such as
+  `matrix(1, 0, 0, 1, 0, 16.3)` while the active column was still changing.
+- User-visible effect: the feed columns appear to flicker or scroll vertically
+  even though the user only asked for horizontal navigation.
+
+Interim mitigation already applied:
+
+- `FeedCarousel` no longer wraps each virtualized column in a mount-time
+  Framer Motion translate/fade animation.
+- This is aligned with the TanStack migration because virtualized windows should
+  avoid decorative enter motion that exaggerates mount churn.
+
+2. Post-landing height shifts inside tweet cards
+
+- After the carousel lands, some active and adjacent columns continue changing
+  `scrollHeight` without any user scrolling.
+- Sampling showed stable item counts but increasing card heights, which points
+  to asynchronous content expansion rather than list reordering.
+- Likely contributors:
+  - media images render without reserved intrinsic height
+  - compact quoted-tweet embeds start with a small placeholder
+    (`TwitterEmbed.module.scss` currently reserves only `min-height: 100px`)
+    and then expand once the iframe loads
+  - URL-resolution fallback in `TweetCard` can add media/quotes after the card
+    first renders
+
+Implication for migration:
+
+- Replacing horizontal windowing with TanStack Virtual will remove the mount
+  churn portion, but it will not by itself fix async height growth inside each
+  `FeedColumn`.
+- The column-internal jank needs a separate stabilization pass around media and
+  embed placeholders, or a more explicit policy about when adjacent/far columns
+  are allowed to resolve rich content.
+
 ## CSS / Layout Changes
 
 Required cleanup during migration:

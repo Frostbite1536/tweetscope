@@ -4,6 +4,8 @@
 
 # tweetscope
 
+[Live demo →](https://tweetscope.maskys.com)
+
 Turn a Twitter/X archive into a searchable map of themes, threads, and quotes.
 
 Tweetscope imports an archive, enriches tweets with surrounding context, projects the corpus into an interactive space, names clusters with hierarchical labels, and serves the result through a React UI backed by a Hono API and LanceDB.
@@ -22,11 +24,7 @@ Tweetscope imports an archive, enriches tweets with surrounding context, project
 - Import likes into a sibling `-likes` dataset that is grouped with the main collection on the dashboard.
 
 <picture>
-  <img src="documentation/screenshot-topic-directory.png" alt="Topic directory view with topic cards and filtered feed">
-</picture>
-
-<picture>
-  <img src="documentation/screenshot-carousel.png" alt="Carousel view with multiple topic columns and tweet cards">
+  <img src="documentation/screenshot-carousel.png" alt="Carousel view with multi-column topic browsing">
 </picture>
 
 ## Current Architecture
@@ -74,7 +72,7 @@ Note: the repo root does not currently include a checked-in Python packaging man
 ### Install JavaScript dependencies
 
 ```bash
-git clone --recurse-submodules <repo-url>
+git clone --recurse-submodules https://github.com/maskys/tweetscope.git
 cd latent-scope
 
 cd api && npm install && cd ..
@@ -113,12 +111,21 @@ Open `http://localhost:5174`.
 
 ### Import data
 
+> **How to request your X data export**
+>
+> 1. Go to [x.com/settings/download_your_data](https://x.com/settings/download_your_data)
+> 2. Re-enter your password and request your archive
+> 3. X will email you when it's ready (usually 24–48 hours)
+> 4. Download the `.zip` — this is what you upload to Tweetscope
+
 Preferred UI flow:
 
 1. Open `/new`
 2. Upload a native X archive zip or start a Community Archive import
 3. For native archives, the browser extracts and normalizes the zip locally before upload
 4. The API runs `latentscope.scripts.twitter_import` and redirects into the new scope when the job completes
+
+**[Community Archive](https://communityarchive.org)** is an alternative if you don't have your own export. It pulls publicly donated tweet archives by username. Enter any username that has donated their archive and Tweetscope will fetch and process it. Community archives may not include likes.
 
 Direct CLI flow:
 
