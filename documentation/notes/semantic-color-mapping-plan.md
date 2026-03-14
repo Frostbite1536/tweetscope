@@ -46,6 +46,12 @@ For Latent Scope, the recommended target is:
 4. use OKLCH as the computational space, with Flexoki acting as the bounded gamut and brand constraint
 5. keep the first implementation simpler than the full paper pipeline unless evaluation proves a richer projection is necessary
 
+Important rollout note:
+
+- the full offline architecture is still the target
+- but the first practical iteration can and should be a frontend-only improvement to sibling differentiation, using the existing family assignment and `semantic_order`
+- that iterative step is valuable because it improves the current UX immediately and tests whether local differentiation is the dominant visible problem before we push the full import-stage cutover
+
 ## The Paper: Key Details That Matter
 
 The paper argues that text visualization systems usually treat color as a categorical afterthought, even though color can help users compare related concepts, keywords, topics, and groups.
@@ -975,6 +981,41 @@ Use at least these corpus sizes:
 
 ## Detailed Implementation Plan
 
+### Iteration 0. Frontend-only sibling differentiation
+
+Before the full offline cutover, land the smallest possible improvement in the existing browser allocator.
+
+Scope:
+
+- keep the current anchor-layer selection and family assignment logic
+- stop coloring all descendants in one family with nearly the same depth-based tone
+- order siblings by existing `semantic_order` with current display/hash fallbacks
+- spread siblings across tone rows inside the inherited family
+- allow only very small intra-family hue drift once sibling count exceeds tone capacity
+
+Why do this first:
+
+- it requires no artifact migration or scope regeneration
+- it improves the observed `8-22` sibling cases immediately
+- it gives a quick read on whether local differentiation is the main user-visible issue
+- it de-risks the larger plan by showing what remains unsolved after the cheapest improvement
+
+Success criteria for this iteration:
+
+- visible improvement on current scopes without changing the data pipeline
+- no regression in existing hierarchy-driven family semantics
+- explicit acknowledgment that this does not solve the patio11 `82`-sibling case
+
+Recommended follow-up before backend work:
+
+- keep the frontend allocator temporary, but make it less wrong on real corpora
+- score layers in the browser with the same high-level policy the offline system will later persist:
+  - prefer connected layers in the `4-10` browse band
+  - avoid letting detached lower roots distort anchor choice
+- keep detached roots renderable, but exclude them from anchor selection when they are synthetic browse artifacts rather than true top-layer families
+
+This is the remaining frontend `80/20` step because it improves patio11-style sparse-root cases without introducing artifact or schema changes.
+
 ### Phase 0. Lock the `v1` contract before coding
 
 Make the following `v1` decisions explicit so implementation does not stall on open design churn:
@@ -1123,6 +1164,10 @@ For each regenerated scope, capture:
 - add patio11-based calibration to the decision rules
 - finalize the anchor-layer scoring policy
 - define the Flexoki-bounded OKLCH volume and contrast gates
+
+Precondition:
+
+- complete and evaluate Iteration `0` so the offline work starts with a measured baseline rather than a hypothesis
 
 ### Phase 2. Lightweight prototype
 

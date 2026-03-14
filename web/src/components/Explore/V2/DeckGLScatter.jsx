@@ -331,7 +331,7 @@ const DeckGLScatter = forwardRef(function DeckGLScatter({
   isHidden = false,
   contentPaddingRight = 0,
   pointScale = 1,
-  pointOpacity = 1,
+  pointOpacity = 0.9,
   minZoom = -2,
   maxZoom = 8,
   onView,

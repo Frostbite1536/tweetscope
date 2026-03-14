@@ -185,7 +185,7 @@ const VisualizationPane = forwardRef(function VisualizationPane({
   const [vizConfig, setVizConfig] = useState({
     showClusterOutlines: true,
     pointSize: 1,
-    pointOpacity: 1,
+    pointOpacity: 0.9,
     showReplyEdges: true,
     showQuoteEdges: true,
     edgeWidthScale: 0.7,
