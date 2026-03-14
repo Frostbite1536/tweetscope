@@ -22,4 +22,5 @@ tools/twitter/visakanv_tweets_full.json
 .garry/
 .agents/skills/*/Archive.zip
 .claude/debug/
+.claude/skills/
 *.env.vercel
