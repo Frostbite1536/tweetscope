@@ -129,13 +129,15 @@ function TweetFeed({
       </div>
 
       {hasMore && (
-        <button
-          className={styles.loadMoreBtn}
-          onClick={handleLoadMore}
-          disabled={rowsLoading}
-        >
-          {rowsLoading ? 'Loading...' : 'Load More'}
-        </button>
+        <div className={styles.loadMoreWrap}>
+          <button
+            className={styles.loadMoreBtn}
+            onClick={handleLoadMore}
+            disabled={rowsLoading}
+          >
+            {rowsLoading ? 'Loading...' : 'Load More'}
+          </button>
+        </div>
       )}
     </div>
   );
