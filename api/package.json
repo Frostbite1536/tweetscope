@@ -16,6 +16,7 @@
     "@hono/zod-validator": "^0.7.6",
     "@lancedb/lancedb": "^0.15.0",
     "hono": "^4.11.9",
+    "hono-rate-limiter": "^0.5.3",
     "zod": "^3.23.0"
   },
   "devDependencies": {

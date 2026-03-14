@@ -1,17 +1,19 @@
+import { lazy, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import NewCollection from './pages/NewCollection';
-import Explore from './pages/V2/FullScreenExplore';
 import { apiService } from './lib/apiService';
 import { queryKeys } from './query/keys';
+import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
 import 'react-element-forge/dist/style.css';
 import './latentscope--brand-theme.scss';
 
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const NewCollection = lazy(() => import('./pages/NewCollection'));
+const Explore = lazy(() => import('./pages/V2/FullScreenExplore'));
+
 const env = import.meta.env;
-console.log('ENV', env);
 const readonly = import.meta.env.MODE == 'read_only';
 const docsUrl = 'https://enjalot.observablehq.cloud/latent-scope/';
 
@@ -72,32 +74,36 @@ function App() {
   return (
     <Router basename={env.BASE_NAME}>
       <div className="page">
-        <Routes>
-          {isSingleProfile ? (
-            <>
-              {publicPath ? (
+        <ErrorBoundary>
+          <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>Loading...</div>}>
+            <Routes>
+              {isSingleProfile ? (
                 <>
-                  <Route path="/" element={<Navigate to={publicPath} replace />} />
-                  <Route path={publicPath} element={<Explore />} />
-                  <Route path="*" element={<Navigate to={publicPath} replace />} />
+                  {publicPath ? (
+                    <>
+                      <Route path="/" element={<Navigate to={publicPath} replace />} />
+                      <Route path={publicPath} element={<Explore />} />
+                      <Route path="*" element={<Navigate to={publicPath} replace />} />
+                    </>
+                  ) : (
+                    <>
+                      <Route path="/" element={<div>Missing public scope config</div>} />
+                      <Route path="*" element={<div>Missing public scope config</div>} />
+                    </>
+                  )}
                 </>
               ) : (
                 <>
-                  <Route path="/" element={<div>Missing public scope config</div>} />
-                  <Route path="*" element={<div>Missing public scope config</div>} />
+                  <Route path="/" element={<Dashboard appConfig={appConfig} />} />
+                  <Route path="/new" element={<NewCollection appConfig={appConfig} />} />
+                  <Route path="/import" element={<Navigate to="/new" replace />} />
+                  <Route path="/datasets/:dataset/explore/:scope" element={<Explore />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
                 </>
               )}
-            </>
-          ) : (
-            <>
-              <Route path="/" element={<Dashboard appConfig={appConfig} />} />
-              <Route path="/new" element={<NewCollection appConfig={appConfig} />} />
-              <Route path="/import" element={<Navigate to="/new" replace />} />
-              <Route path="/datasets/:dataset/explore/:scope" element={<Explore />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </>
-          )}
-        </Routes>
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </div>
     </Router>
   );

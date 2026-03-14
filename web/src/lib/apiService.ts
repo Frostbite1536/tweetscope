@@ -30,7 +30,6 @@ export const catalogClient = {
       param: { dataset: datasetId },
     }, { init: { signal } });
     const data = await res.json();
-    console.log('dataset meta', data);
     return data as JsonRecord;
   },
   fetchScope: async (

@@ -9,6 +9,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { rateLimiter } from "hono-rate-limiter";
 import { searchRoutes } from "./routes/search.js";
 import { resolveUrlRoutes } from "./routes/resolve-url.js";
 import { dataRoutes } from "./routes/data.js";
@@ -24,7 +25,13 @@ function parseBool(raw: string | undefined): boolean {
 }
 
 function parseOrigins(raw: string | undefined): string | string[] {
-  if (!raw || !raw.trim()) return "*"; // Dev uses Vite proxy (same-origin); prod is same-origin on Vercel
+  if (!raw || !raw.trim()) {
+    if (process.env.NODE_ENV === "production") {
+      console.warn("CORS_ORIGIN not set — defaulting to restrictive. Set CORS_ORIGIN env var.");
+      return [];
+    }
+    return "*"; // Dev uses Vite proxy (same-origin)
+  }
   if (raw.trim() === "*") return "*";
   const origins = raw
     .split(",")
@@ -84,6 +91,23 @@ app.use(
     allowHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// --- Rate Limiting ---
+
+const searchLimiter = rateLimiter({
+  windowMs: 60 * 1000,
+  limit: 20,
+  keyGenerator: (c: any) => c.req.header("x-forwarded-for") ?? "unknown",
+});
+
+const globalLimiter = rateLimiter({
+  windowMs: 60 * 1000,
+  limit: 200,
+  keyGenerator: (c: any) => c.req.header("x-forwarded-for") ?? "unknown",
+});
+
+app.use("/api/search/*", searchLimiter);
+app.use("/api/*", globalLimiter);
 
 // --- Routes ---
 // Chain all .route() and inline handlers so TypeScript can infer the full type for RPC.
