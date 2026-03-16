@@ -47,6 +47,9 @@ export const resolveUrlRoutes = new Hono()
     if (!body.urls || !Array.isArray(body.urls)) {
       return c.json({ error: "urls array is required" }, 400);
     }
+    if (body.urls.length > 50) {
+      return c.json({ error: "Maximum 50 URLs per batch" }, 400);
+    }
 
     const results = await Promise.all(
       body.urls.map(async (url) => ({

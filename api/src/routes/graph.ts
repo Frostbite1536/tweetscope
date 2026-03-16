@@ -107,8 +107,8 @@ export const graphRoutes = new Hono()
   .get("/datasets/:dataset/links/thread/:tweetId", async (c) => {
     const { dataset, tweetId } = c.req.param();
     try {
-      const chainLimit = Math.max(1, normalizeIndex(c.req.query("chain_limit")) ?? 300);
-      const descLimit = Math.max(0, normalizeIndex(c.req.query("desc_limit")) ?? 3000);
+      const chainLimit = Math.min(10_000, Math.max(1, normalizeIndex(c.req.query("chain_limit")) ?? 300));
+      const descLimit = Math.min(50_000, Math.max(0, normalizeIndex(c.req.query("desc_limit")) ?? 3000));
 
       const result = await lanceGraphRepo.getThreadEdges(dataset, tweetId, {
         chainLimit,
@@ -128,7 +128,7 @@ export const graphRoutes = new Hono()
   .get("/datasets/:dataset/links/quotes/:tweetId", async (c) => {
     const { dataset, tweetId } = c.req.param();
     try {
-      const limit = Math.max(1, normalizeIndex(c.req.query("limit")) ?? 2000);
+      const limit = Math.min(10_000, Math.max(1, normalizeIndex(c.req.query("limit")) ?? 2000));
       const result = await lanceGraphRepo.getQuoteEdges(dataset, tweetId, limit);
 
       return c.json({
