@@ -1,9 +1,10 @@
-"""Import tweets from CSV files (e.g. X_Account_Analyzer exports).
+"""Import tweets from generic CSV files exported by Twitter/X tools.
 
 Handles the common CSV column conventions used by Twitter/X analysis tools
-and data export extensions.  The importer auto-detects column names from
-several known variants and normalises each row into the same flat dict
-produced by :func:`latentscope.importers.twitter._flatten_tweet`.
+and data export extensions (Chrome extensions, analytics platforms, etc.).
+The importer auto-detects column names from several known variants and
+normalises each row into the same flat dict produced by
+:func:`latentscope.importers.twitter._flatten_tweet`.
 
 Typical usage::
 
@@ -13,9 +14,9 @@ Typical usage::
     # result.rows  -> list[dict] ready for DataFrame / ingest
 
 Supports:
-* X_Account_Analyzer CSV exports
 * Generic Twitter CSV exports with common column names
-* Tab-separated files (auto-detected)
+* Tab-separated files (auto-detected via csv.Sniffer)
+* Flexible column alias matching (60+ known variants)
 """
 
 from __future__ import annotations

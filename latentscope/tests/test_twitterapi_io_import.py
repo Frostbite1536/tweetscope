@@ -4,9 +4,10 @@ import json
 import os
 import tempfile
 
+import pytest
+
 from latentscope.importers.twitterapi_io import (
     _flatten_twitterapi_io_tweet,
-    _flatten_twitterapi_tweet,  # backwards-compat alias
     fetch_twitterapi_io,
     load_twitterapi_io_json,
 )
@@ -69,11 +70,6 @@ def test_basic_tweet_normalisation():
     assert row["tweet_type"] == "tweet"
     assert row["archive_source"] == "twitterapi_io"
     assert row["conversation_id"] == "123456"
-
-
-def test_backwards_compat_alias():
-    """_flatten_twitterapi_tweet is an alias for _flatten_twitterapi_io_tweet."""
-    assert _flatten_twitterapi_tweet is _flatten_twitterapi_io_tweet
 
 
 def test_html_entity_decoding():
@@ -252,3 +248,42 @@ def test_schema_keys_match_flatten_tweet():
     assert "quotes" in extras
     assert "views" in extras
     assert "bookmarks" in extras
+
+
+def test_extended_entities_media_extraction():
+    """Media in extendedEntities should be extracted."""
+    tweet = _make_tweet(
+        extendedEntities={
+            "media": [
+                {
+                    "media_url_https": "https://pbs.twimg.com/media/photo.jpg",
+                    "url": "https://t.co/media1",
+                    "expanded_url": "https://x.com/user/status/1/photo/1",
+                    "type": "photo",
+                    "indices": [20, 40],
+                }
+            ]
+        },
+    )
+    row = _flatten_twitterapi_io_tweet(tweet)
+    media = json.loads(row["media_urls_json"])
+    assert "https://pbs.twimg.com/media/photo.jpg" in media
+    entities = json.loads(row["url_entities_json"])
+    media_entities = [e for e in entities if e["kind"] == "media"]
+    assert len(media_entities) >= 1
+    assert media_entities[0]["media_type"] == "photo"
+
+
+def test_load_json_rejects_invalid_type():
+    """load_twitterapi_io_json raises TypeError for non-str/dict/list."""
+    with pytest.raises(TypeError, match="Expected str, dict, or list"):
+        load_twitterapi_io_json(12345)  # type: ignore[arg-type]
+
+
+def test_empty_author_uses_fallback():
+    """When author is empty, fallback_username and fallback_display_name are used."""
+    tweet = _make_tweet()
+    tweet["author"] = {}
+    row = _flatten_twitterapi_io_tweet(tweet, fallback_username="fb_user", fallback_display_name="FB Name")
+    assert row["username"] == "fb_user"
+    assert row["display_name"] == "FB Name"

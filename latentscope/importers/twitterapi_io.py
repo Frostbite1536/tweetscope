@@ -120,7 +120,7 @@ def _extract_urls(
             "url": str(short) if short else None,
             "expanded_url": str(expanded) if expanded else None,
             "display_url": str(display) if display else None,
-            "indices": url_obj.get("indices"),
+            "indices": url_obj.get("indices") if isinstance(url_obj.get("indices"), list) else None,
         })
 
     # twitterapi.io may embed media in entities.media or extendedEntities.media
@@ -234,10 +234,6 @@ def _flatten_twitterapi_io_tweet(
     }
 
 
-# Keep the old name as an alias for backwards compat with tests
-_flatten_twitterapi_tweet = _flatten_twitterapi_io_tweet
-
-
 # ---------------------------------------------------------------------------
 # HTTP helpers (pure stdlib — no dependency on requests)
 # ---------------------------------------------------------------------------
@@ -257,7 +253,6 @@ def _api_request(
     full_url = f"{url}?{query_string}"
     headers = {
         "X-API-Key": api_key,
-        "Content-Type": "application/json",
     }
 
     for attempt in range(retries):
