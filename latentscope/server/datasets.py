@@ -40,7 +40,7 @@ def get_datasets():
                     jsonData = json.load(file)
                     jsonData['id'] = dir
                     datasets.append(jsonData)
-                except:
+                except (json.JSONDecodeError, OSError, ValueError):
                     print("Error reading meta.json", file_path)
 
     datasets.sort(key=lambda x: x.get('id'))
