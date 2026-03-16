@@ -24,7 +24,7 @@ async function resolveRedirect(url: string): Promise<string> {
   }
 
   try {
-    const res = await fetch(url, { redirect: "manual" });
+    const res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(5000) });
     const location = res.headers.get("location");
     return location ?? url;
   } catch {

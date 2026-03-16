@@ -90,7 +90,7 @@ export const graphRoutes = new Hono()
       }
 
       const maxEdgesRaw = normalizeIndex(payload.max_edges);
-      const maxEdges = maxEdgesRaw && maxEdgesRaw > 0 ? maxEdgesRaw : 5000;
+      const maxEdges = Math.min(maxEdgesRaw && maxEdgesRaw > 0 ? maxEdgesRaw : 5000, 50_000);
       const total = filtered.length;
       const out = filtered.slice(0, maxEdges);
 
